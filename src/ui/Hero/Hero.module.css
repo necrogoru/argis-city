@@ -1,0 +1,14 @@
+.hero {
+  position: absolute;
+  top: var(--content-top);
+  left: var(--gutter);
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  pointer-events: none;
+}
+
+.hero > * {
+  pointer-events: auto;
+}

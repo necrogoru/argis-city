@@ -1,0 +1,39 @@
+/* Design tokens — docs/design/SPEC.md. Mirrored for WebGL in src/domain/palette.ts. */
+:root {
+  --bg: #0a0b0c;
+  --surface: #111314eb;
+  --border: #ffffff14;
+  --border-strong: #ffffff26;
+  --fill-hover: #ffffff0d;
+  --fill-subtle: #ffffff08;
+  --track: #ffffff10;
+
+  --text: #f2f5f4;
+  --text-2: #8e9794;
+  --text-3: #5c6461;
+  --text-on-accent: #062321;
+
+  --teal: #32f3e2;
+  --blue: #67a2fd;
+  --amber: #ffb662;
+  --violet: #b98cff;
+  --grey: #8e9794;
+  --red: #ff6b6b;
+
+  --font: "Outfit", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --radius-button: 14px;
+  --radius-panel: 24px;
+  --radius-card: 16px;
+  --radius-pill: 8px;
+  --blur: 20px;
+
+  --gutter: 40px;
+  --top-bar-y: 28px;
+  --top-bar-h: 56px;
+  --content-top: 124px;
+  --panel-w: 340px;
+  --strip-h: 112px;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}

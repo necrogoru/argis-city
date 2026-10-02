@@ -1,0 +1,41 @@
+.pill {
+  --tone: var(--teal);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 40px;
+  padding: 0 16px 0 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 9%, #0e1112e6);
+  border: 1px solid color-mix(in srgb, var(--tone) 24%, transparent);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+}
+
+.pill[data-tone="stale"] {
+  --tone: var(--amber);
+}
+
+.pill[data-tone="error"] {
+  --tone: var(--red);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 8px 1px var(--tone);
+  animation: breathe 2s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.45;
+    box-shadow: 0 0 3px 0 var(--tone);
+  }
+}

@@ -1,0 +1,22 @@
+.bar {
+  position: absolute;
+  top: var(--top-bar-y);
+  left: var(--gutter);
+  right: var(--gutter);
+  height: var(--top-bar-h);
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  pointer-events: none;
+}
+
+.bar > * {
+  pointer-events: auto;
+}
+
+.right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

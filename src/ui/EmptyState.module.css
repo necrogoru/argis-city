@@ -1,0 +1,52 @@
+.card {
+  --tone: var(--teal);
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--gutter) + 8px);
+  transform: translateX(-50%);
+  max-width: min(520px, calc(100% - 2 * var(--gutter)));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--radius-card);
+  pointer-events: auto;
+}
+
+.card[data-tone="error"] {
+  --tone: var(--red);
+  border-color: color-mix(in srgb, var(--red) 30%, transparent);
+}
+
+.icon {
+  flex: none;
+  color: var(--tone);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.body {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.retry {
+  flex: none;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--fill-hover);
+  font-weight: 500;
+}
