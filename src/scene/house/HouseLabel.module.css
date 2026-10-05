@@ -56,9 +56,9 @@
   text-overflow: ellipsis;
 }
 
+/* Opacity only (the glow fades with it): stays on the compositor. */
 @keyframes urgent {
   50% {
     opacity: 0.25;
-    box-shadow: none;
   }
 }

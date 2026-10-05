@@ -33,9 +33,10 @@
   animation: breathe 2s ease-in-out infinite;
 }
 
+/* Opacity only: it runs on the compositor. Animating box-shadow here repaints
+   the dot — and re-renders the pill's backdrop blur — on every vsync. */
 @keyframes breathe {
   50% {
     opacity: 0.45;
-    box-shadow: 0 0 3px 0 var(--tone);
   }
 }
