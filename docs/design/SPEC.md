@@ -24,11 +24,20 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   with faint diagonal street lines, radial vignette at the edges and a left
   scrim (bg 94% → 0% over the first ~36% width) so the hero text reads.
 - **Top bar** (x 40, y 28, h 56, full width − 80): brand (building icon in
-  teal + "AgentCity" 22/500) · nav pill group (active "City" with teal
-  36px icon tile; then 48px square ghost buttons) · KPIs (icon + 12px label
+  teal + "AgentCity" 22/500) · KPIs (icon + 12px label
   over 16/500 value: Active agents, Subagents, Tokens today/total, Awaiting
-  you [amber icon]) · right: "Live · scanning 2s" teal-tinted pill with
-  glowing dot, settings button.
+  you [amber icon]) · right: search field (260×48 glass, search icon,
+  "Search agents & actions" text-3, `⌘K` key cap; Ctrl K off macOS),
+  "Live · scanning 2s" teal-tinted pill with glowing dot, settings button.
+- **Command palette** (click the search field or ⌘K/Ctrl K; ⌘K again or
+  Esc closes without clearing the selection): 640px glass modal, 112px from
+  the top over a dimmed, blurred backdrop. 60px search row, then an
+  "AGENTS" section (status dot, highlighted title, `provider · model ·
+  ~/dir`, status pill; the 6 most urgent until the user types) and an
+  "ACTIONS" section (selected-agent shortcuts: open folder, copy path,
+  close details; go to each district; show whole city; camera moves;
+  refresh). ↑↓ moves (wraps), ↵ runs, hover moves the cursor; matches are
+  teal. Footer with key hints.
 - **Hero** (x 40, y 124, w 300): "Agent\nInfrastructure" 44/400, lh 1.08,
   tracking −1; 14px text-2 description; "DISTRICTS" list: rows with 10px
   rounded swatch, provider name, "N houses" right (text-3); selected row has

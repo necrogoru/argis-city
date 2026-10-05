@@ -11,7 +11,7 @@ pub mod system;
 use monitor::{Monitor, Poller, ProviderRegistry};
 use providers::claude::ClaudeProvider;
 use providers::codex::CodexProvider;
-use providers::opencode::OpenCodeProvider;
+use providers::opencode::{ModelCatalog, OpenCodeProvider};
 use providers::pi::PiProvider;
 use providers::AgentProvider;
 use std::path::Path;
@@ -30,7 +30,10 @@ pub fn build_registry(paths: &HomePaths) -> ProviderRegistry {
     let providers: Vec<Box<dyn AgentProvider>> = vec![
         Box::new(ClaudeProvider::new(paths.claude.clone())),
         Box::new(CodexProvider::new(paths.codex.clone())),
-        Box::new(OpenCodeProvider::new(paths.opencode.clone())),
+        Box::new(
+            OpenCodeProvider::new(paths.opencode.clone())
+                .with_models(ModelCatalog::from_file(paths.opencode_cache.join("models.json"))),
+        ),
         Box::new(PiProvider::new(paths.pi.clone())),
     ];
     ProviderRegistry::new(providers, Box::new(SysinfoProcessSource::new()), Box::new(SystemClock))

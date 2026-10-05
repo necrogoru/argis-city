@@ -10,6 +10,8 @@ pub struct HomePaths {
     pub codex: PathBuf,
     /// `~/.local/share/opencode`
     pub opencode: PathBuf,
+    /// `~/.cache/opencode` (holds the `models.json` catalog)
+    pub opencode_cache: PathBuf,
     /// `~/.pi/agent`
     pub pi: PathBuf,
 }
@@ -20,6 +22,7 @@ impl HomePaths {
             claude: home.join(".claude"),
             codex: home.join(".codex"),
             opencode: home.join(".local/share/opencode"),
+            opencode_cache: home.join(".cache/opencode"),
             pi: home.join(".pi/agent"),
         }
     }

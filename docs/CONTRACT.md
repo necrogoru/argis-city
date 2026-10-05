@@ -67,12 +67,22 @@ transcript was written in the last 2 minutes.
   (`plan[].status`). Current step from latest agent message.
 
 ### OpenCode (`~/.local/share/opencode/opencode.db`)
-- `session` rows with `parent_id IS NULL`, `time_archived IS NULL`; tokens from
-  `tokens_input/output/cache_read/cache_write`; `model` is JSON (`{id}`).
+- Two layouts coexist; both are read and merged (V2 wins on duplicate ids):
+  - **V2** (current releases): `session_v2` rows + `session_message`
+    (`type` = `user` | `assistant` | `idle`, `data` JSON with inline
+    `content[]` parts; tools use `name` + `state.status`).
+  - **Legacy**: `session` + `message` (role inside `data`) + `part`.
+- Root rows have `parent_id IS NULL`, `time_archived IS NULL`; tokens from
+  `tokens_input/output/cache_read/cache_write`; `model` is JSON
+  (`{id, providerID}`). Subagents = rows whose `parent_id` is the session.
 - Live: an `opencode` process whose cwd equals `directory`; fallback
-  `time_updated` < 2 min. Subagents = rows whose `parent_id` is the session.
-- Plan from `todo` table. Running when the latest assistant `message.data`
-  has no `time.completed`.
+  `time_updated` < 2 min.
+- Status: newest message `user` or unfinished/`tool-calls` assistant ⇒
+  running; an `idle` row or finished assistant ⇒ idle; newest tool call is a
+  `question` not yet completed ⇒ awaitingApproval.
+- Context: newest assistant message with usage (`input + cache.read +
+  cache.write`); window from `~/.cache/opencode/models.json`
+  (`<provider>.models.<id>.limit.context`). Plan from the `todo` table.
 
 ### Pi (`~/.pi/agent/sessions`)
 - Dir per cwd: `--<cwd with "/" → "-">--/*.jsonl`; first line

@@ -1,10 +1,10 @@
-use super::message::{child_status, current_step, latest_turn, model_id, session_status, Outcome};
+use super::message::{child_status, current_step, latest_turn, model_ref, session_status, Outcome};
 use super::OpenCodeProvider;
 use crate::domain::{AgentStatus, ProgressSource};
 use crate::providers::{AgentProvider, CollectContext};
 use crate::system::ProcessInfo;
 use rusqlite::{params, Connection};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::fs;
 
 /// Real OpenCode column names (subset of the live schema).
@@ -23,11 +23,10 @@ CREATE TABLE todo (session_id text NOT NULL, content text NOT NULL, status text 
   priority text NOT NULL, position integer NOT NULL, time_created integer NOT NULL,
   time_updated integer NOT NULL, PRIMARY KEY(session_id, position));";
 
-fn assistant(completed: bool, finish: &str) -> String {
+fn assistant(completed: bool, finish: &str) -> Value {
     let time = if completed { json!({"created": 1, "completed": 2}) } else { json!({"created": 1}) };
     json!({"role": "assistant", "modelID": "gpt-6-luna", "finish": finish, "time": time,
         "tokens": {"input": 100, "output": 5, "reasoning": 0, "cache": {"read": 900, "write": 0}}})
-    .to_string()
 }
 
 #[test]
@@ -35,29 +34,35 @@ fn turn_outcomes() {
     let running = latest_turn(&[assistant(false, "")]);
     assert_eq!((running.outcome, running.context_used), (Outcome::Working, Some(1000)));
     assert_eq!(latest_turn(&[assistant(true, "tool-calls")]).outcome, Outcome::Working);
-    assert_eq!(session_status(&latest_turn(&[assistant(true, "stop")])), AgentStatus::Idle);
-    let user = json!({"role": "user"}).to_string();
+    assert_eq!(session_status(&latest_turn(&[assistant(true, "stop")]), false), AgentStatus::Idle);
+    let user = json!({"role": "user"});
     let fresh = latest_turn(&[user, assistant(true, "stop")]);
     assert_eq!((fresh.outcome, fresh.model.as_deref()), (Outcome::Working, Some("gpt-6-luna")));
-    let failed = json!({"role": "assistant", "error": {"name": "APIError"}, "time": {"completed": 1}}).to_string();
-    assert_eq!(session_status(&latest_turn(&[failed])), AgentStatus::Error);
-    let aborted = json!({"role": "assistant", "error": {"name": "MessageAbortedError"}}).to_string();
-    assert_eq!(session_status(&latest_turn(std::slice::from_ref(&aborted))), AgentStatus::Idle);
-    assert_eq!(child_status(&latest_turn(&[assistant(true, "stop")]), 0, 100_000), AgentStatus::Done);
-    assert_eq!(child_status(&latest_turn(std::slice::from_ref(&aborted)), 90_000, 100_000), AgentStatus::Running);
-    assert_eq!(child_status(&latest_turn(&[aborted]), 0, 100_000), AgentStatus::Idle);
+    let failed = json!({"role": "assistant", "error": {"name": "APIError"}, "time": {"completed": 1}});
+    assert_eq!(session_status(&latest_turn(&[failed]), false), AgentStatus::Error);
+    let aborted = json!({"role": "assistant", "error": {"name": "MessageAbortedError"}});
+    assert_eq!(session_status(&latest_turn(std::slice::from_ref(&aborted)), false), AgentStatus::Idle);
+    assert_eq!(child_status(&latest_turn(&[assistant(true, "stop")]), false, 0, 100_000), AgentStatus::Done);
+    assert_eq!(
+        child_status(&latest_turn(std::slice::from_ref(&aborted)), false, 90_000, 100_000),
+        AgentStatus::Running
+    );
+    assert_eq!(child_status(&latest_turn(&[aborted]), false, 0, 100_000), AgentStatus::Idle);
 }
 
 #[test]
 fn parts_and_model_helpers() {
-    let tool =
-        json!({"type": "tool", "tool": "bash", "state": {"status": "running", "input": {"command": "ls"}}}).to_string();
-    let text = json!({"type": "text", "text": "Reading files"}).to_string();
-    let finish = json!({"type": "step-finish"}).to_string();
+    let tool = json!({"type": "tool", "tool": "bash", "state": {"status": "running", "input": {"command": "ls"}}});
+    let text = json!({"type": "text", "text": "Reading files"});
+    let finish = json!({"type": "step-finish"});
     assert_eq!(current_step(&[finish.clone(), tool, text.clone()]).as_deref(), Some("bash: ls"));
     assert_eq!(current_step(&[finish, text]).as_deref(), Some("Reading files"));
-    assert_eq!(model_id(Some(r#"{"id":"gpt-6-luna","providerID":"x"}"#)).as_deref(), Some("gpt-6-luna"));
-    assert_eq!(model_id(None), None);
+    assert_eq!(
+        model_ref(Some(r#"{"id":"gpt-6-luna","providerID":"x"}"#)),
+        Some((Some("x".into()), "gpt-6-luna".into()))
+    );
+    assert_eq!(model_ref(Some("plain")), Some((None, "plain".into())));
+    assert_eq!(model_ref(None), None);
 }
 
 #[test]
@@ -89,8 +94,8 @@ fn provider_reads_sqlite_with_real_columns() {
     )
     .unwrap();
     let msg = "INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?1, ?2, ?3, ?3, ?4)";
-    conn.execute(msg, params!["m1", "root", now - 2_000, assistant(false, "")]).unwrap();
-    conn.execute(msg, params!["m2", "kid", now - 36_000, assistant(true, "stop")]).unwrap();
+    conn.execute(msg, params!["m1", "root", now - 2_000, assistant(false, "").to_string()]).unwrap();
+    conn.execute(msg, params!["m2", "kid", now - 36_000, assistant(true, "stop").to_string()]).unwrap();
     let part = json!({"type": "text", "text": "Writing handlers"}).to_string();
     conn.execute("INSERT INTO part VALUES ('p1', 'm1', 'root', ?1, ?1, ?2)", params![now - 1_500, part]).unwrap();
     for (pos, status) in ["completed", "completed", "in_progress", "pending"].iter().enumerate() {
