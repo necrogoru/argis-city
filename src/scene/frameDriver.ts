@@ -67,3 +67,17 @@ export function createFrameDriver(loop: LoopControls, fps: () => number) {
     },
   };
 }
+
+/**
+ * Pointer-move handler that calls `changed` only when the move lands on a
+ * different object than the last one — a hover change worth rendering, not
+ * every move.
+ */
+export function onTargetChange(changed: () => void): (event: { object: unknown }) => void {
+  let last: unknown;
+  return (event) => {
+    if (event.object === last) return;
+    last = event.object;
+    changed();
+  };
+}

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createFrameDriver } from "./frameDriver";
+import { createFrameDriver, onTargetChange } from "./frameDriver";
 
 function setup(initialFps: number) {
   let fps = initialFps;
@@ -90,5 +90,20 @@ describe("createFrameDriver", () => {
     expect(loop.stop).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(33);
     expect(loop.start).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("onTargetChange", () => {
+  it("calls back only when the object under the pointer changes", () => {
+    const changed = vi.fn();
+    const onMove = onTargetChange(changed);
+    const ground = {};
+    const house = {};
+    onMove({ object: ground });
+    onMove({ object: ground });
+    onMove({ object: house });
+    onMove({ object: house });
+    onMove({ object: ground });
+    expect(changed).toHaveBeenCalledTimes(3);
   });
 });

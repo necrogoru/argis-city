@@ -1,8 +1,18 @@
 diff --git a/dist/tres.js b/dist/tres.js
-index 43e327457889edff92f57dbc0107a6420dd949f5..e7d2a2965487af44fc7b05a5194d256de1bf91ac 100644
+index 43e327457889edff92f57dbc0107a6420dd949f5..448b156d386cf499e10e0e442fa18132eb8895ee 100644
 --- a/dist/tres.js
 +++ b/dist/tres.js
-@@ -2095,7 +2095,7 @@ var Context_default = /* @__PURE__ */ defineComponent({
+@@ -1003,7 +1003,8 @@ function useSizes(windowSize, canvas, debounceMs = 10) {
+ //#endregion
+ //#region src/composables/useEventManager/index.ts
+ function useEventManager({ canvas, contextParts: { scene, camera, renderer } }) {
+-	const { update, destroy } = forwardHtmlEvents(toValue(canvas), () => toValue(camera.activeCamera), scene.value);
++	// argis patch: raycast pointer events as they arrive (React Three Fiber did), not on the next rendered frame.
++	const { update, destroy } = forwardHtmlEvents(toValue(canvas), () => toValue(camera.activeCamera), scene.value, { batchEvents: false });
+ 	const { off } = renderer.loop.onLoop(update);
+ 	onUnmounted(destroy);
+ 	onUnmounted(off);
+@@ -2095,7 +2096,7 @@ var Context_default = /* @__PURE__ */ defineComponent({
  			}
  			provide(INJECTION_KEY, context);
  			provide("extend", extend);
