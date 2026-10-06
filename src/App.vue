@@ -5,6 +5,7 @@ import EmptyState from "./ui/EmptyState.vue";
 import Hero from "./ui/Hero/Hero.vue";
 import Overlay from "./ui/Overlay.vue";
 import RightColumn from "./ui/RightColumn.vue";
+import SubagentStrip from "./ui/Subagents/SubagentStrip.vue";
 import TopBar from "./ui/TopBar/TopBar.vue";
 </script>
 
@@ -17,5 +18,6 @@ import TopBar from "./ui/TopBar/TopBar.vue";
     <CameraControls />
     <EmptyState />
     <RightColumn />
+    <SubagentStrip />
   </Overlay>
 </template>
