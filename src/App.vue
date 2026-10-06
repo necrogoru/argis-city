@@ -4,6 +4,7 @@ import CameraControls from "./ui/CameraControls.vue";
 import EmptyState from "./ui/EmptyState.vue";
 import Hero from "./ui/Hero/Hero.vue";
 import Overlay from "./ui/Overlay.vue";
+import RightColumn from "./ui/RightColumn.vue";
 </script>
 
 <!-- Composition only: 3D city behind, glass UI overlay in front. -->
@@ -13,5 +14,6 @@ import Overlay from "./ui/Overlay.vue";
     <Hero />
     <CameraControls />
     <EmptyState />
+    <RightColumn />
   </Overlay>
 </template>
