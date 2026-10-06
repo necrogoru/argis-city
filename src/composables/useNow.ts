@@ -1,4 +1,10 @@
-import { createSharedComposable, useTimestamp } from "@vueuse/core";
+import { createSharedComposable, useIntervalFn, useTimestamp } from "@vueuse/core";
 
-/** Current epoch ms, ticking every second — one timer shared by every caller. */
-export const useNow = createSharedComposable(() => useTimestamp({ interval: 1_000 }));
+/**
+ * Current epoch ms, ticking every second — one timer shared by every caller.
+ * The explicit interval scheduler matters: useTimestamp's default ticks on
+ * every animation frame.
+ */
+export const useNow = createSharedComposable(() =>
+  useTimestamp({ scheduler: (tick) => useIntervalFn(tick, 1_000) }),
+);
