@@ -22,7 +22,7 @@ export function notePress(press: ScreenPoint): void {
 }
 
 /**
- * React-Three-Fiber-style click on top of TresJS pointer events: fires on
+ * Press-and-release click on top of TresJS pointer events: fires on
  * pointer-up over the object that was pressed, whatever the press duration,
  * unless the pointer travelled more than CLICK_TOLERANCE_PX (a camera drag).
  * TresJS's own `click` only fires within 300 ms and has no travel distance.

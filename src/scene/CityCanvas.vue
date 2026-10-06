@@ -38,8 +38,8 @@ provide(labelLayerKey, labels);
     <!--
       The scene composer replaces TresJS's render, so the canvas only receives the
       final full-screen pass: no depth buffer needed, and an opaque canvas is
-      cheaper for the compositor to blend. No tone mapping, as under
-      @react-three/postprocessing: the HDR emissives feed bloom untouched.
+      cheaper for the compositor to blend. No tone mapping: the HDR emissives
+      feed bloom untouched.
     -->
     <TresCanvas
       :dpr="DPR"

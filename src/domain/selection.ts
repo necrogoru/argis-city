@@ -10,7 +10,7 @@ export const EMPTY_SELECTION: Selection = { sessionId: null, provider: null };
 
 /**
  * Keep a selection valid against a new snapshot. Returns the *same* object when
- * nothing changes so React can bail out of re-renders.
+ * nothing changes, so consumers can skip work when the selection is unchanged.
  */
 export function reconcileSelection(selection: Selection, snapshot: Snapshot): Selection {
   const { sessionId } = selection;

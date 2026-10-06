@@ -26,7 +26,7 @@ const controlsComponent = shallowRef<InstanceType<typeof CameraControls> | null>
 const controls = computed(() => controlsComponent.value?.instance ?? null);
 
 // TresJS resizes only perspective cameras: keep the orthographic frustum at
-// one world unit per CSS pixel, as React Three Fiber did.
+// one world unit per CSS pixel, as layout.ts's fitZoom assumes.
 watchEffect(() => {
   const active = camera.value;
   if (active instanceof OrthographicCamera && sizes.width.value && sizes.height.value) {

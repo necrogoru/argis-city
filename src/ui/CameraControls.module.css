@@ -1,9 +1,0 @@
-.controls {
-  position: absolute;
-  left: var(--gutter);
-  bottom: calc(var(--gutter) + var(--strip-space, 0px));
-  display: flex;
-  gap: 8px;
-  pointer-events: auto;
-  transition: bottom 260ms var(--ease-out);
-}
