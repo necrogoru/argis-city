@@ -2,6 +2,7 @@
 import CityCanvas from "./scene/CityCanvas.vue";
 import CameraControls from "./ui/CameraControls.vue";
 import EmptyState from "./ui/EmptyState.vue";
+import Hero from "./ui/Hero/Hero.vue";
 import Overlay from "./ui/Overlay.vue";
 </script>
 
@@ -9,6 +10,7 @@ import Overlay from "./ui/Overlay.vue";
 <template>
   <CityCanvas />
   <Overlay>
+    <Hero />
     <CameraControls />
     <EmptyState />
   </Overlay>
