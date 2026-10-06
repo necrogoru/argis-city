@@ -1,0 +1,13 @@
+diff --git a/dist/tres.js b/dist/tres.js
+index 43e327457889edff92f57dbc0107a6420dd949f5..e7d2a2965487af44fc7b05a5194d256de1bf91ac 100644
+--- a/dist/tres.js
++++ b/dist/tres.js
+@@ -2095,7 +2095,7 @@ var Context_default = /* @__PURE__ */ defineComponent({
+ 			}
+ 			provide(INJECTION_KEY, context);
+ 			provide("extend", extend);
+-			if (typeof window !== "undefined" && ctx?.app) registerTresDevtools(ctx?.app, context);
++			// argis patch: no devtools bridge (per-vsync rAF loops and scene traversal in every build).
+ 			return () => {
+ 				hmrTick.value;
+ 				return h(Fragment, null, slots.default?.() ?? []);
