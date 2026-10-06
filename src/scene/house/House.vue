@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef } from "vue";
+import { computed, shallowRef, watch } from "vue";
 import type { Group, Object3D } from "three";
 import type { AgentStatus, ProviderId } from "../../domain/types";
 import { PALETTE } from "../../domain/palette";
@@ -7,6 +7,7 @@ import { housePhase, houseVisual } from "../../domain/houseVisuals";
 import { useCursor } from "../../composables/useCursor";
 import { useDoneRipple } from "../../composables/useDoneRipple";
 import { useHouseMotion } from "../../composables/useHouseMotion";
+import { useHoverSources } from "../../composables/useHoverSources";
 import { usePressClick } from "../../composables/usePressClick";
 import { useHoverStore } from "../../stores/hover";
 import { HOUSE_TOP, selectionRingGeometry } from "../geometries";
@@ -40,28 +41,27 @@ const emit = defineEmits<{ select: [id: string] }>();
 // returns a readonly view that silently drops every mutation to a three.js object.
 const group = shallowRef<Group | null>(null);
 const initial: [number, number, number] = [props.x, 0, props.z];
-const pointerOver = ref(false);
 const hover = useHoverStore();
 const hovered = computed(() => hover.hoveredId === props.id);
 const visual = computed(() => houseVisual(props.status, props.provider));
 const phase = computed(() => housePhase(props.id));
 const ripples = useDoneRipple(() => props.status);
-useCursor(pointerOver);
+// The house is hovered while the pointer is on its mesh or on its label.
+const sources = useHoverSources(() => props.id, hover);
+useCursor(sources.mesh);
 useHouseMotion(group, () => props.x, () => props.z, () => hovered.value || props.selected);
 
 const select = () => emit("select", props.id);
-const enter = () => hover.set(props.id);
-const leave = () => hover.clear(props.id);
 const press = usePressClick(select, { stop: true });
+// Selecting swaps the label for the marker; an unmounted label never reports its leave.
+watch(
+  () => props.selected,
+  (selected) => selected && sources.labelLeave(),
+);
 
 function onPointerover(event: { stopPropagation(): void }) {
   event.stopPropagation();
-  pointerOver.value = true;
-  enter();
-}
-function onPointerout() {
-  pointerOver.value = false;
-  leave();
+  sources.meshOver();
 }
 </script>
 
@@ -73,7 +73,7 @@ function onPointerout() {
     @pointerdown="press.onPointerdown"
     @pointerup="press.onPointerup"
     @pointerover="onPointerover"
-    @pointerout="onPointerout"
+    @pointerout="sources.meshOut()"
   >
     <HouseShell :visual="visual" :phase="phase" :hovered="hovered" />
     <HouseBeacon :visual="visual" :phase="phase" />
@@ -92,8 +92,8 @@ function onPointerout() {
       :lift="labelLift(index, ring)"
       :occluders="occluders"
       @select="select"
-      @enter="enter"
-      @leave="leave"
+      @enter="sources.labelEnter()"
+      @leave="sources.labelLeave()"
     />
   </TresGroup>
 </template>

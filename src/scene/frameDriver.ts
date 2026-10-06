@@ -12,14 +12,24 @@ export interface LoopControls {
  * skips most of them — and in WKWebView every one of those wake-ups costs a
  * rendering update in the page and the UI process. Instead, after each frame
  * the loop is parked and a timer restarts it when the next frame is due. An
- * unlimited rate (camera moving) keeps the loop running continuously.
+ * unlimited rate (camera moving) keeps the loop running continuously, and
+ * `wake` renders the next frame at once (pointer input, state changes).
  */
 export function createFrameDriver(loop: LoopControls, fps: () => number) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let parked = false;
+  /** A frame just ended and its park is queued behind the frame callback. */
+  let parkPending = false;
+  let disposed = false;
 
   function resume(): void {
     clearTimeout(timer);
+    // Asked again before the queued park ran (a watcher flushing in the same
+    // microtask queue): cancel the park and let the next vsync render.
+    if (parkPending) {
+      parkPending = false;
+      return;
+    }
     if (!parked) return;
     parked = false;
     loop.start();
@@ -32,19 +42,28 @@ export function createFrameDriver(loop: LoopControls, fps: () => number) {
       if (!Number.isFinite(rate)) return;
       // Stop once the current animation-frame callback has returned, so the
       // frame it already re-requested is cancelled too.
+      parkPending = true;
       queueMicrotask(() => {
+        if (!parkPending || disposed) return;
+        parkPending = false;
         loop.stop();
         parked = true;
       });
       clearTimeout(timer);
       timer = setTimeout(resume, frameDelayMs(rate));
     },
-    /** Call when the rate changes: lifting the cap resumes at once. */
+    /** Call when the rate changes: the new rate applies from a frame rendered now. */
     rateChanged(): void {
-      if (!Number.isFinite(fps())) resume();
+      resume();
     },
+    /** Render the next frame now instead of when the timer is due. */
+    wake(): void {
+      resume();
+    },
+    /** Hand the loop back running, so a remounted driver is never stuck parked. */
     dispose(): void {
-      clearTimeout(timer);
+      resume();
+      disposed = true;
     },
   };
 }
