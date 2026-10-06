@@ -13,8 +13,9 @@ React patterns translated into Vue syntax.
 
 1. Side-by-side screenshots of `main` (React) and `vue-migration` (Vue) match.
 2. Every item in the behavior checklist (below) works as it does today.
-3. `vue-tsc --noEmit` is clean; the existing 13 test files pass unchanged; new
-   store/composable tests pass.
+3. `vue-tsc --noEmit` is clean; 12 existing test files pass unchanged (the
+   hover-store test is ported, see Verification); new store/composable tests
+   pass.
 4. Production-build CPU and memory are within run-to-run noise of today's React
    numbers or better (see Performance gate).
 5. `package.json` contains no React packages.
@@ -33,8 +34,9 @@ changes, Tauri config changes. Any of these is separate follow-up work.
 | Reusable logic | React hooks, a `CameraRig` class, a hover-store factory | Vue composables (`useXxx`) built on the Composition API; Vue 3.5 built-ins (`useTemplateRef`, `useId`) where applicable |
 | Utilities | manual `addEventListener` / `setInterval` | **VueUse** (`useNow`, `useIntervalFn`, `onKeyStroke`, `useEventListener`, `useWindowFocus`, `createSharedComposable`) |
 | Panel content kept during fade-out | `useRetained` hook | a `watch` that remembers the last selected session (both slots stay mounted and crossfade with CSS, as today) |
-| Overlays | portals | `<Teleport to="body">` |
-| 3D | `@react-three/fiber`, `drei`, `@react-three/postprocessing` | `@tresjs/core`, `@tresjs/cientos`, `@tresjs/post-processing` |
+| Overlays | native `<dialog>` + `showModal()` (top layer) | unchanged — the ⌘K palette stays a native modal dialog, so no `<Teleport>` is needed |
+| 3D | `@react-three/fiber`, `drei`, `@react-three/postprocessing` | `@tresjs/core`, `@tresjs/cientos` (`Html`, `Grid`, `CameraControls`); post-processing via a `useEffectComposer` composable on `postprocessing`; connection lines via `SegmentLines.vue` on three's `LineSegments2` |
+| File layout | hooks and contexts under `state/`, `scene/`, `ui/` | Pinia stores in `src/stores/`, composables in `src/composables/` |
 | Icons | `lucide-react` | `@lucide/vue` |
 | Build / types | `@vitejs/plugin-react`, `tsc` | `@vitejs/plugin-vue` (+ TresJS template compiler options), `vue-tsc` |
 
@@ -42,9 +44,16 @@ changes, Tauri config changes. Any of these is separate follow-up work.
 `@react-three/drei`, `@react-three/postprocessing`, `lucide-react`,
 `@vitejs/plugin-react`, `@types/react`, `@types/react-dom`.
 **Added:** `vue`, `pinia`, `@vueuse/core`, `@tresjs/core`, `@tresjs/cientos`,
-`@tresjs/post-processing`, `@lucide/vue`, `@vitejs/plugin-vue`, `vue-tsc`.
-**Kept:** `three`, `postprocessing` (used by TresJS's composer too),
-`@tauri-apps/*`, `vite`, `vitest`, `typescript`.
+`@lucide/vue`, `postprocessing` (previously only a transitive dependency of
+`@react-three/postprocessing`; now imported directly), `@vitejs/plugin-vue`,
+`vue-tsc`.
+**Kept:** `three`, `@tauri-apps/*`, `vite`, `vitest`, `typescript`.
+
+**Not used: `@tresjs/post-processing`.** Each of its effect components adds its
+own `EffectPass`, so FXAA + Bloom would cost two full-screen passes and an extra
+full-resolution buffer, where today both are merged into one pass. A ~30-line
+`useEffectComposer()` composable builds the same merged pass on `postprocessing`
+directly and hands it to TresJS via `useLoop().render()`.
 
 ## What stays, what is rewritten
 
@@ -135,13 +144,13 @@ failures are logged with the `[argis]` prefix.
 | `<Canvas orthographic dpr gl shadows camera>` | `<TresCanvas :dpr="[1, 1.5]" :antialias="false" :alpha="false" :depth="false" shadows :shadow-map-type="PCFShadowMap" :clear-color="PALETTE.bg" :fps-limit="fpsLimit">` + `<TresOrthographicCamera>` (same position/zoom/near/far) |
 | `<color attach="background">`, `<fog attach="fog">` | `clear-color` prop, `<TresFog attach="fog" :args>` |
 | `useFrame((state, delta) => …)` | `useLoop().onBeforeRender(({ delta, elapsed }) => …)` |
-| drei `Html` (`portal`, `zIndexRange`, `occlude`, `onOcclude`) | cientos `Html`, same props, `@on-occlude` |
-| drei `Line` (base lines + dashed flow line) | cientos `Line2` (`vertexColors`, `dashed`, `dashSize`, `gapSize`; flow line advances `material.dashOffset` in the loop) |
+| drei `Html` (`portal`, `zIndexRange`, `occlude`, `onOcclude`) | cientos `Html` (`portal`, `zIndexRange`) **without** `occlude` — cientos always hides an occluded label (`display: none`), whereas today labels fade to 30 %; a `useOcclusion()` composable runs drei's raycast test and drives `data-occluded` |
+| drei `Line` with `segments` (base lines + dashed flow line) | `SegmentLines.vue` on three's `LineSegments2` / `LineSegmentsGeometry` / `LineMaterial` (what drei used) — cientos `Line2` has no `segments` mode and would join the house → tower pairs into one polyline, double-drawing segments with dashes running the wrong way |
 | drei `Grid` | cientos `Grid`, identical props |
 | drei `CameraControls` | cientos `CameraControls` (`make-default`, `min-zoom`/`max-zoom`, polar limits, `smooth-time`, `dolly-to-cursor`, same `mouseButtons`/`touches` from `camera-controls` `ACTION`) |
 | drei `useCursor` | `useCursor(hovered)` composable — `watch` setting `document.body.style.cursor`, reset on unmount |
-| `EffectComposer multisampling={0}` + `FXAA` + `Bloom` | `EffectComposerPmndrs :multisampling="0"` + `FXAAPmndrs` (first) + `BloomPmndrs` (same props) |
-| `onClick` / `onPointerOver` / `onPointerOut`, `event.delta` | `@click` / `@pointerover` / `@pointerout` (`@pmndrs/pointer-events`: `delta`, `stopPropagation()`); 6 px `CLICK_TOLERANCE_PX` rule unchanged |
+| `EffectComposer multisampling={0}` + `FXAA` + `Bloom` | `useEffectComposer()`: `EffectComposer({ multisampling: 0, frameBufferType: HalfFloatType })` + `RenderPass` + one `EffectPass(camera, FXAAEffect, BloomEffect)` (same props), installed with `useLoop().render()` |
+| `onClick` / `onPointerOver` / `onPointerOut`, `event.delta` | `@pointerover` / `@pointerout` unchanged; clicks via a `usePressClick()` composable (`@pointerdown` + `@pointerup`): in `@pmndrs/pointer-events` (TresJS's event layer) `delta` throws "not supported" and `click` only fires if released within 300 ms, so the composable restores React Three Fiber's semantics — any press duration, rejected when the pointer travelled more than the 6 px `CLICK_TOLERANCE_PX` |
 
 Shared geometries and materials remain module-level singletons from
 `geometries.ts` / `materials.ts`, bound with `:geometry` / `:material`.
@@ -152,9 +161,13 @@ Shared geometries and materials remain module-level singletons from
 - camera moving → no limit (display rate);
 - otherwise window focused → 30 fps; unfocused → 15 fps.
 
-"Moving" tracks camera-controls `wake` / `sleep` on the controls instance
-(covers drags, damping and animated transitions); focus comes from VueUse
-`useWindowFocus()`. The policy itself is a pure function
+"Moving" is set by any camera-controls activity event (`controlstart`,
+`control`, `transitionstart`, `update`, `wake`) and cleared 150 ms after the
+last one — this covers drags, damping and animated transitions, and also a
+press that never moves the camera (where `sleep` would never fire). Focus comes
+from VueUse `useWindowFocus()`. `CameraRigBinding` is mounted before the city
+so the controls update ahead of the label projections each frame (drei ran it
+at priority −1 for the same reason). The policy itself is a pure function
 `fpsLimitFor({ moving, focused })` so it is unit-tested without a canvas.
 
 **Reactivity rules (protect the performance work)**
@@ -174,21 +187,24 @@ Shared geometries and materials remain module-level singletons from
    requests a frame every vsync even when it skips the callback. Measure against
    today's numbers; if it costs measurably, stop the TresJS loop and drive frames
    from a timer, as `FrameThrottle` does today.
-2. **Labels.** cientos `Html` occlusion (fade behind the tower) and the stable
-   label-layer portal must match today, including the remount race documented in
-   `LabelLayer.tsx`.
-3. **Pointer travel.** Confirm `@pmndrs/pointer-events` `delta` is the pixel
-   distance since pointer-down (React Three Fiber semantics); if not, track it
-   from `pointerdown` on the canvas.
-4. **Composer.** `EffectComposerPmndrs` renders exactly once per loop tick, with
-   FXAA ahead of Bloom.
+2. **Labels.** The stable label-layer portal must match today, including the
+   remount race documented in `LabelLayer.tsx`. (Occlusion is handled by
+   `useOcclusion`, see above.)
+3. **Pointer travel.** Resolved while planning: `@pmndrs/pointer-events`'
+   `delta` is unsupported and its `click` is time-gated (300 ms); see
+   `usePressClick` above. The spike still checks a slow click and a short drag
+   on a house by hand.
+4. **Composer.** `useEffectComposer` renders exactly once per loop tick with
+   FXAA ahead of Bloom in a single pass — verified by screenshot parity.
 
 ## Verification
 
 **Automated**
 
-- `vue-tsc --noEmit` clean; `vitest run` — the 13 existing test files unchanged
-  and green.
+- `vue-tsc --noEmit` clean; `vitest run` — 12 of the 13 existing test files
+  unchanged and green. The 13th, `state/hoverStore.test.ts`, tests the React-era
+  store factory; its cases move to the Pinia hover store's test, and it is
+  deleted with the factory.
 - New Vitest tests (no DOM): snapshot store ordering (`accept()`), selection
   reconciliation persistence, Escape peeling (house → district), hover
   set/clear race guard, `fpsLimitFor` (30 / 15 / unlimited).
