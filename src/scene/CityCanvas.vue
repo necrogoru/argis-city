@@ -1,20 +1,17 @@
 <script setup lang="ts">
 import { computed, provide, useTemplateRef } from "vue";
 import { storeToRefs } from "pinia";
-import { useWindowFocus } from "@vueuse/core";
 import { TresCanvas } from "@tresjs/core";
 import { Color, NoToneMapping, PCFShadowMap } from "three";
 import { PALETTE } from "../domain/palette";
 import { labelLayerKey } from "../composables/useLabelLayer";
-import { useCameraRigStore } from "../stores/cameraRig";
 import { useSelectionStore } from "../stores/selection";
 import { useSnapshotStore } from "../stores/snapshot";
 import { buildCity } from "./cityModel";
-import { fpsLimitFor, rafFpsLimit } from "./frameRate";
 import CameraRigBinding from "./CameraRigBinding.vue";
 import CityScene from "./CityScene.vue";
 import Effects from "./Effects.vue";
-import FpsProbe from "./FpsProbe.vue";
+import FrameDriver from "./FrameDriver.vue";
 import Lights from "./Lights.vue";
 
 const CAMERA_POSITION: [number, number, number] = [60, 60, 60];
@@ -29,10 +26,7 @@ const background = new Color(PALETTE.bg);
 
 const { snapshot } = storeToRefs(useSnapshotStore());
 const { selection } = storeToRefs(useSelectionStore());
-const { moving } = storeToRefs(useCameraRigStore());
-const focused = useWindowFocus();
 const city = computed(() => buildCity(snapshot.value));
-const fpsLimit = computed(() => rafFpsLimit(fpsLimitFor({ moving: moving.value, focused: focused.value })));
 
 const labels = useTemplateRef<HTMLDivElement>("labels");
 provide(labelLayerKey, labels);
@@ -55,8 +49,8 @@ provide(labelLayerKey, labels);
       shadows
       :shadow-map-type="PCFShadowMap"
       :tone-mapping="NoToneMapping"
-      :fps-limit="fpsLimit"
     >
+      <FrameDriver />
       <TresOrthographicCamera :position="CAMERA_POSITION" :zoom="22" :near="0.1" :far="1000" />
       <primitive :object="background" attach="background" />
       <TresFog attach="fog" :args="[PALETTE.bg, 110, 175]" />
@@ -65,7 +59,6 @@ provide(labelLayerKey, labels);
       <Lights />
       <CityScene :city="city" />
       <Effects />
-      <FpsProbe />
     </TresCanvas>
     <div ref="labels" class="labels" />
   </div>

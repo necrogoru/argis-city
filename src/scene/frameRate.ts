@@ -18,12 +18,7 @@ export function fpsLimitFor({ moving, focused }: { moving: boolean; focused: boo
 /** Fire this much early so vsync jitter never pushes a frame to the next vsync. */
 const VSYNC_SLACK_MS = 4;
 
-/**
- * The limit to hand TresJS's `fps-limit`. Its rAF loop (VueUse `useRafFn`) drops
- * any frame that arrives even slightly early, so asking for exactly 30 fps on a
- * 60 Hz display lands on every second *or third* vsync (~22 fps). Shortening the
- * accepted interval by a few ms makes it every second vsync, reliably.
- */
-export function rafFpsLimit(fps: number): number {
-  return Number.isFinite(fps) ? 1000 / (1000 / fps - VSYNC_SLACK_MS) : fps;
+/** Timer delay from one rendered frame to the next at `fps` (see frameDriver.ts). */
+export function frameDelayMs(fps: number): number {
+  return 1000 / fps - VSYNC_SLACK_MS;
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, useTemplateRef, watch, watchEffect } from "vue";
+import { computed, shallowRef, watch, watchEffect } from "vue";
 import { useTres } from "@tresjs/core";
 import { BaseCameraControls, CameraControls } from "@tresjs/cientos";
 import { OrthographicCamera } from "three";
@@ -20,7 +20,9 @@ const MOVE_GRACE_MS = 150;
 const props = defineProps<{ city: CityModel; hasData: boolean; focusedProvider: ProviderId | null }>();
 const rig = useCameraRigStore();
 const { camera, sizes } = useTres();
-const controlsComponent = useTemplateRef<InstanceType<typeof CameraControls>>("controls");
+// Template refs to three.js objects are plain shallowRefs: in dev builds useTemplateRef
+// returns a readonly view that silently drops every mutation to a three.js object.
+const controlsComponent = shallowRef<InstanceType<typeof CameraControls> | null>(null);
 const controls = computed(() => controlsComponent.value?.instance ?? null);
 
 // TresJS resizes only perspective cameras: keep the orthographic frustum at
@@ -89,7 +91,7 @@ watch(
 <!-- In-canvas half of the camera rig: owns CameraControls and reacts to focus. -->
 <template>
   <CameraControls
-    ref="controls"
+    ref="controlsComponent"
     make-default
     :min-zoom="MIN_ZOOM"
     :max-zoom="MAX_ZOOM"

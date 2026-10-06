@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BACKGROUND_FPS, FOCUSED_FPS, fpsLimitFor, rafFpsLimit } from "./frameRate";
+import { BACKGROUND_FPS, FOCUSED_FPS, fpsLimitFor, frameDelayMs } from "./frameRate";
 
 describe("fpsLimitFor", () => {
   it("caps ambient animation at 30 fps while the window is focused", () => {
@@ -18,22 +18,16 @@ describe("fpsLimitFor", () => {
   });
 });
 
-describe("rafFpsLimit", () => {
-  /** Shortest frame interval TresJS's rAF loop accepts for a given target rate. */
-  const minInterval = (fps: number) => 1000 / rafFpsLimit(fps);
+describe("frameDelayMs", () => {
   const vsync60 = 1000 / 60;
 
-  it("30 fps renders every second 60 Hz vsync even when it arrives 1 ms early", () => {
-    expect(minInterval(30)).toBeLessThan(2 * vsync60 - 1);
-    expect(minInterval(30)).toBeGreaterThan(vsync60 + 1);
+  it("30 fps waits just under two 60 Hz vsyncs, so the next frame lands on the second one", () => {
+    expect(frameDelayMs(30)).toBeLessThan(2 * vsync60 - 1);
+    expect(frameDelayMs(30)).toBeGreaterThan(vsync60 + 1);
   });
 
-  it("15 fps renders every fourth 60 Hz vsync even when it arrives 1 ms early", () => {
-    expect(minInterval(15)).toBeLessThan(4 * vsync60 - 1);
-    expect(minInterval(15)).toBeGreaterThan(3 * vsync60 + 1);
-  });
-
-  it("leaves an unlimited rate unlimited", () => {
-    expect(rafFpsLimit(Infinity)).toBe(Infinity);
+  it("15 fps waits just under four 60 Hz vsyncs", () => {
+    expect(frameDelayMs(15)).toBeLessThan(4 * vsync60 - 1);
+    expect(frameDelayMs(15)).toBeGreaterThan(3 * vsync60 + 1);
   });
 });
