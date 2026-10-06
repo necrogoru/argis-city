@@ -2,13 +2,20 @@
 import { computed, ref, shallowRef } from "vue";
 import type { Group, Object3D } from "three";
 import type { AgentStatus, ProviderId } from "../../domain/types";
+import { PALETTE } from "../../domain/palette";
 import { housePhase, houseVisual } from "../../domain/houseVisuals";
 import { useCursor } from "../../composables/useCursor";
+import { useDoneRipple } from "../../composables/useDoneRipple";
 import { useHouseMotion } from "../../composables/useHouseMotion";
 import { usePressClick } from "../../composables/usePressClick";
 import { useHoverStore } from "../../stores/hover";
+import { HOUSE_TOP, selectionRingGeometry } from "../geometries";
 import { labelLift } from "../layout";
+import { selectionRingMaterial } from "../materials";
+import GroundPulse from "./GroundPulse.vue";
+import HouseBeacon from "./HouseBeacon.vue";
 import HouseLabel from "./HouseLabel.vue";
+import HouseMarker from "./HouseMarker.vue";
 import HouseShell from "./HouseShell.vue";
 
 const props = defineProps<{
@@ -38,6 +45,7 @@ const hover = useHoverStore();
 const hovered = computed(() => hover.hoveredId === props.id);
 const visual = computed(() => houseVisual(props.status, props.provider));
 const phase = computed(() => housePhase(props.id));
+const ripples = useDoneRipple(() => props.status);
 useCursor(pointerOver);
 useHouseMotion(group, () => props.x, () => props.z, () => hovered.value || props.selected);
 
@@ -68,8 +76,15 @@ function onPointerout() {
     @pointerout="onPointerout"
   >
     <HouseShell :visual="visual" :phase="phase" :hovered="hovered" />
+    <HouseBeacon :visual="visual" :phase="phase" />
+    <GroundPulse v-if="visual.groundPulse" :hex="visual.hex" loop />
+    <GroundPulse v-if="ripples > 0" :key="ripples" :hex="PALETTE.blue" />
+    <template v-if="selected">
+      <TresMesh :geometry="selectionRingGeometry" :material="selectionRingMaterial" :position-y="0.06" />
+      <HouseMarker :position="[0, HOUSE_TOP + 0.05, 0]" :title="title" :percent="percent" />
+    </template>
     <HouseLabel
-      v-if="!selected"
+      v-else
       :title="title"
       :status="status"
       :opacity="visual.labelOpacity"
