@@ -23,7 +23,7 @@ const layer = useLabelLayer();
 
 <!-- In-scene glass pill anchored to the tower top, rendered into the label layer. -->
 <template>
-  <Html v-if="layer" :position="position" :portal="layer" :z-index-range="[50, 41]">
+  <Html v-if="layer" :position="position" :portal="layer" :z-index-range="[50, 41]" pointer-events="none">
     <div class="root" :style="{ '--accent': meta.hex }" :data-state="state">
       <button
         type="button"

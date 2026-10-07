@@ -42,7 +42,7 @@ const style = computed(() => ({
 -->
 <template>
   <TresGroup ref="anchor" :position="[0, LABEL_Y, 0]">
-    <Html v-if="layer" :portal="layer" :z-index-range="[40, 0]">
+    <Html v-if="layer" :portal="layer" :z-index-range="[40, 0]" pointer-events="none">
       <div
         class="label"
         :style="style"

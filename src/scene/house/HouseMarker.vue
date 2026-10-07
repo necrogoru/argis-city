@@ -8,9 +8,12 @@ defineProps<{ position: [number, number, number]; title: string; progress: strin
 const layer = useLabelLayer();
 </script>
 
-<!-- Solid teal callout above the selected house: `title · 68%` (or `· ctx 74%`), line, ring. -->
+<!--
+  Solid teal callout above the selected house: `title · 68%` (or `· ctx 74%`), line, ring.
+  Click-through, so the houses and labels it overlaps stay clickable.
+-->
 <template>
-  <Html v-if="layer" :position="position" :portal="layer" :z-index-range="[60, 51]">
+  <Html v-if="layer" :position="position" :portal="layer" :z-index-range="[60, 51]" pointer-events="none">
     <div class="root">
       <div class="callout">
         <span class="tile">
