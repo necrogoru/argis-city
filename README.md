@@ -1,3 +1,5 @@
+<img width="612" height="612" alt="claude ai_artifact_M98UsQy6xmCoXEqNGWY4xJ" src="https://github.com/user-attachments/assets/cf69e713-3722-4c8d-8455-d4a34ffd8373" />
+
 # Argis
 
 **See every coding agent on your machine as a living 3D city.**
