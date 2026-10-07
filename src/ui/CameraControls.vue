@@ -1,9 +1,18 @@
 <script setup lang="ts">
+import { onKeyStroke } from "@vueuse/core";
 import { useCameraRigStore } from "../stores/cameraRig";
-import { CAMERA_COMMANDS } from "./cameraCommands";
+import { CAMERA_COMMANDS, cameraCommandFor, shortcutAria } from "./cameraCommands";
 import IconButton from "./common/IconButton.vue";
 
 const rig = useCameraRigStore();
+
+// ⌘+ / ⌘− / ⌘0 anywhere in the window; holding repeats, like browser zoom.
+onKeyStroke((event) => {
+  const command = cameraCommandFor(event);
+  if (!command) return;
+  event.preventDefault();
+  command.run(rig);
+});
 </script>
 
 <!-- 44px round glass buttons, bottom-left above the subagent strip. -->
@@ -13,6 +22,7 @@ const rig = useCameraRigStore();
       v-for="command in CAMERA_COMMANDS"
       :key="command.label"
       :label="command.label"
+      :aria-keyshortcuts="shortcutAria(command.keys)"
       shape="round"
       :size="44"
       @click="command.run(rig)"

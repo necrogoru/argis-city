@@ -24,6 +24,7 @@ terminals.
   and progress.
 - **⌘K palette:** jump to any agent or district, open a session's folder, move
   the camera, refresh.
+- **Zoom keys:** ⌘+ / ⌘− zoom the city in and out, ⌘0 fits it to the window.
 - **Top bar:** live counts of active agents, subagents, tokens, and sessions
   waiting on you.
 

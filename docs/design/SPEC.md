@@ -45,7 +45,8 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   rounded swatch, provider name, "N houses" right (text-3); selected row has
   `#FFFFFF0D` fill. Rows filter/focus the camera on that tower.
 - **Camera controls** (x 40, bottom-left above the strip): 44px round glass
-  buttons: zoom in, zoom out, reset/rotate, fit.
+  buttons: zoom in, zoom out, reset/rotate, fit. Keys (Ctrl off macOS):
+  ⌘+ or ⌘= zooms in, ⌘− zooms out, ⌘0 fits; holding repeats.
 - **Tower labels** (in-scene HTML): glass pill (swatch + name + count chip),
   thin gradient line down to a glowing anchor dot on the tower top. The
   selected tower's pill has a 1px provider-colour stroke.
