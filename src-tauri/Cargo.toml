@@ -1,8 +1,8 @@
 [package]
 name = "argis"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "This is a tool created with Tauri to monitor AI agents, featuring a modern 3D city based on the FrostPunk generators and the way we build the city in that game."
+authors = ["Necrogoru"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
