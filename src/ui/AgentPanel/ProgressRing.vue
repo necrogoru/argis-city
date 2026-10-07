@@ -7,10 +7,12 @@ const props = withDefaults(
     fraction: number;
     label: string;
     caption: string;
+    /** No estimate: the centre value recedes instead of shouting a dash. */
+    muted?: boolean;
     size?: number;
     stroke?: number;
   }>(),
-  { size: 112, stroke: 8 },
+  { muted: false, size: 112, stroke: 8 },
 );
 const radius = computed(() => (props.size - props.stroke) / 2);
 const circumference = computed(() => 2 * Math.PI * radius.value);
@@ -34,7 +36,7 @@ const clamped = computed(() => Math.min(1, Math.max(0, props.fraction)));
       />
     </svg>
     <div class="center">
-      <span class="value">{{ label }}</span>
+      <span class="value" :data-muted="muted">{{ label }}</span>
       <span class="caption">{{ caption }}</span>
     </div>
   </div>
@@ -74,6 +76,10 @@ const clamped = computed(() => Math.min(1, Math.max(0, props.fraction)));
   font-weight: 500;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+
+.value[data-muted="true"] {
+  color: var(--text-3);
 }
 
 .caption {

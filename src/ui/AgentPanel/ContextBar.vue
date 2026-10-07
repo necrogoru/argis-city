@@ -16,12 +16,12 @@ const share = computed(() => contextShare(props.tokens));
 const readout = computed(() => {
   const { contextUsed, contextWindow } = props.tokens;
   return share.value != null && contextUsed != null && contextWindow != null
-    ? `${formatTokens(contextUsed)} / ${formatCompact(contextWindow)}`
+    ? `${formatTokens(contextUsed)} / ${formatCompact(contextWindow)} · ${Math.round(share.value * 100)}%`
     : "Unknown";
 });
 </script>
 
-<!-- 6px context-window bar with used / window readout. -->
+<!-- 6px context-window bar with `used / window · %` readout (the panel's only context number). -->
 <template>
   <div class="block">
     <div class="head">

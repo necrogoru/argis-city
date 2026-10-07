@@ -25,7 +25,9 @@ const tooltip = computed(() => (props.agent.kind ? `${props.agent.title} (${prop
       <span :style="{ width: `${progressFraction(agent.progress) * 100}%` }" />
     </div>
     <div class="meta">
-      <span :title="`Progress: ${progress.caption}`"><Gauge :size="12" aria-hidden="true" />{{ progress.label }}</span>
+      <span :title="agent.progress.source === 'context' ? 'Context window fill (no plan)' : `Progress: ${progress.caption}`">
+        <Gauge :size="12" aria-hidden="true" />{{ progress.short }}
+      </span>
       <span title="Tokens"><Coins :size="12" aria-hidden="true" />{{ formatTokens(agent.tokens.total) }}</span>
       <span title="Elapsed"><Clock :size="12" aria-hidden="true" /><Elapsed :item="agent" /></span>
     </div>

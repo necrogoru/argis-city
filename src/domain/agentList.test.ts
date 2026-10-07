@@ -6,7 +6,7 @@ import {
   toggleFilter,
   visibleChips,
 } from "./agentList";
-import { session } from "./testFixtures";
+import { session, subagent } from "./testFixtures";
 
 const sessions = [
   session({ id: "pi:1", provider: "pi", status: "idle", startedAt: 1 }),
@@ -15,16 +15,23 @@ const sessions = [
   session({ id: "claude:new-run", status: "running", startedAt: 20 }),
   session({ id: "claude:err", status: "error", startedAt: 5 }),
   session({ id: "codex:done", provider: "codex", status: "done", startedAt: 3 }),
+  session({
+    id: "codex:sub-wait",
+    provider: "codex",
+    status: "running",
+    startedAt: 4,
+    subagents: [subagent({ status: "awaitingApproval" })],
+  }),
 ];
 
 describe("statusCounts / visibleChips", () => {
   it("counts every status in display order", () => {
     expect(statusCounts(sessions)).toEqual([
-      { status: "awaitingApproval", count: 1 },
-      { status: "running", count: 2 },
+      { status: "awaitingApproval", count: 2 },
+      { status: "error", count: 1 },
+      { status: "running", count: 3 },
       { status: "idle", count: 1 },
       { status: "done", count: 1 },
-      { status: "error", count: 1 },
     ]);
   });
 
@@ -44,7 +51,15 @@ describe("filtering", () => {
 
   it("returns all sessions without a filter, matching ones with it", () => {
     expect(filterSessions(sessions, null)).toHaveLength(sessions.length);
-    expect(filterSessions(sessions, "running").map((s) => s.id)).toEqual(["claude:old-run", "claude:new-run"]);
+    expect(filterSessions(sessions, "running").map((s) => s.id)).toEqual([
+      "claude:old-run",
+      "claude:new-run",
+      "codex:sub-wait",
+    ]);
+  });
+
+  it("files a session whose subagent waits under 'Needs you'", () => {
+    expect(filterSessions(sessions, "awaitingApproval").map((s) => s.id)).toEqual(["claude:wait", "codex:sub-wait"]);
   });
 });
 
@@ -53,19 +68,24 @@ describe("groupSessions", () => {
     expect(groupSessions(sessions, null).map((g) => g.provider)).toEqual(["claude", "codex", "pi"]);
   });
 
-  it("sorts 'needs you' first, then running (oldest first), then error", () => {
+  it("sorts 'needs you' first, then error, then running (oldest first)", () => {
     const claude = groupSessions(sessions, null)[0];
     expect(claude.sessions.map((s) => s.id)).toEqual([
       "claude:wait",
+      "claude:err",
       "claude:old-run",
       "claude:new-run",
-      "claude:err",
     ]);
+  });
+
+  it("sorts a session with a waiting subagent with 'needs you'", () => {
+    const codex = groupSessions(sessions, null)[1];
+    expect(codex.sessions.map((s) => s.id)).toEqual(["codex:sub-wait", "codex:done"]);
   });
 
   it("applies the status filter before grouping", () => {
     const groups = groupSessions(sessions, "awaitingApproval");
-    expect(groups).toHaveLength(1);
+    expect(groups.map((g) => g.provider)).toEqual(["claude", "codex"]);
     expect(groups[0].sessions.map((s) => s.id)).toEqual(["claude:wait"]);
     expect(groupSessions(sessions, "done").map((g) => g.provider)).toEqual(["codex"]);
   });

@@ -24,7 +24,8 @@ const props = defineProps<{
   provider: ProviderId;
   status: AgentStatus;
   title: string;
-  percent: number | null;
+  /** Short progress readout for the selection marker: `68%`, `ctx 74%` or `—`. */
+  progress: string;
   /** 0-based index and ring within the district (label stagger). */
   index: number;
   ring: number;
@@ -81,7 +82,7 @@ function onPointerover(event: { stopPropagation(): void }) {
     <GroundPulse v-if="ripples > 0" :key="ripples" :hex="PALETTE.blue" />
     <template v-if="selected">
       <TresMesh :geometry="selectionRingGeometry" :material="selectionRingMaterial" :position-y="0.06" />
-      <HouseMarker :position="[0, HOUSE_TOP + 0.05, 0]" :title="title" :percent="percent" />
+      <HouseMarker :position="[0, HOUSE_TOP + 0.05, 0]" :title="title" :progress="progress" />
     </template>
     <HouseLabel
       v-else

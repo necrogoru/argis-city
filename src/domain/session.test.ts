@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contextShare, elapsedMs, findSelected, sessionsOf, subagentCounts } from "./session";
+import { contextShare, elapsedMs, findSelected, needsUser, sessionsOf, subagentCounts } from "./session";
 import { session, snapshot, subagent, tokenUsage } from "./testFixtures";
 
 describe("elapsedMs", () => {
@@ -31,6 +31,15 @@ describe("subagentCounts", () => {
       ],
     });
     expect(subagentCounts(s)).toEqual({ total: 4, running: 2, awaiting: 1 });
+  });
+});
+
+describe("needsUser", () => {
+  it("is true when the session or any of its subagents awaits approval", () => {
+    expect(needsUser(session({ status: "awaitingApproval" }))).toBe(true);
+    expect(needsUser(session({ status: "running", subagents: [subagent({ status: "awaitingApproval" })] }))).toBe(true);
+    expect(needsUser(session({ status: "running", subagents: [subagent({ status: "running" })] }))).toBe(false);
+    expect(needsUser(session({ status: "error" }))).toBe(false);
   });
 });
 

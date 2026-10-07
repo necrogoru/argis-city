@@ -1,6 +1,7 @@
 /** Pure grouping / sorting / filtering for the right-side "Agents" list. */
 import type { AgentSession, AgentStatus, ProviderId } from "./types";
 import { PROVIDER_ORDER, PROVIDERS, type ProviderMeta } from "./providers";
+import { needsUser } from "./session";
 import { STATUS_ORDER, statusRank } from "./status";
 
 export type StatusFilter = AgentStatus | null;
@@ -16,11 +17,19 @@ export interface AgentGroup {
   sessions: AgentSession[];
 }
 
+/**
+ * Whether a session belongs under a status chip. "Needs you" (`awaitingApproval`)
+ * also takes a session whose subagent is waiting: that is where the user must go.
+ */
+export function matchesStatus(session: AgentSession, status: AgentStatus): boolean {
+  return status === "awaitingApproval" ? needsUser(session) : session.status === status;
+}
+
 /** Counts per status in display order, including zeros. */
 export function statusCounts(sessions: readonly AgentSession[]): StatusCount[] {
   return STATUS_ORDER.map((status) => ({
     status,
-    count: sessions.filter((s) => s.status === status).length,
+    count: sessions.filter((s) => matchesStatus(s, status)).length,
   }));
 }
 
@@ -35,13 +44,18 @@ export function toggleFilter(current: StatusFilter, status: AgentStatus): Status
 }
 
 export function filterSessions(sessions: readonly AgentSession[], filter: StatusFilter): AgentSession[] {
-  return filter ? sessions.filter((s) => s.status === filter) : [...sessions];
+  return filter ? sessions.filter((s) => matchesStatus(s, filter)) : [...sessions];
 }
 
-/** "Needs you" first, then running, idle, done, error; oldest first within a status. */
+/** Status rank, except anything that needs the user ranks as "Needs you". */
+function attentionRank(session: AgentSession): number {
+  return needsUser(session) ? statusRank("awaitingApproval") : statusRank(session.status);
+}
+
+/** "Needs you" first, then error, running, idle, done; oldest first within a status. */
 export function compareSessions(a: AgentSession, b: AgentSession): number {
   return (
-    statusRank(a.status) - statusRank(b.status) ||
+    attentionRank(a) - attentionRank(b) ||
     a.startedAt - b.startedAt ||
     a.id.localeCompare(b.id)
   );

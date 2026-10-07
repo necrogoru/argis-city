@@ -10,7 +10,7 @@
 
   --text: #f2f5f4;
   --text-2: #8e9794;
-  --text-3: #5c6461;
+  --text-3: #7a8380;
   --text-on-accent: #062321;
 
   --teal: #32f3e2;
@@ -29,8 +29,9 @@
   --blur: 20px;
 
   --gutter: 40px;
-  --top-bar-y: 28px;
-  --top-bar-h: 56px;
+  /* Tall enough for the 80px brand mark; centre line stays at y 56. */
+  --top-bar-y: 16px;
+  --top-bar-h: 80px;
   --content-top: 124px;
   --panel-w: 340px;
   --strip-h: 112px;

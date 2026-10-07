@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { GitFork } from "@lucide/vue";
+import { GitFork, Hand } from "@lucide/vue";
 import type { AgentSession } from "../../domain/types";
-import { formatPercent } from "../../domain/format";
 import { cssVar } from "../../domain/palette";
-import { clampPercent } from "../../domain/progress";
+import { displayProgress } from "../../domain/progress";
+import { needsUser, subagentCounts } from "../../domain/session";
 import { statusMeta } from "../../domain/status";
 import { useHoverStore } from "../../stores/hover";
 import Elapsed from "../common/Elapsed.vue";
@@ -14,11 +14,23 @@ const emit = defineEmits<{ select: [id: string] }>();
 const hover = useHoverStore();
 const hovered = computed(() => hover.hoveredId === props.session.id);
 const meta = computed(() => statusMeta(props.session.status));
+const progress = computed(() => displayProgress(props.session.progress));
+const subagents = computed(() => subagentCounts(props.session));
+const subagentsTitle = computed(() => {
+  const { total, awaiting } = subagents.value;
+  const plural = total === 1 ? "subagent" : "subagents";
+  if (awaiting === 0) return `${total} ${plural}`;
+  return `${awaiting} of ${total} ${plural} need${awaiting === 1 ? "s" : ""} approval`;
+});
 const enter = () => hover.set(props.session.id);
 const leave = () => hover.clear(props.session.id);
 </script>
 
-<!-- Status accent + dot, title, `model · elapsed`, progress % and subagent badge. -->
+<!--
+  Status accent + dot, title, `model · elapsed`, progress (`63%`, or `ctx 66%`
+  when only context fill is known) and a subagent badge that turns amber when a
+  subagent waits on the user — the row then sorts and tints as "Needs you".
+-->
 <template>
   <li>
     <button
@@ -26,6 +38,7 @@ const leave = () => hover.clear(props.session.id);
       class="row"
       :style="{ '--tint': cssVar(meta.color) }"
       :data-status="session.status"
+      :data-needs-you="needsUser(session)"
       :data-hovered="hovered"
       @click="emit('select', session.id)"
       @pointerenter="enter"
@@ -40,12 +53,17 @@ const leave = () => hover.clear(props.session.id);
         <span class="sub">{{ session.model ?? "unknown model" }} · <Elapsed :item="session" /></span>
       </span>
       <span class="side">
-        <span class="percent">{{ formatPercent(clampPercent(session.progress.percent)) }}</span>
-        <span v-if="session.subagents.length > 0" class="badge" :title="`${session.subagents.length} subagents`">
-          <GitFork :size="10" aria-hidden="true" />{{ session.subagents.length }}
+        <span
+          class="percent"
+          :data-source="session.progress.source"
+          :title="session.progress.source === 'context' ? 'Context window fill (no plan to measure progress)' : undefined"
+        >{{ progress.short }}</span>
+        <span v-if="subagents.total > 0" class="badge" :data-alert="subagents.awaiting > 0" :title="subagentsTitle">
+          <template v-if="subagents.awaiting > 0"><Hand :size="10" aria-hidden="true" />{{ subagents.awaiting }}</template>
+          <template v-else><GitFork :size="10" aria-hidden="true" />{{ subagents.total }}</template>
         </span>
       </span>
-      <span class="sr-only">{{ meta.label }}</span>
+      <span class="sr-only">{{ meta.label }}<template v-if="subagents.awaiting > 0">, {{ subagentsTitle }}</template></span>
     </button>
   </li>
 </template>
@@ -69,13 +87,18 @@ const leave = () => hover.clear(props.session.id);
   background: var(--fill-hover);
 }
 
-.row[data-status="awaitingApproval"] {
+.row[data-needs-you="true"] {
   background: color-mix(in srgb, var(--amber) 9%, transparent);
 }
 
-.row[data-status="awaitingApproval"]:hover,
-.row[data-status="awaitingApproval"][data-hovered="true"] {
+.row[data-needs-you="true"]:hover,
+.row[data-needs-you="true"][data-hovered="true"] {
   background: color-mix(in srgb, var(--amber) 15%, transparent);
+}
+
+/* text-3 drops below 4.5:1 on the amber tint. */
+.row[data-needs-you="true"] .sub {
+  color: var(--text-2);
 }
 
 .accent {
@@ -140,6 +163,18 @@ const leave = () => hover.clear(props.session.id);
   font-weight: 500;
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Context fill, not progress: quieter so it doesn't read as "nearly done". */
+.percent[data-source="context"] {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+.row[data-needs-you="true"] .percent[data-source="context"] {
+  color: var(--text-2);
 }
 
 .badge {
@@ -153,6 +188,11 @@ const leave = () => hover.clear(props.session.id);
   font-weight: 600;
   color: var(--text-2);
   background: var(--fill-hover);
+}
+
+.badge[data-alert="true"] {
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 16%, transparent);
 }
 
 @keyframes urgent {

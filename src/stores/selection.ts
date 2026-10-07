@@ -1,7 +1,8 @@
 import { defineStore } from "pinia";
 import { computed, shallowRef, watch } from "vue";
 import { onKeyStroke } from "@vueuse/core";
-import type { ProviderId } from "../domain/types";
+import type { AgentStatus, ProviderId } from "../domain/types";
+import { toggleFilter, type StatusFilter } from "../domain/agentList";
 import {
   EMPTY_SELECTION,
   escapeSelection,
@@ -14,7 +15,7 @@ import {
 import { findSelected } from "../domain/session";
 import { useSnapshotStore } from "./snapshot";
 
-/** What the user is looking at — one house and/or one focused district. */
+/** What the user is looking at — one house and/or one focused district, and the list's status filter. */
 export const useSelectionStore = defineStore("selection", () => {
   const snapshots = useSnapshotStore();
   const raw = shallowRef<Selection>(EMPTY_SELECTION);
@@ -30,6 +31,7 @@ export const useSelectionStore = defineStore("selection", () => {
     { flush: "sync" },
   );
   const selectedSession = computed(() => findSelected(snapshots.snapshot, selection.value.sessionId));
+  const statusFilter = shallowRef<StatusFilter>(null);
 
   function selectSession(sessionId: string | null): void {
     raw.value = withSession(selection.value, sessionId);
@@ -43,6 +45,17 @@ export const useSelectionStore = defineStore("selection", () => {
   function toggleProvider(provider: ProviderId): void {
     raw.value = toggled(selection.value, provider);
   }
+  function toggleStatusFilter(status: AgentStatus): void {
+    statusFilter.value = toggleFilter(statusFilter.value, status);
+  }
+  function clearStatusFilter(): void {
+    statusFilter.value = null;
+  }
+  /** The "Needs you" KPI: back to the Agents list, filtered to what waits on the user. */
+  function showNeedsYou(): void {
+    clearSession();
+    statusFilter.value = "awaitingApproval";
+  }
   /** Escape peels one layer: first the house, then the district focus. */
   function escape(): void {
     raw.value = escapeSelection(selection.value);
@@ -53,5 +66,17 @@ export const useSelectionStore = defineStore("selection", () => {
     if (!event.defaultPrevented) escape();
   });
 
-  return { selection, selectedSession, selectSession, clearSession, focusProvider, toggleProvider, escape };
+  return {
+    selection,
+    selectedSession,
+    statusFilter,
+    selectSession,
+    clearSession,
+    focusProvider,
+    toggleProvider,
+    toggleStatusFilter,
+    clearStatusFilter,
+    showNeedsYou,
+    escape,
+  };
 });

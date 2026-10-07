@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, shallowRef } from "vue";
 import type { ProviderMeta } from "../domain/providers";
-import { clampPercent } from "../domain/progress";
+import { displayProgress } from "../domain/progress";
 import type { DistrictModel } from "./cityModel";
 import ConnectionLines from "./ConnectionLines.vue";
 import House from "./house/House.vue";
@@ -37,7 +37,7 @@ const lines = computed(() => props.district.houses.map((h) => ({ x: h.x, z: h.z,
       :provider="house.session.provider"
       :status="house.session.status"
       :title="house.session.title"
-      :percent="clampPercent(house.session.progress.percent)"
+      :progress="displayProgress(house.session.progress).short"
       :index="house.number - 1"
       :ring="house.ring"
       :x="house.x"

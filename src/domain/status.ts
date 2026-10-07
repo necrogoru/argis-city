@@ -21,13 +21,13 @@ export const STATUS_META: Readonly<Record<AgentStatus, StatusMeta>> = {
   error: { label: "Error", chipLabel: "Error", color: "red", icon: "alert" },
 };
 
-/** Display order: what needs the user first, finished/broken last. */
+/** Display order: what needs the user first (approval, then a failed turn), finished last. */
 export const STATUS_ORDER: readonly AgentStatus[] = [
   "awaitingApproval",
+  "error",
   "running",
   "idle",
   "done",
-  "error",
 ];
 
 export function statusMeta(status: AgentStatus): StatusMeta {

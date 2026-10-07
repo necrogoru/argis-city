@@ -13,8 +13,11 @@ interface Row {
 }
 
 function subagentText(session: AgentSession): string {
-  const { total, running } = subagentCounts(session);
-  return total === 0 ? "None" : `${total} · ${running} running`;
+  const { total, running, awaiting } = subagentCounts(session);
+  if (total === 0) return "None";
+  return [`${total}`, `${running} running`, awaiting > 0 ? `${awaiting} need${awaiting === 1 ? "s" : ""} you` : null]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 const props = defineProps<{ session: AgentSession }>();

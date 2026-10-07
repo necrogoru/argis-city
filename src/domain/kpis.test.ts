@@ -20,11 +20,19 @@ describe("computeKpis", () => {
         ],
       }),
       session({ id: "codex:b", provider: "codex", status: "idle", tokens: tokenUsage(4_000) }),
+      session({
+        id: "codex:c",
+        provider: "codex",
+        status: "running",
+        tokens: tokenUsage(0),
+        subagents: [subagent({ id: "s4", status: "awaitingApproval", tokens: tokenUsage(0) })],
+      }),
     ]);
 
+    // "Needs you" counts sessions (a: itself and a subagent; c: a subagent), not subagents.
     expect(computeKpis(snap)).toEqual({
-      activeAgents: 2,
-      subagents: 3,
+      activeAgents: 3,
+      subagents: 4,
       runningSubagents: 1,
       totalTokens: 15_000,
       awaiting: 2,

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { Html } from "@tresjs/cientos";
 import { House as HouseIcon } from "@lucide/vue";
-import { formatPercent } from "../../domain/format";
 import { useLabelLayer } from "../../composables/useLabelLayer";
 
-defineProps<{ position: [number, number, number]; title: string; percent: number | null }>();
+/** `progress` is the short readout (`68%`, `ctx 74%`); `—` hides it. */
+defineProps<{ position: [number, number, number]; title: string; progress: string }>();
 const layer = useLabelLayer();
 </script>
 
-<!-- Solid teal callout above the selected house: `title · 68%`, line, ring. -->
+<!-- Solid teal callout above the selected house: `title · 68%` (or `· ctx 74%`), line, ring. -->
 <template>
   <Html v-if="layer" :position="position" :portal="layer" :z-index-range="[60, 51]">
     <div class="root">
@@ -18,7 +18,7 @@ const layer = useLabelLayer();
         </span>
         <span class="text">
           <span class="title">{{ title }}</span>
-          <span v-if="percent != null" class="percent">· {{ formatPercent(percent) }}</span>
+          <span v-if="progress !== '—'" class="percent">· {{ progress }}</span>
         </span>
       </div>
       <span class="line" />
@@ -47,7 +47,7 @@ const layer = useLabelLayer();
   padding: 0 12px 0 5px;
   border-radius: 12px;
   background: var(--teal);
-  color: #062321;
+  color: var(--text-on-accent);
   box-shadow: 0 0 24px rgba(50, 243, 226, 0.35);
   white-space: nowrap;
 }

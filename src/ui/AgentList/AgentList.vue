@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import type { AgentStatus } from "../../domain/types";
-import { groupSessions, statusCounts, toggleFilter, type StatusFilter } from "../../domain/agentList";
+import { groupSessions, statusCounts } from "../../domain/agentList";
 import { useCameraRigStore } from "../../stores/cameraRig";
 import { useSelectionStore } from "../../stores/selection";
 import { useSnapshotStore } from "../../stores/snapshot";
@@ -11,14 +11,19 @@ import StatusChips from "./StatusChips.vue";
 
 const { snapshot } = storeToRefs(useSnapshotStore());
 const selection = useSelectionStore();
+const { statusFilter: filter } = storeToRefs(selection);
 const rig = useCameraRigStore();
-const filter = ref<StatusFilter>(null);
 const sessions = computed(() => snapshot.value?.sessions ?? []);
 const counts = computed(() => statusCounts(sessions.value));
 const groups = computed(() => groupSessions(sessions.value, filter.value));
+const emptyText = computed(() => {
+  if (!snapshot.value) return "Scanning for agents…";
+  if (filter.value === "awaitingApproval") return "Nothing needs you right now.";
+  return filter.value ? "No agents with this status." : "No live agents right now.";
+});
 
 function onToggle(status: AgentStatus): void {
-  filter.value = toggleFilter(filter.value, status);
+  selection.toggleStatusFilter(status);
 }
 function onSelect(id: string): void {
   selection.selectSession(id);
@@ -36,8 +41,8 @@ function onSelect(id: string): void {
     <div class="thin-scroll body">
       <AgentGroup v-for="group in groups" :key="group.provider" :group="group" @select="onSelect" />
       <div v-if="groups.length === 0" class="empty">
-        <p>{{ !snapshot ? "Scanning for agents…" : filter ? "No agents with this status." : "No live agents right now." }}</p>
-        <button v-if="filter" type="button" class="clear" @click="filter = null">Clear filter</button>
+        <p>{{ emptyText }}</p>
+        <button v-if="filter" type="button" class="clear" @click="selection.clearStatusFilter()">Clear filter</button>
         <p v-else-if="snapshot" class="hint">Start a Claude Code, Codex, OpenCode or Pi session.</p>
       </div>
     </div>

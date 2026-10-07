@@ -10,7 +10,7 @@ const emit = defineEmits<{ toggle: [status: AgentStatus] }>();
 const chips = computed(() => visibleChips(props.counts, props.filter));
 </script>
 
-<!-- Running · Needs you · Idle · Done · Error — non-zero only; click to filter. -->
+<!-- Needs you · Error · Running · Idle · Done — non-zero only; click to filter. -->
 <template>
   <div v-if="chips.length > 0" class="chips" role="group" aria-label="Filter by status">
     <button

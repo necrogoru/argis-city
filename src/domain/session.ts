@@ -42,6 +42,11 @@ export function subagentCounts(session: AgentSession): SubagentCounts {
   return { total: session.subagents.length, running, awaiting };
 }
 
+/** Blocked on the user: the session itself or one of its subagents awaits approval. */
+export function needsUser(session: AgentSession): boolean {
+  return session.status === "awaitingApproval" || session.subagents.some((a) => a.status === "awaitingApproval");
+}
+
 /** Sessions of one provider in stable house order (oldest first). */
 export function sessionsOf(snapshot: Snapshot, provider: ProviderId): AgentSession[] {
   return snapshot.sessions

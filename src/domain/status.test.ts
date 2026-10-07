@@ -28,11 +28,11 @@ describe("shared status colours", () => {
 });
 
 describe("statusRank", () => {
-  it("puts 'needs you' first and error last", () => {
+  it("puts 'needs you' first, then errors, and done last", () => {
     expect(STATUS_ORDER[0]).toBe("awaitingApproval");
-    expect(statusRank("awaitingApproval")).toBeLessThan(statusRank("running"));
+    expect(statusRank("awaitingApproval")).toBeLessThan(statusRank("error"));
+    expect(statusRank("error")).toBeLessThan(statusRank("running"));
     expect(statusRank("running")).toBeLessThan(statusRank("idle"));
     expect(statusRank("idle")).toBeLessThan(statusRank("done"));
-    expect(statusRank("done")).toBeLessThan(statusRank("error"));
   });
 });

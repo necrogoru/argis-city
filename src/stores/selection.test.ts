@@ -64,4 +64,23 @@ describe("useSelectionStore", () => {
     store.toggleProvider("codex");
     expect(store.selection.provider).toBeNull();
   });
+
+  it("toggles the list's status filter", () => {
+    const { store } = setup();
+    store.toggleStatusFilter("running");
+    expect(store.statusFilter).toBe("running");
+    store.toggleStatusFilter("running");
+    expect(store.statusFilter).toBeNull();
+  });
+
+  it("'Needs you' closes the house and filters the list to what waits on the user", () => {
+    const { store, show } = setup();
+    show("claude:a");
+    store.selectSession("claude:a");
+    store.showNeedsYou();
+    expect(store.selection.sessionId).toBeNull();
+    expect(store.statusFilter).toBe("awaitingApproval");
+    store.clearStatusFilter();
+    expect(store.statusFilter).toBeNull();
+  });
 });

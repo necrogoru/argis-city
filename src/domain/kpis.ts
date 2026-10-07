@@ -1,4 +1,5 @@
 import type { Snapshot } from "./types";
+import { needsUser } from "./session";
 
 export interface CityKpis {
   /** Live sessions across every provider. */
@@ -8,7 +9,7 @@ export interface CityKpis {
   runningSubagents: number;
   /** Sessions + subagents, all-time tokens of what is live now. */
   totalTokens: number;
-  /** Sessions and subagents blocked on the user. */
+  /** Sessions blocked on the user, directly or through a subagent (= the "Needs you" filter). */
   awaiting: number;
 }
 
@@ -25,12 +26,11 @@ export function computeKpis(snapshot: Snapshot | null): CityKpis {
   const kpis = { ...EMPTY_KPIS, activeAgents: snapshot.sessions.length };
   for (const session of snapshot.sessions) {
     kpis.totalTokens += session.tokens.total;
-    if (session.status === "awaitingApproval") kpis.awaiting += 1;
+    if (needsUser(session)) kpis.awaiting += 1;
     for (const agent of session.subagents) {
       kpis.subagents += 1;
       kpis.totalTokens += agent.tokens.total;
       if (agent.status === "running") kpis.runningSubagents += 1;
-      if (agent.status === "awaitingApproval") kpis.awaiting += 1;
     }
   }
   return kpis;
