@@ -23,8 +23,9 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
 - **Scene**: full window, isometric orthographic camera, black matte ground
   with faint diagonal street lines, radial vignette at the edges and a left
   scrim (bg 94% → 0% over the first ~36% width) so the hero text reads.
-- **Top bar** (x 40, y 28, h 56, full width − 80): brand (building icon in
-  teal + "AgentCity" 22/500) · KPIs (icon + 12px label
+- **Top bar** (x 40, y 28, h 56, full width − 80): brand (36px Panoptes
+  mark — the app icon, a short ripple-and-blink beat every 10s while the
+  window is focused — + "Argis" 22/500) · KPIs (icon + 12px label
   over 16/500 value: Active agents, Subagents, Tokens today/total, Awaiting
   you [amber icon]) · right: search field (260×48 glass, search icon,
   "Search agents & actions" text-3, `⌘K` key cap; Ctrl K off macOS),
