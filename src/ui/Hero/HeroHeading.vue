@@ -1,6 +1,6 @@
 <template>
   <div class="heading">
-    <h1 class="title">Agent<br />Infrastructure</h1>
+    <h2 class="title">Agent<br />Infrastructure</h2>
     <p class="description">
       Every coding agent running on this machine, mapped as a living city — one tower per tool,
       one house per live session.
@@ -16,7 +16,7 @@
 }
 
 .title {
-  font-size: 44px;
+  font-size: 36px;
   font-weight: 400;
   line-height: 1.08;
   letter-spacing: -1px;

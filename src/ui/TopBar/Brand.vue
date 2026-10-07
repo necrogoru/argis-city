@@ -6,8 +6,8 @@ const BRAND_NAME = "Argis";
 
 <template>
   <div class="brand">
-    <ArgisLogo :size="36" />
-    <span class="name">{{ BRAND_NAME }}</span>
+    <ArgisLogo :size="80" />
+    <h1 class="name">{{ BRAND_NAME }}</h1>
   </div>
 </template>
 
@@ -20,7 +20,7 @@ const BRAND_NAME = "Argis";
 }
 
 .name {
-  font-size: 22px;
+  font-size: 44px;
   font-weight: 500;
   letter-spacing: -0.3px;
 }
