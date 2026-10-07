@@ -1,4 +1,5 @@
-<img width="612" height="612" alt="claude ai_artifact_M98UsQy6xmCoXEqNGWY4xJ" src="https://github.com/user-attachments/assets/cf69e713-3722-4c8d-8455-d4a34ffd8373" />
+<img width="128" height="128" alt="claude ai_artifact_M98UsQy6xmCoXEqNGWY4xJ" src="https://github.com/user-attachments/assets/e560709a-13f0-47d2-b623-ee87578117aa" />
+
 
 # Argis
 
