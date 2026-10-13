@@ -96,8 +96,11 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
 - Manage projects uses a modal listing registered local paths and an add-path
   form with an explicit "Create the directory if it doesn’t exist" checkbox.
   New task and edit task use a modal form for task name and description; task
-  creation additionally requires a project. Keep the approved palette, type,
-  radii, and spacing tokens unchanged.
+  creation additionally requires a project. Editing a task exposes Delete
+  task inside the editor; confirmation asks whether to also remove its branch
+  and worktree. A failed safe cleanup leaves a notice with the remaining paths,
+  while the task is still removed. Keep the approved palette, type, radii, and
+  spacing tokens unchanged.
 
 ## Progress readouts
 Progress is a real estimate only when it comes from a plan (`execution`) or

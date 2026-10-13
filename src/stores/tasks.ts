@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, shallowRef } from "vue";
-import type { Project, Task, TaskStatus } from "../domain/types";
+import type { Project, Task, TaskDeletionOutcome, TaskStatus } from "../domain/types";
 import { useAgentSource } from "../composables/useAgentSource";
 
 function errorMessage(error: unknown): string {
@@ -63,14 +63,11 @@ export const useTaskStore = defineStore("tasks", () => {
     return updated;
   }
 
-  async function deleteTask(id: number): Promise<boolean> {
-    const deleted = await perform(async () => {
-      await source.deleteTask(id);
-      return true;
-    });
-    if (!deleted) return false;
+  async function deleteTask(id: number, removeGitResources: boolean): Promise<TaskDeletionOutcome | null> {
+    const outcome = await perform(() => source.deleteTask(id, removeGitResources));
+    if (!outcome?.taskDeleted) return null;
     tasks.value = tasks.value.filter((task) => task.id !== id);
-    return true;
+    return outcome;
   }
 
   return { projects, tasks, loading, error, load, addProject, createTask, updateTaskDetails, updateTaskStatus, deleteTask };

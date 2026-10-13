@@ -97,5 +97,19 @@ export interface Task {
   worktreePath: string | null;
 }
 
+export interface TaskGitCleanup {
+  requested: boolean;
+  worktreeRemoved: boolean;
+  branchRemoved: boolean;
+  branchName: string | null;
+  worktreePath: string | null;
+  error: string | null;
+}
+
+export interface TaskDeletionOutcome {
+  taskDeleted: boolean;
+  git: TaskGitCleanup;
+}
+
 /** Tauri event name the backend emits a `Snapshot` on, every poll tick. */
 export const SNAPSHOT_EVENT = "agents://snapshot";

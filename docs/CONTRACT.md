@@ -16,7 +16,7 @@ one tower per tool (provider), one house per live session, subagents as cards.
 | command | `create_task`        | `{ projectId, title, description }` → `Task` |
 | command | `update_task_details`| `{ id, title, description }` → `Task` |
 | command | `update_task_status` | `{ id, status }` → `Task`            |
-| command | `delete_task`        | `{ id }` → `()`                      |
+| command | `delete_task`        | `{ id, removeGitResources }` → `TaskDeletionOutcome` |
 | event   | `agents://snapshot`  | `Snapshot`, emitted every poll (2 s) |
 
 Types live in `src/domain/types.ts` (TS) and `src-tauri/src/domain/` (Rust,
@@ -30,6 +30,10 @@ paths are absolute canonical paths. Task statuses are `pending`, `inProgress`,
 until created. `register_project` creates a missing directory only when
 `createIfMissing` is true. Task status changes are explicit user operations;
 agent plan data is not imported into the task list.
+
+`delete_task` removes the task record even when Git cleanup is declined or
+fails. Its result reports which Git resources were removed and any cleanup
+error; worktree cleanup never uses force.
 
 ## Semantics
 

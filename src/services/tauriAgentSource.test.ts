@@ -44,12 +44,23 @@ describe("TauriAgentSource project and task operations", () => {
   });
 
   it("updates task fields, status and deletion through their commands", async () => {
-    invoke.mockResolvedValueOnce(task).mockResolvedValueOnce({ ...task, status: "inProgress" }).mockResolvedValueOnce(undefined);
+    const deletion = {
+      taskDeleted: true,
+      git: {
+        requested: true,
+        worktreeRemoved: true,
+        branchRemoved: true,
+        branchName: "argis/12-add-task-board",
+        worktreePath: "/projects/argis/.argis/worktrees/12-add-task-board",
+        error: null,
+      },
+    };
+    invoke.mockResolvedValueOnce(task).mockResolvedValueOnce({ ...task, status: "inProgress" }).mockResolvedValueOnce(deletion);
     const source = createTauriAgentSource();
 
     await source.updateTaskDetails(task.id, "Edited title", "Edited description");
     await source.updateTaskStatus(task.id, "inProgress");
-    await source.deleteTask(task.id);
+    await expect(source.deleteTask(task.id, true)).resolves.toEqual(deletion);
 
     expect(invoke).toHaveBeenNthCalledWith(1, "update_task_details", {
       id: task.id,
@@ -57,6 +68,6 @@ describe("TauriAgentSource project and task operations", () => {
       description: "Edited description",
     });
     expect(invoke).toHaveBeenNthCalledWith(2, "update_task_status", { id: task.id, status: "inProgress" });
-    expect(invoke).toHaveBeenNthCalledWith(3, "delete_task", { id: task.id });
+    expect(invoke).toHaveBeenNthCalledWith(3, "delete_task", { id: task.id, removeGitResources: true });
   });
 });

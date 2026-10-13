@@ -54,7 +54,11 @@ describe("mock project and task operations", () => {
     expect(edited.id).toBe(task.id);
     expect(updated.status).toBe("inProgress");
 
-    await source.deleteTask(task.id);
+    const deleted = await source.deleteTask(task.id, false);
+    expect(deleted).toMatchObject({
+      taskDeleted: true,
+      git: { requested: false, branchName: null, worktreePath: null, error: null },
+    });
     expect(await source.listTasks()).toEqual([]);
   });
 });

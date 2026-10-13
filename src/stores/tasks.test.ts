@@ -30,7 +30,17 @@ function setup(overrides: Partial<AgentSource> = {}) {
     createTask: vi.fn(async (projectId, title, description) => ({ ...task, id: 8, projectId, title, description })),
     updateTaskDetails: vi.fn(async (id, title, description) => ({ ...task, id, title, description })),
     updateTaskStatus: vi.fn(async (id, status) => ({ ...task, id, status })),
-    deleteTask: vi.fn(async () => {}),
+    deleteTask: vi.fn(async (_id, removeGitResources) => ({
+      taskDeleted: true,
+      git: {
+        requested: removeGitResources,
+        worktreeRemoved: false,
+        branchRemoved: false,
+        branchName: null,
+        worktreePath: null,
+        error: null,
+      },
+    })),
     ...overrides,
   };
   const app = createApp({});
@@ -77,23 +87,26 @@ describe("useTaskStore", () => {
   });
 
   it("updates status and removes a task only after deletion succeeds", async () => {
-    const { store } = setup();
+    const { store, source } = setup();
     await store.load();
 
     const updated = await store.updateTaskStatus(task.id, "inProgress");
     expect(updated?.status).toBe("inProgress");
     expect(store.tasks[0].status).toBe("inProgress");
 
-    expect(await store.deleteTask(task.id)).toBe(true);
+    expect(await store.deleteTask(task.id, true)).toMatchObject({ taskDeleted: true, git: { requested: true } });
+    expect(source.deleteTask).toHaveBeenCalledWith(task.id, true);
     expect(store.tasks).toEqual([]);
   });
 
   it("keeps a task and exposes an error when deletion fails", async () => {
-    const { store } = setup({ deleteTask: vi.fn(async () => Promise.reject(new Error("Git cleanup failed"))) });
+    const { store } = setup({
+      deleteTask: vi.fn(async () => Promise.reject(new Error("Task deletion failed"))),
+    });
     await store.load();
 
-    expect(await store.deleteTask(task.id)).toBe(false);
+    expect(await store.deleteTask(task.id, true)).toBeNull();
     expect(store.tasks).toEqual([task]);
-    expect(store.error).toBe("Git cleanup failed");
+    expect(store.error).toBe("Task deletion failed");
   });
 });

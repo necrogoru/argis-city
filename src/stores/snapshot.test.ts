@@ -26,7 +26,17 @@ function fakeSource(refresh: () => Promise<Snapshot> = async () => at(99)) {
     createTask: async () => { throw new Error("unused test operation"); },
     updateTaskDetails: async () => { throw new Error("unused test operation"); },
     updateTaskStatus: async () => { throw new Error("unused test operation"); },
-    deleteTask: async () => {},
+    deleteTask: async (_id, removeGitResources) => ({
+      taskDeleted: true,
+      git: {
+        requested: removeGitResources,
+        worktreeRemoved: false,
+        branchRemoved: false,
+        branchName: null,
+        worktreePath: null,
+        error: null,
+      },
+    }),
   };
   return { source, resolveInitial: (s: Snapshot) => resolveInitial(s), rejectInitial: (e: unknown) => rejectInitial(e), push: (s: Snapshot) => push(s) };
 }

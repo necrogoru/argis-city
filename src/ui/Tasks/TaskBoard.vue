@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, shallowRef } from "vue";
-import type { Task, TaskStatus } from "../../domain/types";
+import type { Task, TaskDeletionOutcome, TaskStatus } from "../../domain/types";
 import { groupTasks } from "../../domain/tasks";
 import { useTaskStore } from "../../stores/tasks";
 import ProjectManagerDialog from "./ProjectManagerDialog.vue";
@@ -27,6 +27,7 @@ const projectPaths = computed(() => new Map(store.projects.map((project) => [pro
 const projectsOpen = ref(false);
 const taskEditorOpen = ref(false);
 const editingTask = shallowRef<Task | null>(null);
+const deletionNotice = ref<string | null>(null);
 
 function createTask(): void {
   editingTask.value = null;
@@ -40,6 +41,19 @@ function editTask(task: Task): void {
 
 function updateStatus(task: Task, status: TaskStatus): void {
   void store.updateTaskStatus(task.id, status);
+}
+
+function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
+  if (!outcome.git.error) {
+    deletionNotice.value = null;
+    return;
+  }
+
+  const remaining: string[] = [];
+  if (outcome.git.worktreePath && !outcome.git.worktreeRemoved) remaining.push(`worktree at ${outcome.git.worktreePath}`);
+  if (outcome.git.branchName && !outcome.git.branchRemoved) remaining.push(`branch ${outcome.git.branchName}`);
+  const retained = remaining.length > 0 ? ` Retained ${remaining.join(" and ")}.` : "";
+  deletionNotice.value = `Task deleted, but Git cleanup failed: ${outcome.git.error}.${retained}`;
 }
 </script>
 
@@ -64,6 +78,10 @@ function updateStatus(task: Task, status: TaskStatus): void {
     </div>
 
     <p v-if="store.error" class="board-error" role="alert">{{ store.error }}</p>
+    <div v-if="deletionNotice" class="deletion-notice" role="alert">
+      <p>{{ deletionNotice }}</p>
+      <button type="button" aria-label="Dismiss Git cleanup notice" @click="deletionNotice = null">Dismiss</button>
+    </div>
     <p v-if="store.projects.length === 0" class="board-empty" role="status">
       Add a project directory to start organizing tasks.
     </p>
@@ -91,7 +109,12 @@ function updateStatus(task: Task, status: TaskStatus): void {
     </div>
 
     <ProjectManagerDialog v-model:open="projectsOpen" :projects="store.projects" />
-    <TaskEditorDialog v-model:open="taskEditorOpen" :projects="store.projects" :task="editingTask" />
+    <TaskEditorDialog
+      v-model:open="taskEditorOpen"
+      :projects="store.projects"
+      :task="editingTask"
+      @deleted="handleTaskDeleted"
+    />
   </section>
 </template>
 
@@ -172,6 +195,40 @@ function updateStatus(task: Task, status: TaskStatus): void {
   margin: 0;
   color: var(--red);
   font-size: 13px;
+}
+
+.deletion-notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--amber) 28%, transparent);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--amber) 9%, transparent);
+  color: var(--amber);
+  font-size: 13px;
+}
+
+.deletion-notice p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.deletion-notice button {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.deletion-notice button:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
 }
 
 .board-empty,

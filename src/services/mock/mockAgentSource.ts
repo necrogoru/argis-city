@@ -1,4 +1,4 @@
-import type { Project, Snapshot, Task, TaskStatus } from "../../domain/types";
+import type { Project, Snapshot, Task, TaskDeletionOutcome, TaskStatus } from "../../domain/types";
 import { POLL_INTERVAL_MS, type AgentSource } from "../agentSource";
 import { buildSession } from "./mockFactory";
 import { SESSION_SEEDS } from "./mockSeed";
@@ -103,10 +103,21 @@ export class MockAgentSource implements AgentSource {
     return { ...task };
   }
 
-  async deleteTask(id: number): Promise<void> {
+  async deleteTask(id: number, removeGitResources: boolean): Promise<TaskDeletionOutcome> {
     const index = this.tasks.findIndex((task) => task.id === id);
     if (index < 0) throw new Error(`task ${id} does not exist`);
-    this.tasks.splice(index, 1);
+    const [task] = this.tasks.splice(index, 1);
+    return {
+      taskDeleted: true,
+      git: {
+        requested: removeGitResources,
+        worktreeRemoved: removeGitResources && task.worktreePath !== null,
+        branchRemoved: removeGitResources && task.branchName !== null,
+        branchName: task.branchName,
+        worktreePath: task.worktreePath,
+        error: null,
+      },
+    };
   }
 
   private findTask(id: number): Task {
