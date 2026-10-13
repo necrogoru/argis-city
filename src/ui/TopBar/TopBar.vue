@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { RefreshCw } from "@lucide/vue";
+import { List, RefreshCw } from "@lucide/vue";
 import { useSnapshotStore } from "../../stores/snapshot";
+import { useAppViewStore } from "../../stores/appView";
 import IconButton from "../common/IconButton.vue";
 import Brand from "./Brand.vue";
 import KpiStrip from "./KpiStrip.vue";
@@ -8,6 +9,7 @@ import LiveIndicator from "./LiveIndicator.vue";
 import SearchTrigger from "./SearchTrigger.vue";
 
 const snapshots = useSnapshotStore();
+const appView = useAppViewStore();
 </script>
 
 <!-- Brand · KPIs · search (⌘K) · live status + refresh. -->
@@ -17,6 +19,9 @@ const snapshots = useSnapshotStore();
     <KpiStrip />
     <div class="right">
       <SearchTrigger />
+      <IconButton label="Open tasks" :size="48" @click="appView.showTasks()">
+        <List :size="18" aria-hidden="true" />
+      </IconButton>
       <LiveIndicator />
       <IconButton label="Refresh now" :size="48" @click="snapshots.refresh()">
         <RefreshCw :size="18" aria-hidden="true" />

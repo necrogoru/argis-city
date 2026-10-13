@@ -6,18 +6,25 @@ import Hero from "./ui/Hero/Hero.vue";
 import Overlay from "./ui/Overlay.vue";
 import RightColumn from "./ui/RightColumn.vue";
 import SubagentStrip from "./ui/Subagents/SubagentStrip.vue";
+import TaskWorkspace from "./ui/Tasks/TaskWorkspace.vue";
 import TopBar from "./ui/TopBar/TopBar.vue";
+import { useAppViewStore } from "./stores/appView";
+
+const appView = useAppViewStore();
 </script>
 
-<!-- Composition only: 3D city behind, glass UI overlay in front. -->
+<!-- Monitoring remains the default view; task management is an optional workspace. -->
 <template>
-  <CityCanvas />
-  <Overlay>
-    <TopBar />
-    <Hero />
-    <CameraControls />
-    <EmptyState />
-    <RightColumn />
-    <SubagentStrip />
-  </Overlay>
+  <TaskWorkspace v-if="appView.activeView === 'tasks'" />
+  <template v-else>
+    <CityCanvas />
+    <Overlay>
+      <TopBar />
+      <Hero />
+      <CameraControls />
+      <EmptyState />
+      <RightColumn />
+      <SubagentStrip />
+    </Overlay>
+  </template>
 </template>
