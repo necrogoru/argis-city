@@ -19,7 +19,7 @@ monitor::Monitor            keeps the latest Snapshot (parking_lot RwLock)
      ▼
 monitor::Poller             thread "argis-poller": refresh every 2 s
      │                         └─ emit "agents://snapshot" (lib.rs SNAPSHOT_EVENT)
-commands.rs                 get_snapshot · refresh_snapshot · open_path
+commands.rs                 snapshots · open_path · project/task/Git operations
 ═══════════════════════ Tauri IPC ═══════════════════════
 services/tauriAgentSource   invoke + listen (or services/mock/* in a browser)
      ▼  app.provide(agentSourceKey, …) in main.ts → inject via useAgentSource()
@@ -32,13 +32,28 @@ stores/cameraRig            camera-controls instance + framing (math in scene/la
 scene/  (TresJS canvas)     ui/  (DOM overlay on top of the canvas)
 ```
 
+The optional task workflow is separate from provider observation:
+
+```
+TaskWorkspace → AgentSource → Tauri task/Git commands → TaskStoreState
+                    ↑                  │                    │
+                    └── browser mock   │                    ▼
+                                      git_worktrees     app data/argis.sqlite
+```
+
+`TaskStore` writes only Argis-owned data in the app data directory. It must not
+reuse provider databases or weaken their read-only access. Git worktree changes
+occur only from explicit task actions and are scoped to the registered project.
+
 ## Backend (`src-tauri/src/`)
 
 | Module | Role | Notes |
 | --- | --- | --- |
 | `lib.rs` | Composition root: `build_registry`, `run()` | The only place providers are wired in |
 | `commands.rs` | Tauri commands | Thin; blocking work in `spawn_blocking`; errors → `String` |
-| `domain/` | Wire types (`Snapshot`, `AgentSession`, `Progress`, `Tokens`, `Status`, `ProviderId`) | `serde(rename_all = "camelCase")`, pure, no I/O |
+| `domain/` | Wire types (`Snapshot`, `AgentSession`, `Project`, `Task`, `Progress`, `Tokens`, `Status`, `ProviderId`) | `serde(rename_all = "camelCase")`, pure, no I/O |
+| `task_store.rs` | Argis-owned project/task persistence | Versioned writable SQLite in app data; separate from provider stores |
+| `git_worktrees.rs` | Task branch/worktree checks, creation, and optional cleanup | Direct Git arguments; never force-removes; local `.git/info/exclude` only |
 | `providers/mod.rs` | `AgentProvider` trait, shared time windows | `RUNNING_WINDOW_MS`, `APPROVAL_STALE_MS`, `CANDIDATE_WINDOW_MS` |
 | `providers/claude/` | Live registry `sessions/<pid>.json` + transcripts + subagents | Token dedupe by `message.id` |
 | `providers/codex/` | `state_*.sqlite` thread index + rollout JSONL | |
@@ -61,9 +76,9 @@ the provider's `tests.rs` write fixture files into a `tempfile` dir and point a
 
 | Folder | Role | Notes |
 | --- | --- | --- |
-| `domain/` | Types, status/progress/format helpers, search, selection rules, KPIs, palette | Framework-free; logic modules have a colocated `*.test.ts` |
+| `domain/` | Types, status/progress/format helpers, search, selection, task grouping/names, KPIs, palette | Framework-free; logic modules have a colocated `*.test.ts` |
 | `services/` | `AgentSource` interface, Tauri impl, mock impl (`mockSeed`, `mockTick`) | `createAgentSource()` picks one (Tauri unless `?mock`) |
-| `stores/` | Pinia setup stores | Thin; delegate logic to `domain/` |
+| `stores/` | Pinia setup stores, including local task state | Thin; delegate logic to `domain/` |
 | `composables/` | `useNow`, `useModKey`, `useCursor`, `usePressClick`, `useOcclusion`, `useEffectComposer`, … | VueUse underneath |
 | `scene/` | `CityCanvas` → `CityScene` → `District` → `Tower` / `house/House` | Pure modules: `layout.ts`, `cityModel.ts`, `connectionModel.ts`, `geometries.ts`, `materials.ts`, `frameRate.ts`, `frameDriver.ts` |
 | `ui/` | `App.vue` = `CityCanvas` + `Overlay` (`TopBar`, `Hero`, `CameraControls`, `EmptyState`, `RightColumn` → agent list / panel, `SubagentStrip`) | ⌘K `CommandPalette` lives in `TopBar/SearchTrigger` as a native `<dialog>` (top layer, no Teleport) |
@@ -84,6 +99,12 @@ tower, with a second ring after 8. A fifth provider needs a layout decision firs
   `geometries.ts` / `materials.ts`.
 - A new command: a function in `commands.rs`, registered in `generate_handler!`,
   added to `AgentSource` (both implementations) and to the Transport table.
+- Task/project changes: keep their SQLite store separate from provider observers;
+  update `docs/CONTRACT.md`, `src/domain/types.ts`, both `AgentSource`
+  implementations, and the task store/tests together.
+- Git worktree behavior: validate paths and task-owned refs, use direct Git
+  arguments, and test operations with temporary repositories; never modify a
+  project's tracked ignore file for generated worktrees.
 
 ## Tests
 

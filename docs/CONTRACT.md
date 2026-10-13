@@ -5,25 +5,27 @@ one tower per tool (provider), one house per live session, subagents as cards.
 
 ## Transport
 
-| Kind    | Name                 | Payload / return                     |
-| ------- | -------------------- | ------------------------------------ |
-| command | `get_snapshot`       | → `Snapshot` (latest cached)         |
-| command | `refresh_snapshot`   | → `Snapshot` (forces a collect now)  |
-| command | `open_path`          | `{ path: string }` → `()` (Finder)   |
-| command | `list_projects`      | → `Project[]`                        |
-| command | `register_project`   | `{ path, createIfMissing }` → `Project` |
-| command | `list_tasks`         | `{ projectId: number \| null }` → `Task[]` |
-| command | `create_task`        | `{ projectId, title, description }` → `Task` |
-| command | `update_task_details`| `{ id, title, description }` → `Task` |
-| command | `update_task_status` | `{ id, status }` → `Task`            |
-| command | `delete_task`        | `{ id, removeGitResources }` → `TaskDeletionOutcome` |
-| command | `inspect_task_git_status` | `{ taskId }` → `TaskGitStatus`    |
-| command | `create_task_worktree`| `{ taskId }` → `TaskWorktree`      |
-| event   | `agents://snapshot`  | `Snapshot`, emitted every poll (2 s) |
+| Kind    | Name                      | Payload / return                                  |
+| ------- | ------------------------- | ------------------------------------------------- |
+| command | `get_snapshot`            | → `Snapshot` (latest cached)                      |
+| command | `refresh_snapshot`        | → `Snapshot` (forces a collect now)               |
+| command | `open_path`               | `{ path: string }` → `()` (Finder)                |
+| command | `list_projects`           | → `Project[]`                                     |
+| command | `register_project`        | `{ path, createIfMissing }` → `Project`           |
+| command | `list_tasks`              | `{ projectId: number \| null }` → `Task[]`        |
+| command | `create_task`             | `{ projectId, title, description }` → `Task`      |
+| command | `update_task_details`     | `{ id, title, description }` → `Task`             |
+| command | `update_task_status`      | `{ id, status }` → `Task`                         |
+| command | `delete_task`             | `{ id, removeGitResources }` → `TaskDeletionOutcome` |
+| command | `inspect_task_git_status` | `{ taskId }` → `TaskGitStatus`                    |
+| command | `create_task_worktree`    | `{ taskId }` → `TaskWorktree`                     |
+| event   | `agents://snapshot`       | `Snapshot`, emitted every poll (2 s)              |
 
-Types live in `src/domain/types.ts` (TS) and `src-tauri/src/domain/` (Rust,
-serde `rename_all = "camelCase"`, enums `camelCase`). All timestamps are Unix
-epoch **milliseconds**. Optional fields serialize as `null`, never omitted.
+Snapshot, project, and task types live in `src/domain/types.ts` (TS) and
+`src-tauri/src/domain/` (Rust). Git operation result types live in
+`src-tauri/src/git_worktrees.rs`. Rust wire types serialize with
+`rename_all = "camelCase"`; optional fields serialize as `null`, never omitted.
+All timestamps are Unix epoch **milliseconds**.
 
 `Project` and `Task` are Argis-owned local records and are not part of the
 agent `Snapshot`. Project and task IDs are stable generated integers. Project
@@ -41,6 +43,27 @@ error; worktree cleanup never uses force.
 task's generated branch and worktree names, branch collision state, whether
 creation is available, and the reason when it is not. `create_task_worktree`
 creates and records both resources only for an eligible task.
+
+## Task Git semantics
+
+- Branches use `argis/<task-id>-<title-slug>`; worktrees live at
+  `<project>/.argis/worktrees/<task-id>-<title-slug>`. The stable task ID keeps
+  existing branch and worktree names unchanged when a task title is edited.
+- Eligibility checks use `git -C <project> rev-parse --show-toplevel` and
+  `git -C <project> show-ref --verify --quiet refs/heads/<branch>`. Creation
+  uses `git -C <project> worktree add -b <branch> <path>`.
+- Git commands receive validated paths and separate arguments; task text is
+  normalized into a branch slug and is never evaluated by a shell.
+- Argis adds the project-relative `.argis/worktrees/` path (with a project
+  subdirectory prefix when needed) to the repository-local `.git/info/exclude`,
+  preserving existing entries. It does not edit the project's tracked
+  `.gitignore` or initialize Git in a non-Git project.
+- When `removeGitResources` is true, cleanup removes a clean worktree first and
+  then runs `git -C <project> branch -d <branch>` (never `-D`). Worktree removal
+  uses `git -C <project> worktree remove <path>` without `--force`. If either
+  operation fails, the task record is still deleted and `TaskDeletionOutcome.git`
+  reports the error and any branch/worktree paths that remain. Declining cleanup
+  deletes only the task record and leaves its Git resources untouched.
 
 ## Semantics
 
