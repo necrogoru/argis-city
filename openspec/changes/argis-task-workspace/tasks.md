@@ -8,7 +8,7 @@
 
 ## 2. Task workspace and board
 
-- [ ] 2.1 Implement pure task status-order, previous/next transition, grouping, and project-filter helpers; verify all five statuses, three groups, filter behavior, and boundary-disabled actions with colocated Vitest tests.
+- [x] 2.1 Implement pure task status-order, previous/next transition, grouping, and project-filter helpers; verify all five statuses, three groups, filter behavior, and boundary-disabled actions with colocated Vitest tests.
 - [ ] 2.2 Add a Pinia task store over the injected service and cover load/create/edit/status/delete state transitions; verify the store tests use the mock service and preserve task IDs on edits.
 - [ ] 2.3 Add the optional Tasks entry point and dedicated task workspace while retaining the city as the startup view; verify navigation and return-to-city behavior in browser mock mode without changing snapshot polling.
 - [ ] 2.4 Build the project list/path form and task board with project filtering, task create/edit panels, and the four agreed task actions; verify the layout and interactions manually at the documented desktop size and update `docs/design/SPEC.md` without changing existing tokens.
