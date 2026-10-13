@@ -1,3 +1,4 @@
+use crate::domain::Task;
 use crate::task_store::TaskStore;
 use anyhow::{anyhow, bail, Context};
 use serde::{Deserialize, Serialize};
@@ -24,6 +25,24 @@ pub struct TaskGitStatus {
 pub struct TaskWorktree {
     pub branch_name: String,
     pub worktree_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskGitCleanup {
+    pub requested: bool,
+    pub worktree_removed: bool,
+    pub branch_removed: bool,
+    pub branch_name: Option<String>,
+    pub worktree_path: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskDeletionOutcome {
+    pub task_deleted: bool,
+    pub git: TaskGitCleanup,
 }
 
 pub fn task_branch_name(task_id: i64, title: &str) -> String {
@@ -114,6 +133,117 @@ pub fn create_task_worktree(store: &TaskStore, task_id: i64) -> anyhow::Result<T
     }
 
     Ok(TaskWorktree { branch_name: status.branch_name, worktree_path: canonical_path })
+}
+
+/// Deletes the task even when optional Git cleanup is declined or fails.
+pub fn delete_task_with_git_cleanup(
+    store: &TaskStore,
+    task_id: i64,
+    remove_git_resources: bool,
+) -> anyhow::Result<TaskDeletionOutcome> {
+    let task = store.get_task(task_id)?;
+    let mut git = TaskGitCleanup {
+        requested: remove_git_resources,
+        worktree_removed: false,
+        branch_removed: false,
+        branch_name: task.branch_name.clone(),
+        worktree_path: task.worktree_path.clone(),
+        error: None,
+    };
+
+    if remove_git_resources && (task.branch_name.is_some() || task.worktree_path.is_some()) {
+        match store.get_project(task.project_id) {
+            Ok(project) => {
+                if let Err(error) = cleanup_task_git_resources(Path::new(&project.path), &task, &mut git) {
+                    git.error = Some(error.to_string());
+                }
+            }
+            Err(error) => git.error = Some(error.to_string()),
+        }
+    }
+
+    store.delete_task(task_id)?;
+    Ok(TaskDeletionOutcome { task_deleted: true, git })
+}
+
+fn cleanup_task_git_resources(project_path: &Path, task: &Task, cleanup: &mut TaskGitCleanup) -> anyhow::Result<()> {
+    let project_path =
+        fs::canonicalize(project_path).with_context(|| format!("resolving project {}", project_path.display()))?;
+    if git_root(&project_path)?.is_none() {
+        bail!("project is not a Git working tree: {}", project_path.display());
+    }
+
+    if let Some(branch_name) = task.branch_name.as_deref() {
+        validate_task_branch_name(task.id, branch_name)?;
+    }
+    let worktree_path = task
+        .worktree_path
+        .as_deref()
+        .map(|path| validate_task_worktree_path(&project_path, task.id, path))
+        .transpose()?;
+
+    if let Some(worktree_path) = worktree_path {
+        if worktree_path.exists() {
+            let worktree_argument =
+                worktree_path.to_str().ok_or_else(|| anyhow!("worktree path is not valid UTF-8"))?;
+            let output = run_git(&project_path, &["worktree", "remove", worktree_argument])?;
+            ensure_success(&output, "removing task worktree")?;
+        }
+        cleanup.worktree_removed = true;
+    }
+
+    if let Some(branch_name) = task.branch_name.as_deref() {
+        if branch_exists(&project_path, branch_name)? {
+            let output = run_git(&project_path, &["branch", "-d", branch_name])?;
+            ensure_success(&output, "deleting task branch")?;
+        }
+        cleanup.branch_removed = true;
+    }
+
+    Ok(())
+}
+
+fn validate_task_branch_name(task_id: i64, branch_name: &str) -> anyhow::Result<()> {
+    let prefix = format!("argis/{task_id}-");
+    let slug = branch_name
+        .strip_prefix(&prefix)
+        .ok_or_else(|| anyhow!("refusing to delete branch not owned by task {task_id}"))?;
+    if slug.is_empty()
+        || !slug
+            .chars()
+            .all(|character| character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-')
+    {
+        bail!("refusing to delete invalid task branch name: {branch_name}");
+    }
+    Ok(())
+}
+
+fn validate_task_worktree_path(project_path: &Path, task_id: i64, path: &str) -> anyhow::Result<PathBuf> {
+    let recorded_path = PathBuf::from(path);
+    if !recorded_path.is_absolute() {
+        bail!("refusing to remove non-absolute worktree path: {path}");
+    }
+    let expected_root = project_path.join(WORKTREE_ROOT);
+    if recorded_path.parent() != Some(expected_root.as_path()) {
+        bail!("refusing to remove worktree outside {}", expected_root.display());
+    }
+    let name = recorded_path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+    if !name.starts_with(&format!("{task_id}-")) {
+        bail!("refusing to remove worktree not owned by task {task_id}");
+    }
+    if !recorded_path.exists() {
+        return Ok(recorded_path);
+    }
+
+    let canonical_root = fs::canonicalize(&expected_root)?;
+    if canonical_root == project_path || !canonical_root.starts_with(project_path) {
+        bail!("refusing to remove worktree root outside project: {}", canonical_root.display());
+    }
+    let canonical_path = fs::canonicalize(&recorded_path)?;
+    if canonical_path.parent() != Some(canonical_root.as_path()) || !canonical_path.starts_with(&canonical_root) {
+        bail!("refusing to remove worktree path outside its task directory: {}", canonical_path.display());
+    }
+    Ok(canonical_path)
 }
 
 fn title_slug(title: &str) -> String {

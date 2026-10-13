@@ -1,5 +1,6 @@
-use crate::git_worktrees::{create_task_worktree, inspect_task_git, task_branch_name};
+use crate::git_worktrees::{create_task_worktree, delete_task_with_git_cleanup, inspect_task_git, task_branch_name};
 use crate::task_store::TaskStore;
+use rusqlite::Connection;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -114,4 +115,103 @@ fn unusual_task_titles_are_never_interpreted_as_shell_commands() {
 
     assert_eq!(worktree.branch_name, "argis/1-create-touch-pwned");
     assert!(!repo.join("pwned").exists());
+}
+
+#[test]
+fn task_deletion_can_keep_the_branch_and_worktree() {
+    let parent = tempfile::tempdir().unwrap();
+    let repo = init_repository(&parent);
+    let (store, task_id) = task_store_for(&parent, &repo, "Keep workspace");
+    let worktree = create_task_worktree(&store, task_id).unwrap();
+
+    let result = delete_task_with_git_cleanup(&store, task_id, false).unwrap();
+
+    assert!(result.task_deleted);
+    assert!(!result.git.requested);
+    assert!(Path::new(&worktree.worktree_path).is_dir());
+    assert!(git(&repo, &["show-ref", "--verify", "--quiet", &format!("refs/heads/{}", worktree.branch_name)])
+        .status
+        .success());
+    assert!(store.list_tasks(None).unwrap().is_empty());
+}
+
+#[test]
+fn task_deletion_removes_a_clean_worktree_and_branch_when_requested() {
+    let parent = tempfile::tempdir().unwrap();
+    let repo = init_repository(&parent);
+    let (store, task_id) = task_store_for(&parent, &repo, "Remove workspace");
+    let worktree = create_task_worktree(&store, task_id).unwrap();
+
+    let result = delete_task_with_git_cleanup(&store, task_id, true).unwrap();
+
+    assert!(result.task_deleted);
+    assert!(result.git.requested);
+    assert!(result.git.worktree_removed);
+    assert!(result.git.branch_removed);
+    assert!(result.git.error.is_none());
+    assert!(!Path::new(&worktree.worktree_path).exists());
+    assert_eq!(
+        git(&repo, &["show-ref", "--verify", "--quiet", &format!("refs/heads/{}", worktree.branch_name)]).status.code(),
+        Some(1)
+    );
+    assert!(store.list_tasks(None).unwrap().is_empty());
+}
+
+#[test]
+fn dirty_worktree_cleanup_does_not_block_task_deletion_or_force_remove_files() {
+    let parent = tempfile::tempdir().unwrap();
+    let repo = init_repository(&parent);
+    let (store, task_id) = task_store_for(&parent, &repo, "Dirty workspace");
+    let worktree = create_task_worktree(&store, task_id).unwrap();
+    let worktree_path = PathBuf::from(&worktree.worktree_path);
+    fs::write(worktree_path.join("README.md"), "uncommitted content\n").unwrap();
+
+    let result = delete_task_with_git_cleanup(&store, task_id, true).unwrap();
+
+    assert!(result.task_deleted);
+    assert!(!result.git.worktree_removed);
+    assert!(!result.git.branch_removed);
+    assert!(result.git.error.is_some());
+    assert_eq!(fs::read_to_string(worktree_path.join("README.md")).unwrap(), "uncommitted content\n");
+    assert!(store.list_tasks(None).unwrap().is_empty());
+}
+
+#[test]
+fn cleanup_refuses_a_worktree_path_outside_its_project() {
+    let parent = tempfile::tempdir().unwrap();
+    let repo = init_repository(&parent);
+    let (store, task_id) = task_store_for(&parent, &repo, "Unsafe workspace");
+    let outside = parent.path().join("valuable-data");
+    fs::create_dir(&outside).unwrap();
+    fs::write(outside.join("keep.txt"), "keep me\n").unwrap();
+    store.set_task_worktree(task_id, "argis/1-unsafe-workspace", &outside.to_string_lossy()).unwrap();
+
+    let result = delete_task_with_git_cleanup(&store, task_id, true).unwrap();
+
+    assert!(result.task_deleted);
+    assert!(result.git.error.is_some());
+    assert_eq!(fs::read_to_string(outside.join("keep.txt")).unwrap(), "keep me\n");
+}
+
+#[test]
+fn cleanup_validates_branch_ownership_before_removing_the_worktree() {
+    let parent = tempfile::tempdir().unwrap();
+    let repo = init_repository(&parent);
+    let database_path = parent.path().join("argis.sqlite");
+    let (store, task_id) = task_store_for(&parent, &repo, "Owned workspace");
+    let worktree = create_task_worktree(&store, task_id).unwrap();
+    drop(store);
+
+    let connection = Connection::open(&database_path).unwrap();
+    connection.execute("UPDATE tasks SET branch_name = 'main' WHERE id = ?1", [task_id]).unwrap();
+    drop(connection);
+    let store = TaskStore::open(&database_path).unwrap();
+
+    let result = delete_task_with_git_cleanup(&store, task_id, true).unwrap();
+
+    assert!(result.task_deleted);
+    assert!(result.git.error.is_some());
+    assert!(Path::new(&worktree.worktree_path).is_dir());
+    assert!(git(&repo, &["show-ref", "--verify", "--quiet", "refs/heads/main"]).status.success());
+    assert!(store.list_tasks(None).unwrap().is_empty());
 }
