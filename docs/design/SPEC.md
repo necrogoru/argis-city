@@ -80,6 +80,25 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   4px progress bar in status colour, meta row: `%`, tokens, elapsed with tiny
   icons. Awaiting-approval cards get an amber-tinted fill and stroke.
 
+## Task workspace extension
+- The city remains the startup and primary monitoring view. A top-bar Tasks
+  icon opens an optional full-window task workspace; Back to city returns to
+  monitoring without changing snapshot polling.
+- The workspace header contains "Projects & tasks" and Back to city. The board
+  has an All projects filter, Manage projects action, New task action, and
+  three columns: Pending, In progress, and Other statuses. Stopped, Canceled,
+  and Completed remain individually labeled in the final column.
+- Each task entry shows its generated ID, title, description, project name, and
+  exact status. Its action row has four icon buttons in this order: Create
+  branch/worktree, Open terminal, previous status, next status. Disable status
+  movement at the ends of the fixed status order and explain unavailable Git
+  or terminal actions without removing their place in the row.
+- Manage projects uses a modal listing registered local paths and an add-path
+  form with an explicit "Create the directory if it doesn’t exist" checkbox.
+  New task and edit task use a modal form for task name and description; task
+  creation additionally requires a project. Keep the approved palette, type,
+  radii, and spacing tokens unchanged.
+
 ## Progress readouts
 Progress is a real estimate only when it comes from a plan (`execution`) or
 the status (`complete`). The context-window fallback is never shown as a bare

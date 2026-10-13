@@ -3,6 +3,7 @@ import { onMounted } from "vue";
 import { ArrowLeft } from "@lucide/vue";
 import { useAppViewStore } from "../../stores/appView";
 import { useTaskStore } from "../../stores/tasks";
+import TaskBoard from "./TaskBoard.vue";
 
 const appView = useAppViewStore();
 const taskStore = useTaskStore();
@@ -16,7 +17,6 @@ onMounted(() => {
   <main class="task-workspace">
     <header class="workspace-header">
       <div class="heading">
-        <p class="eyebrow">ARGIS / TASKS</p>
         <h1>Projects & tasks</h1>
         <p class="description">Organize work by project, then open an isolated workspace when you’re ready.</p>
       </div>
@@ -26,13 +26,7 @@ onMounted(() => {
       </button>
     </header>
 
-    <section class="workspace-summary" aria-live="polite">
-      <p v-if="taskStore.loading" class="summary-message" role="status">Loading projects and tasks…</p>
-      <p v-else-if="taskStore.error" class="summary-message" role="alert">{{ taskStore.error }}</p>
-      <p v-else class="summary-message">
-        {{ taskStore.projects.length }} projects · {{ taskStore.tasks.length }} tasks
-      </p>
-    </section>
+    <TaskBoard />
   </main>
 </template>
 
@@ -43,7 +37,7 @@ onMounted(() => {
   inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 40px;
+  gap: 32px;
   padding: 40px;
   overflow: auto;
   background: var(--bg);
@@ -60,15 +54,6 @@ onMounted(() => {
 
 .heading {
   max-width: 700px;
-}
-
-.eyebrow {
-  margin: 0 0 8px;
-  color: var(--text-3);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
 }
 
 h1 {
@@ -108,20 +93,6 @@ h1 {
 .back-button:focus-visible {
   outline: 2px solid var(--teal);
   outline-offset: 2px;
-}
-
-.workspace-summary {
-  min-height: 72px;
-  padding: 20px 24px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-panel);
-  background: var(--surface);
-}
-
-.summary-message {
-  margin: 0;
-  color: var(--text-2);
-  font-size: 14px;
 }
 
 @media (max-width: 700px) {
