@@ -12,14 +12,13 @@
 - [x] 2.2 Add a Pinia task store over the injected service and cover load/create/edit/status/delete state transitions; verify the store tests use the mock service and preserve task IDs on edits.
 - [x] 2.3 Add the optional Tasks entry point and dedicated task workspace while retaining the city as the startup view; verify navigation and return-to-city behavior in browser mock mode without changing snapshot polling.
 - [x] 2.4 Build the project list/path form and task board with project filtering, task create/edit panels, and the four agreed task actions; verify the layout and interactions manually at the documented desktop size and update `docs/design/SPEC.md` without changing existing tokens.
-- [ ] 2.5 Implement task deletion confirmation and the keep-or-remove-Git-resources choice; verify task deletion remains available when Git cleanup is declined or reports an error.
-
 ## 3. Git task worktrees
 
 - [ ] 3.1 Implement validated Git repository/branch checks and task branch/worktree creation using the agreed names and path; verify successful creation, non-Git projects, branch collisions, unusual task titles, and the local exclude rule with temporary Git repositories.
 - [ ] 3.2 Implement optional worktree/branch cleanup without force removal and without blocking task-record deletion; verify clean cleanup, declined cleanup, and dirty-worktree retention with temporary Git repositories.
-- [ ] 3.3 Expose Git capability and error state through the Tauri/mock transport and task cards; verify disabled states and user-facing explanations for non-Git projects and existing branches.
-- [ ] 3.4 Document Git commands, side effects, and cleanup behavior in the transport/architecture documentation; verify the documented branch and worktree conventions match the tests.
+- [ ] 3.3 Implement task deletion confirmation and the keep-or-remove-Git-resources choice; verify task deletion remains available when Git cleanup is declined or reports an error.
+- [ ] 3.4 Expose Git capability and error state through the Tauri/mock transport and task cards; verify disabled states and user-facing explanations for non-Git projects and existing branches.
+- [ ] 3.5 Document Git commands, side effects, and cleanup behavior in the transport/architecture documentation; verify the documented branch and worktree conventions match the tests.
 
 ## 4. Embedded terminal sessions
 
