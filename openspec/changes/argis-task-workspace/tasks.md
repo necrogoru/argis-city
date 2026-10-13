@@ -3,7 +3,7 @@
 ## 1. Local project and task data
 
 - [x] 1.1 Add Rust and TypeScript project/task types plus the versioned app-owned SQLite store; verify CRUD, stable generated IDs, status persistence, and restart restoration with Rust tests using temporary database paths.
-- [ ] 1.2 Implement project path validation, existing-directory registration, and explicit missing-directory creation; verify valid, relative, non-directory, and uncreatable paths with temporary-directory tests.
+- [x] 1.2 Implement project path validation, existing-directory registration, and explicit missing-directory creation; verify valid, relative, non-directory, and uncreatable paths with temporary-directory tests.
 - [ ] 1.3 Expose project/task persistence through Tauri commands and the injected `AgentSource` Tauri/mock implementations; document the transport contract and verify `pnpm build` plus command/service tests.
 
 ## 2. Task workspace and board
