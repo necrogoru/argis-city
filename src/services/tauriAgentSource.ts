@@ -1,6 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { SNAPSHOT_EVENT, type Project, type Snapshot, type Task, type TaskDeletionOutcome } from "../domain/types";
+import {
+  SNAPSHOT_EVENT,
+  type Project,
+  type Snapshot,
+  type Task,
+  type TaskDeletionOutcome,
+  type TaskGitStatus,
+  type TaskWorktree,
+} from "../domain/types";
 import type { AgentSource } from "./agentSource";
 
 /** AgentSource backed by the Rust commands/events in docs/CONTRACT.md. */
@@ -20,6 +28,8 @@ export function createTauriAgentSource(): AgentSource {
     updateTaskStatus: (id, status) => invoke<Task>("update_task_status", { id, status }),
     deleteTask: (id, removeGitResources) =>
       invoke<TaskDeletionOutcome>("delete_task", { id, removeGitResources }),
+    getTaskGitStatus: (id) => invoke<TaskGitStatus>("inspect_task_git_status", { taskId: id }),
+    createTaskWorktree: (id) => invoke<TaskWorktree>("create_task_worktree", { taskId: id }),
     subscribe(callback) {
       let unlisten: UnlistenFn | null = null;
       let disposed = false;

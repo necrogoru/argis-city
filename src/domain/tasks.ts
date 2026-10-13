@@ -30,3 +30,17 @@ export function groupTasks(tasks: readonly Task[], projectId: number | null = nu
 
   return groups;
 }
+
+export function taskBranchName(taskId: number, title: string): string {
+  return `argis/${taskId}-${taskTitleSlug(title)}`;
+}
+
+export function taskWorktreePath(projectPath: string, taskId: number, title: string): string {
+  const project = projectPath.replace(/[\\/]+$/, "");
+  return `${project}/.argis/worktrees/${taskId}-${taskTitleSlug(title)}`;
+}
+
+function taskTitleSlug(title: string): string {
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48).replace(/-+$/g, "");
+  return slug || "task";
+}

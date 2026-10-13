@@ -17,6 +17,8 @@ one tower per tool (provider), one house per live session, subagents as cards.
 | command | `update_task_details`| `{ id, title, description }` → `Task` |
 | command | `update_task_status` | `{ id, status }` → `Task`            |
 | command | `delete_task`        | `{ id, removeGitResources }` → `TaskDeletionOutcome` |
+| command | `inspect_task_git_status` | `{ taskId }` → `TaskGitStatus`    |
+| command | `create_task_worktree`| `{ taskId }` → `TaskWorktree`      |
 | event   | `agents://snapshot`  | `Snapshot`, emitted every poll (2 s) |
 
 Types live in `src/domain/types.ts` (TS) and `src-tauri/src/domain/` (Rust,
@@ -34,6 +36,11 @@ agent plan data is not imported into the task list.
 `delete_task` removes the task record even when Git cleanup is declined or
 fails. Its result reports which Git resources were removed and any cleanup
 error; worktree cleanup never uses force.
+
+`inspect_task_git_status` reports whether a project is a Git working tree, the
+task's generated branch and worktree names, branch collision state, whether
+creation is available, and the reason when it is not. `create_task_worktree`
+creates and records both resources only for an eligible task.
 
 ## Semantics
 

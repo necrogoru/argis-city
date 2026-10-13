@@ -37,6 +37,18 @@ function fakeSource(refresh: () => Promise<Snapshot> = async () => at(99)) {
         error: null,
       },
     }),
+    getTaskGitStatus: async (id) => ({
+      isGitRepository: true,
+      canCreateBranch: true,
+      branchExists: false,
+      branchName: `argis/${id}-task`,
+      worktreePath: `/projects/argis/.argis/worktrees/${id}-task`,
+      reason: null,
+    }),
+    createTaskWorktree: async (id) => ({
+      branchName: `argis/${id}-task`,
+      worktreePath: `/projects/argis/.argis/worktrees/${id}-task`,
+    }),
   };
   return { source, resolveInitial: (s: Snapshot) => resolveInitial(s), rejectInitial: (e: unknown) => rejectInitial(e), push: (s: Snapshot) => push(s) };
 }

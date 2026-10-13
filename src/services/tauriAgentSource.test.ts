@@ -70,4 +70,24 @@ describe("TauriAgentSource project and task operations", () => {
     expect(invoke).toHaveBeenNthCalledWith(2, "update_task_status", { id: task.id, status: "inProgress" });
     expect(invoke).toHaveBeenNthCalledWith(3, "delete_task", { id: task.id, removeGitResources: true });
   });
+
+  it("checks Git capability and creates a task worktree through backend commands", async () => {
+    const status = {
+      isGitRepository: true,
+      canCreateBranch: true,
+      branchExists: false,
+      branchName: "argis/12-add-task-board",
+      worktreePath: "/projects/argis/.argis/worktrees/12-add-task-board",
+      reason: null,
+    };
+    const worktree = { branchName: status.branchName, worktreePath: status.worktreePath };
+    invoke.mockResolvedValueOnce(status).mockResolvedValueOnce(worktree);
+    const source = createTauriAgentSource();
+
+    await expect(source.getTaskGitStatus(task.id)).resolves.toEqual(status);
+    await expect(source.createTaskWorktree(task.id)).resolves.toEqual(worktree);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "inspect_task_git_status", { taskId: task.id });
+    expect(invoke).toHaveBeenNthCalledWith(2, "create_task_worktree", { taskId: task.id });
+  });
 });

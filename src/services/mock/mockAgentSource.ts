@@ -1,4 +1,13 @@
-import type { Project, Snapshot, Task, TaskDeletionOutcome, TaskStatus } from "../../domain/types";
+import type {
+  Project,
+  Snapshot,
+  Task,
+  TaskDeletionOutcome,
+  TaskGitStatus,
+  TaskStatus,
+  TaskWorktree,
+} from "../../domain/types";
+import { taskBranchName, taskWorktreePath } from "../../domain/tasks";
 import { POLL_INTERVAL_MS, type AgentSource } from "../agentSource";
 import { buildSession } from "./mockFactory";
 import { SESSION_SEEDS } from "./mockSeed";
@@ -118,6 +127,30 @@ export class MockAgentSource implements AgentSource {
         error: null,
       },
     };
+  }
+
+  async getTaskGitStatus(id: number): Promise<TaskGitStatus> {
+    const task = this.findTask(id);
+    const project = this.projects.find((candidate) => candidate.id === task.projectId);
+    if (!project) throw new Error(`project ${task.projectId} does not exist`);
+    const linked = task.branchName !== null || task.worktreePath !== null;
+    return {
+      isGitRepository: true,
+      canCreateBranch: !linked,
+      branchExists: task.branchName !== null,
+      branchName: task.branchName ?? taskBranchName(task.id, task.title),
+      worktreePath: task.worktreePath ?? taskWorktreePath(project.path, task.id, task.title),
+      reason: linked ? "Task already has a branch or worktree" : null,
+    };
+  }
+
+  async createTaskWorktree(id: number): Promise<TaskWorktree> {
+    const status = await this.getTaskGitStatus(id);
+    if (!status.canCreateBranch) throw new Error(status.reason ?? "Git worktree is unavailable");
+    const task = this.findTask(id);
+    task.branchName = status.branchName;
+    task.worktreePath = status.worktreePath;
+    return { branchName: status.branchName, worktreePath: status.worktreePath };
   }
 
   private findTask(id: number): Task {

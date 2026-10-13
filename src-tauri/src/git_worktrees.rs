@@ -21,7 +21,8 @@ pub struct TaskGitStatus {
     pub reason: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskWorktree {
     pub branch_name: String,
     pub worktree_path: String,

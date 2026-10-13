@@ -41,6 +41,18 @@ function setup(overrides: Partial<AgentSource> = {}) {
         error: null,
       },
     })),
+    getTaskGitStatus: vi.fn(async (id) => ({
+      isGitRepository: true,
+      canCreateBranch: true,
+      branchExists: false,
+      branchName: `argis/${id}-task`,
+      worktreePath: `/projects/argis/.argis/worktrees/${id}-task`,
+      reason: null,
+    })),
+    createTaskWorktree: vi.fn(async (id) => ({
+      branchName: `argis/${id}-task`,
+      worktreePath: `/projects/argis/.argis/worktrees/${id}-task`,
+    })),
     ...overrides,
   };
   const app = createApp({});
@@ -108,5 +120,29 @@ describe("useTaskStore", () => {
     expect(await store.deleteTask(task.id, true)).toBeNull();
     expect(store.tasks).toEqual([task]);
     expect(store.error).toBe("Task deletion failed");
+  });
+
+  it("loads task Git status and stores newly created worktree details", async () => {
+    const available = {
+      isGitRepository: true,
+      canCreateBranch: true,
+      branchExists: false,
+      branchName: "argis/7-add-task-board",
+      worktreePath: "/projects/argis/.argis/worktrees/7-add-task-board",
+      reason: null,
+    };
+    const created = { branchName: available.branchName, worktreePath: available.worktreePath };
+    const linked = { ...available, canCreateBranch: false, branchExists: true, reason: "Task already has a branch or worktree" };
+    const { store, source } = setup({
+      getTaskGitStatus: vi.fn().mockResolvedValueOnce(available).mockResolvedValueOnce(linked),
+      createTaskWorktree: vi.fn(async () => created),
+    });
+    await store.load();
+
+    expect(store.gitStatuses[task.id]).toEqual(available);
+    await expect(store.createTaskWorktree(task.id)).resolves.toEqual(created);
+    expect(source.createTaskWorktree).toHaveBeenCalledWith(task.id);
+    expect(store.tasks[0]).toMatchObject(created);
+    expect(store.gitStatuses[task.id]).toEqual(linked);
   });
 });

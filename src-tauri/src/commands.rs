@@ -1,7 +1,10 @@
 //! Tauri commands (see docs/CONTRACT.md → Transport).
 
 use crate::domain::{Project, Snapshot, Task, TaskStatus};
-use crate::git_worktrees::{delete_task_with_git_cleanup, TaskDeletionOutcome};
+use crate::git_worktrees::{
+    create_task_worktree as create_git_worktree, delete_task_with_git_cleanup, inspect_task_git, TaskDeletionOutcome,
+    TaskGitStatus, TaskWorktree,
+};
 use crate::monitor::Monitor;
 use crate::project_paths::register_project as register_project_path;
 use crate::task_store::{TaskStore, TaskStoreState};
@@ -83,6 +86,16 @@ pub async fn delete_task(
     state: State<'_, TaskStoreState>,
 ) -> Result<TaskDeletionOutcome, String> {
     task_store_operation(state, move |store| delete_task_with_git_cleanup(&store, id, remove_git_resources)).await
+}
+
+#[tauri::command]
+pub async fn inspect_task_git_status(task_id: i64, state: State<'_, TaskStoreState>) -> Result<TaskGitStatus, String> {
+    task_store_operation(state, move |store| inspect_task_git(&store, task_id)).await
+}
+
+#[tauri::command]
+pub async fn create_task_worktree(task_id: i64, state: State<'_, TaskStoreState>) -> Result<TaskWorktree, String> {
+    task_store_operation(state, move |store| create_git_worktree(&store, task_id)).await
 }
 
 async fn task_store_operation<T>(

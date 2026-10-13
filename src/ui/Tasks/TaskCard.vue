@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { ChevronDown, ChevronUp, GitBranch, SquareTerminal } from "@lucide/vue";
-import type { Task, TaskStatus } from "../../domain/types";
+import type { Task, TaskGitStatus, TaskStatus } from "../../domain/types";
 import { nextTaskStatus, previousTaskStatus } from "../../domain/tasks";
 
 const props = defineProps<{
   task: Task;
   projectPath: string;
-  canCreateBranch?: boolean;
-  branchDisabledReason?: string;
+  gitStatus: TaskGitStatus | null;
+  canOpenTerminal?: boolean;
 }>();
 const emit = defineEmits<{
   edit: [];
@@ -21,8 +21,16 @@ const previousStatus = computed(() => previousTaskStatus(props.task.status));
 const nextStatus = computed(() => nextTaskStatus(props.task.status));
 const branchLabel = computed(() => {
   if (props.task.branchName) return `Branch exists: ${props.task.branchName}`;
-  return props.canCreateBranch ? "Create branch and worktree" : props.branchDisabledReason ?? "Git worktree unavailable";
+  if (!props.gitStatus) return "Checking Git status";
+  if (props.gitStatus.reason) return props.gitStatus.reason;
+  return props.gitStatus.canCreateBranch ? "Create branch and worktree" : "Git worktree unavailable";
 });
+const branchDisabled = computed(() => !props.gitStatus?.canCreateBranch || props.task.branchName !== null);
+const terminalLabel = computed(() => {
+  if (!props.task.worktreePath) return "Open terminal (create a task worktree first)";
+  return props.canOpenTerminal ? "Open terminal" : "Embedded terminal is not available yet";
+});
+const terminalDisabled = computed(() => !props.canOpenTerminal || props.task.worktreePath === null);
 const projectName = computed(() => props.projectPath.split(/[\\/]/).filter(Boolean).at(-1) ?? props.projectPath);
 
 const STATUS_LABELS: Readonly<Record<TaskStatus, string>> = {
@@ -55,7 +63,7 @@ const STATUS_LABELS: Readonly<Record<TaskStatus, string>> = {
         type="button"
         :aria-label="branchLabel"
         :title="branchLabel"
-        :disabled="!props.canCreateBranch || props.task.branchName !== null"
+        :disabled="branchDisabled"
         @click="emit('createBranch')"
       >
         <GitBranch :size="16" aria-hidden="true" />
@@ -63,9 +71,9 @@ const STATUS_LABELS: Readonly<Record<TaskStatus, string>> = {
       <button
         class="task-action"
         type="button"
-        :aria-label="props.task.worktreePath ? 'Open terminal' : 'Open terminal (create a task worktree first)'"
-        :title="props.task.worktreePath ? 'Open terminal' : 'Create a task worktree first'"
-        :disabled="props.task.worktreePath === null"
+        :aria-label="terminalLabel"
+        :title="terminalLabel"
+        :disabled="terminalDisabled"
         @click="emit('openTerminal')"
       >
         <SquareTerminal :size="16" aria-hidden="true" />

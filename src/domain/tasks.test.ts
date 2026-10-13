@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Task, TaskStatus } from "./types";
-import { groupTasks, nextTaskStatus, previousTaskStatus, TASK_STATUS_ORDER } from "./tasks";
+import {
+  groupTasks,
+  nextTaskStatus,
+  previousTaskStatus,
+  taskBranchName,
+  taskWorktreePath,
+  TASK_STATUS_ORDER,
+} from "./tasks";
 
 function task(id: number, status: TaskStatus, projectId = 1): Task {
   return {
@@ -34,6 +41,16 @@ describe("task status order", () => {
       "completed",
       null,
     ]);
+  });
+});
+
+describe("task Git names", () => {
+  it("uses stable IDs and normalized title slugs", () => {
+    expect(taskBranchName(27, "Ship cleanup (safe)!")).toBe("argis/27-ship-cleanup-safe");
+    expect(taskBranchName(28, "🎨")).toBe("argis/28-task");
+    expect(taskWorktreePath("/projects/argis/", 27, "Ship cleanup (safe)!")).toBe(
+      "/projects/argis/.argis/worktrees/27-ship-cleanup-safe",
+    );
   });
 });
 

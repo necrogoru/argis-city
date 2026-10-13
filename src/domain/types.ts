@@ -111,5 +111,19 @@ export interface TaskDeletionOutcome {
   git: TaskGitCleanup;
 }
 
+export interface TaskGitStatus {
+  isGitRepository: boolean;
+  canCreateBranch: boolean;
+  branchExists: boolean;
+  branchName: string;
+  worktreePath: string;
+  reason: string | null;
+}
+
+export interface TaskWorktree {
+  branchName: string;
+  worktreePath: string;
+}
+
 /** Tauri event name the backend emits a `Snapshot` on, every poll tick. */
 export const SNAPSHOT_EVENT = "agents://snapshot";

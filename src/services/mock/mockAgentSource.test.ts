@@ -61,6 +61,25 @@ describe("mock project and task operations", () => {
     });
     expect(await source.listTasks()).toEqual([]);
   });
+
+  it("simulates Git capability and associates a created worktree with its task", async () => {
+    const source = new MockAgentSource("empty");
+    const project = await source.addProject("/projects/argis", false);
+    const task = await source.createTask(project.id, "Add task board", "Create the grouped view");
+
+    const before = await source.getTaskGitStatus(task.id);
+    expect(before.canCreateBranch).toBe(true);
+    expect(before.branchName).toBe("argis/1-add-task-board");
+
+    const worktree = await source.createTaskWorktree(task.id);
+
+    expect(worktree.worktreePath).toBe("/projects/argis/.argis/worktrees/1-add-task-board");
+    expect((await source.listTasks(project.id))[0]).toMatchObject({
+      branchName: worktree.branchName,
+      worktreePath: worktree.worktreePath,
+    });
+    expect((await source.getTaskGitStatus(task.id)).canCreateBranch).toBe(false);
+  });
 });
 
 describe("tickSnapshot", () => {

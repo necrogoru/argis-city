@@ -1,4 +1,4 @@
-import type { Project, Snapshot, Task, TaskDeletionOutcome, TaskStatus } from "../domain/types";
+import type { Project, Snapshot, Task, TaskDeletionOutcome, TaskGitStatus, TaskStatus, TaskWorktree } from "../domain/types";
 
 /**
  * Where snapshots come from. Components depend on this abstraction only
@@ -21,6 +21,8 @@ export interface AgentSource {
   updateTaskDetails(id: number, title: string, description: string): Promise<Task>;
   updateTaskStatus(id: number, status: TaskStatus): Promise<Task>;
   deleteTask(id: number, removeGitResources: boolean): Promise<TaskDeletionOutcome>;
+  getTaskGitStatus(id: number): Promise<TaskGitStatus>;
+  createTaskWorktree(id: number): Promise<TaskWorktree>;
 }
 
 /** Poll interval the backend (and the mock) emit snapshots at. */

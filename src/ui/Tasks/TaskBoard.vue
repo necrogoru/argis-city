@@ -43,6 +43,10 @@ function updateStatus(task: Task, status: TaskStatus): void {
   void store.updateTaskStatus(task.id, status);
 }
 
+function createBranch(task: Task): void {
+  void store.createTaskWorktree(task.id);
+}
+
 function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
   if (!outcome.git.error) {
     deletionNotice.value = null;
@@ -98,9 +102,11 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
             <TaskCard
               :task="task"
               :project-path="projectPaths.get(task.projectId) ?? 'Unknown project'"
-              branch-disabled-reason="Git worktree support is not connected yet"
+              :git-status="store.gitStatuses[task.id] ?? null"
+              :can-open-terminal="false"
               @edit="editTask(task)"
               @move-status="updateStatus(task, $event)"
+              @create-branch="createBranch(task)"
             />
           </li>
         </ul>
