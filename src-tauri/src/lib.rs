@@ -7,6 +7,10 @@ pub mod monitor;
 pub mod providers;
 pub mod shared;
 pub mod system;
+pub mod task_store;
+
+#[cfg(test)]
+mod task_store_tests;
 
 use monitor::{Monitor, Poller, ProviderRegistry};
 use providers::claude::ClaudeProvider;

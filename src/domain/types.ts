@@ -80,5 +80,22 @@ export interface Snapshot {
   providers: ProviderSummary[];
 }
 
+export type TaskStatus = "pending" | "inProgress" | "stopped" | "canceled" | "completed";
+
+export interface Project {
+  id: number;
+  path: string;
+}
+
+export interface Task {
+  id: number;
+  projectId: number;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  branchName: string | null;
+  worktreePath: string | null;
+}
+
 /** Tauri event name the backend emits a `Snapshot` on, every poll tick. */
 export const SNAPSHOT_EVENT = "agents://snapshot";
