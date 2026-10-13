@@ -15,6 +15,13 @@ function setup() {
     refresh: async () => snapshot([]),
     subscribe: (callback) => ((push = callback), () => {}),
     openPath: async () => {},
+    listProjects: async () => [],
+    addProject: async (path) => ({ id: 1, path }),
+    listTasks: async () => [],
+    createTask: async () => { throw new Error("unused test operation"); },
+    updateTaskDetails: async () => { throw new Error("unused test operation"); },
+    updateTaskStatus: async () => { throw new Error("unused test operation"); },
+    deleteTask: async () => {},
   };
   const app = createApp({});
   const pinia = createPinia();

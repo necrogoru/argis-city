@@ -4,7 +4,7 @@
 
 - [x] 1.1 Add Rust and TypeScript project/task types plus the versioned app-owned SQLite store; verify CRUD, stable generated IDs, status persistence, and restart restoration with Rust tests using temporary database paths.
 - [x] 1.2 Implement project path validation, existing-directory registration, and explicit missing-directory creation; verify valid, relative, non-directory, and uncreatable paths with temporary-directory tests.
-- [ ] 1.3 Expose project/task persistence through Tauri commands and the injected `AgentSource` Tauri/mock implementations; document the transport contract and verify `pnpm build` plus command/service tests.
+- [x] 1.3 Expose project/task persistence through Tauri commands and the injected `AgentSource` Tauri/mock implementations; document the transport contract and verify `pnpm build` plus command/service tests.
 
 ## 2. Task workspace and board
 
@@ -31,5 +31,5 @@
 
 ## 5. Integration verification
 
-- [ ] 5.1 Verify the optional task and terminal workflows do not regress monitoring by running `pnpm build`, `pnpm exec vitest run`, `cargo test --manifest-path src-tauri/Cargo.toml`, `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`, and `cargo fmt --manifest-path src-tauri/Cargo.toml --check`; manually check city/task navigation and terminal lifecycle in the desktop app.
+- [ ] 5.1 Verify the optional task and terminal workflows do not regress monitoring by running `pnpm build`, `pnpm exec vitest run`, and, from `src-tauri/` so the pinned toolchain applies, `cargo test`, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --check`; manually check city/task navigation and terminal lifecycle in the desktop app.
 - [ ] 5.2 Run `openspec validate argis-task-workspace --strict` and resolve any spec/design/task inconsistencies before implementation is considered ready.

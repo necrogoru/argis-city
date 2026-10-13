@@ -10,11 +10,26 @@ one tower per tool (provider), one house per live session, subagents as cards.
 | command | `get_snapshot`       | → `Snapshot` (latest cached)         |
 | command | `refresh_snapshot`   | → `Snapshot` (forces a collect now)  |
 | command | `open_path`          | `{ path: string }` → `()` (Finder)   |
+| command | `list_projects`      | → `Project[]`                        |
+| command | `register_project`   | `{ path, createIfMissing }` → `Project` |
+| command | `list_tasks`         | `{ projectId: number \| null }` → `Task[]` |
+| command | `create_task`        | `{ projectId, title, description }` → `Task` |
+| command | `update_task_details`| `{ id, title, description }` → `Task` |
+| command | `update_task_status` | `{ id, status }` → `Task`            |
+| command | `delete_task`        | `{ id }` → `()`                      |
 | event   | `agents://snapshot`  | `Snapshot`, emitted every poll (2 s) |
 
 Types live in `src/domain/types.ts` (TS) and `src-tauri/src/domain/` (Rust,
 serde `rename_all = "camelCase"`, enums `camelCase`). All timestamps are Unix
 epoch **milliseconds**. Optional fields serialize as `null`, never omitted.
+
+`Project` and `Task` are Argis-owned local records and are not part of the
+agent `Snapshot`. Project and task IDs are stable generated integers. Project
+paths are absolute canonical paths. Task statuses are `pending`, `inProgress`,
+`stopped`, `canceled`, and `completed`; branch and worktree fields are `null`
+until created. `register_project` creates a missing directory only when
+`createIfMissing` is true. Task status changes are explicit user operations;
+agent plan data is not imported into the task list.
 
 ## Semantics
 

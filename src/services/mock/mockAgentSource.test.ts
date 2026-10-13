@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentStatus } from "../../domain/types";
-import { createSeedSnapshot } from "./mockAgentSource";
+import { createSeedSnapshot, MockAgentSource } from "./mockAgentSource";
 import { FLIP_EVERY, flipStatus, tickSnapshot } from "./mockTick";
 
 const count = (provider: string, snap = createSeedSnapshot(0)) =>
@@ -36,6 +36,26 @@ describe("mock seed", () => {
     const empty = createSeedSnapshot(0, "empty");
     expect(empty.sessions).toHaveLength(0);
     expect(empty.providers.find((p) => p.provider === "pi")?.available).toBe(false);
+  });
+});
+
+describe("mock project and task operations", () => {
+  it("creates projects and tasks, updates task details/status, and deletes tasks", async () => {
+    const source = new MockAgentSource("empty");
+    const project = await source.addProject("/projects/argis", false);
+    const task = await source.createTask(project.id, "Add task board", "Create the grouped view");
+
+    expect(await source.listProjects()).toEqual([project]);
+    expect(await source.listTasks(project.id)).toEqual([task]);
+    expect(task.status).toBe("pending");
+
+    const edited = await source.updateTaskDetails(task.id, "Edited title", "Edited description");
+    const updated = await source.updateTaskStatus(task.id, "inProgress");
+    expect(edited.id).toBe(task.id);
+    expect(updated.status).toBe("inProgress");
+
+    await source.deleteTask(task.id);
+    expect(await source.listTasks()).toEqual([]);
   });
 });
 

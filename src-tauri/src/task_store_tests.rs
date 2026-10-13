@@ -1,5 +1,5 @@
 use crate::domain::TaskStatus;
-use crate::task_store::TaskStore;
+use crate::task_store::{TaskStore, TaskStoreState};
 use rusqlite::Connection;
 
 #[test]
@@ -64,4 +64,11 @@ fn task_store_rejects_a_newer_unknown_schema_version() {
 fn task_status_uses_camel_case_wire_values() {
     assert_eq!(serde_json::to_value(TaskStatus::InProgress).unwrap(), "inProgress");
     assert_eq!(serde_json::from_value::<TaskStatus>(serde_json::json!("canceled")).unwrap(), TaskStatus::Canceled);
+}
+
+#[test]
+fn task_store_state_retains_initialization_errors_for_task_commands() {
+    let state = TaskStoreState::from_path(Err("application data directory is unavailable".to_owned()));
+
+    assert_eq!(state.store().err().as_deref(), Some("application data directory is unavailable"));
 }

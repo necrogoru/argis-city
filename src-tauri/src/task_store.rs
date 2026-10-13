@@ -4,6 +4,8 @@ use parking_lot::Mutex;
 use rusqlite::{params, Connection, OptionalExtension, Row, TransactionBehavior};
 use std::fs;
 use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 const SCHEMA_VERSION: i64 = 1;
 
@@ -11,6 +13,25 @@ const SCHEMA_VERSION: i64 = 1;
 /// read-only helpers in `shared::sqlite` instead.
 pub struct TaskStore {
     connection: Mutex<Connection>,
+}
+
+#[derive(Clone)]
+pub struct TaskStoreState {
+    store: Result<Arc<TaskStore>, String>,
+}
+
+impl TaskStoreState {
+    pub fn from_path(path: Result<PathBuf, String>) -> Self {
+        let store = path.and_then(|path| TaskStore::open(&path).map(Arc::new).map_err(|error| error.to_string()));
+        Self { store }
+    }
+
+    pub fn store(&self) -> Result<Arc<TaskStore>, String> {
+        match &self.store {
+            Ok(store) => Ok(Arc::clone(store)),
+            Err(error) => Err(error.clone()),
+        }
+    }
 }
 
 impl TaskStore {

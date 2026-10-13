@@ -20,6 +20,13 @@ function fakeSource(refresh: () => Promise<Snapshot> = async () => at(99)) {
     refresh: vi.fn(refresh),
     subscribe: (callback) => ((push = callback), () => {}),
     openPath: async () => {},
+    listProjects: async () => [],
+    addProject: async (path) => ({ id: 1, path }),
+    listTasks: async () => [],
+    createTask: async () => { throw new Error("unused test operation"); },
+    updateTaskDetails: async () => { throw new Error("unused test operation"); },
+    updateTaskStatus: async () => { throw new Error("unused test operation"); },
+    deleteTask: async () => {},
   };
   return { source, resolveInitial: (s: Snapshot) => resolveInitial(s), rejectInitial: (e: unknown) => rejectInitial(e), push: (s: Snapshot) => push(s) };
 }

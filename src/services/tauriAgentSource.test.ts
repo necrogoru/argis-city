@@ -1,0 +1,62 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Project, Task } from "../domain/types";
+import { createTauriAgentSource } from "./tauriAgentSource";
+
+const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
+
+vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+
+const project: Project = { id: 4, path: "/projects/argis" };
+const task: Task = {
+  id: 12,
+  projectId: project.id,
+  title: "Add task board",
+  description: "Create the grouped view",
+  status: "pending",
+  branchName: null,
+  worktreePath: null,
+};
+
+describe("TauriAgentSource project and task operations", () => {
+  beforeEach(() => invoke.mockReset());
+
+  it("registers a project path and returns the saved project", async () => {
+    invoke.mockResolvedValue(project);
+
+    await expect(createTauriAgentSource().addProject(project.path, true)).resolves.toEqual(project);
+
+    expect(invoke).toHaveBeenCalledWith("register_project", { path: project.path, createIfMissing: true });
+  });
+
+  it("creates and lists tasks for a project", async () => {
+    invoke.mockResolvedValueOnce(task).mockResolvedValueOnce([task]);
+    const source = createTauriAgentSource();
+
+    await expect(source.createTask(project.id, task.title, task.description)).resolves.toEqual(task);
+    await expect(source.listTasks(project.id)).resolves.toEqual([task]);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "create_task", {
+      projectId: project.id,
+      title: task.title,
+      description: task.description,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, "list_tasks", { projectId: project.id });
+  });
+
+  it("updates task fields, status and deletion through their commands", async () => {
+    invoke.mockResolvedValueOnce(task).mockResolvedValueOnce({ ...task, status: "inProgress" }).mockResolvedValueOnce(undefined);
+    const source = createTauriAgentSource();
+
+    await source.updateTaskDetails(task.id, "Edited title", "Edited description");
+    await source.updateTaskStatus(task.id, "inProgress");
+    await source.deleteTask(task.id);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "update_task_details", {
+      id: task.id,
+      title: "Edited title",
+      description: "Edited description",
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, "update_task_status", { id: task.id, status: "inProgress" });
+    expect(invoke).toHaveBeenNthCalledWith(3, "delete_task", { id: task.id });
+  });
+});

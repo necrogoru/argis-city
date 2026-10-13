@@ -26,6 +26,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use system::{HomePaths, SysinfoProcessSource, SystemClock};
+use task_store::TaskStoreState;
 use tauri::{Emitter, Manager};
 
 /// Event the UI listens on (`SNAPSHOT_EVENT` in `src/domain/types.ts`).
@@ -57,6 +58,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(monitor)
         .setup(move |app| {
+            let task_store_path = app
+                .path()
+                .app_data_dir()
+                .map(|directory| directory.join("argis.sqlite"))
+                .map_err(|error| error.to_string());
+            app.manage(TaskStoreState::from_path(task_store_path));
+
             let handle = app.handle().clone();
             let poller = Poller::spawn(poller_monitor, POLL_INTERVAL, move |snapshot| {
                 let _ = handle.emit(SNAPSHOT_EVENT, snapshot);
@@ -67,7 +75,14 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_snapshot,
             commands::refresh_snapshot,
-            commands::open_path
+            commands::open_path,
+            commands::list_projects,
+            commands::register_project,
+            commands::list_tasks,
+            commands::create_task,
+            commands::update_task_details,
+            commands::update_task_status,
+            commands::delete_task
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
