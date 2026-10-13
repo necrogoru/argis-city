@@ -60,6 +60,16 @@ impl TaskStore {
         rows.collect::<rusqlite::Result<Vec<_>>>().context("reading projects")
     }
 
+    pub fn get_project(&self, id: i64) -> anyhow::Result<Project> {
+        let connection = self.connection.lock();
+        connection
+            .query_row("SELECT id, path FROM projects WHERE id = ?1", [id], |row| {
+                Ok(Project { id: row.get(0)?, path: row.get(1)? })
+            })
+            .optional()?
+            .ok_or_else(|| anyhow!("project {id} does not exist"))
+    }
+
     pub fn create_task(&self, project_id: i64, title: &str, description: &str) -> anyhow::Result<Task> {
         let connection = self.connection.lock();
         connection.execute(
@@ -77,6 +87,24 @@ impl TaskStore {
         )?;
         let rows = statement.query_map([project_id], task_from_row)?;
         rows.collect::<rusqlite::Result<Vec<_>>>().context("reading tasks")
+    }
+
+    pub fn get_task(&self, id: i64) -> anyhow::Result<Task> {
+        let connection = self.connection.lock();
+        task_by_id(&connection, id)
+    }
+
+    pub fn set_task_worktree(&self, id: i64, branch_name: &str, worktree_path: &str) -> anyhow::Result<Task> {
+        let connection = self.connection.lock();
+        let changed = connection.execute(
+            "UPDATE tasks SET branch_name = ?2, worktree_path = ?3
+             WHERE id = ?1 AND branch_name IS NULL AND worktree_path IS NULL",
+            params![id, branch_name, worktree_path],
+        )?;
+        if changed == 0 {
+            bail!("task {id} does not exist or already has a Git worktree");
+        }
+        task_by_id(&connection, id)
     }
 
     pub fn update_task_details(&self, id: i64, title: &str, description: &str) -> anyhow::Result<Task> {

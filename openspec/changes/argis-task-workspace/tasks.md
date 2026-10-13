@@ -14,7 +14,7 @@
 - [x] 2.4 Build the project list/path form and task board with project filtering, task create/edit panels, and the four agreed task actions; verify the layout and interactions manually at the documented desktop size and update `docs/design/SPEC.md` without changing existing tokens.
 ## 3. Git task worktrees
 
-- [ ] 3.1 Implement validated Git repository/branch checks and task branch/worktree creation using the agreed names and path; verify successful creation, non-Git projects, branch collisions, unusual task titles, and the local exclude rule with temporary Git repositories.
+- [x] 3.1 Implement validated Git repository/branch checks and task branch/worktree creation using the agreed names and path; verify successful creation, non-Git projects, branch collisions, unusual task titles, and the local exclude rule with temporary Git repositories.
 - [ ] 3.2 Implement optional worktree/branch cleanup without force removal and without blocking task-record deletion; verify clean cleanup, declined cleanup, and dirty-worktree retention with temporary Git repositories.
 - [ ] 3.3 Implement task deletion confirmation and the keep-or-remove-Git-resources choice; verify task deletion remains available when Git cleanup is declined or reports an error.
 - [ ] 3.4 Expose Git capability and error state through the Tauri/mock transport and task cards; verify disabled states and user-facing explanations for non-Git projects and existing branches.

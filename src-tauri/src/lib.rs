@@ -3,12 +3,16 @@
 
 pub mod commands;
 pub mod domain;
+pub mod git_worktrees;
 pub mod monitor;
 pub mod project_paths;
 pub mod providers;
 pub mod shared;
 pub mod system;
 pub mod task_store;
+
+#[cfg(test)]
+mod git_worktrees_tests;
 
 #[cfg(test)]
 mod project_paths_tests;
