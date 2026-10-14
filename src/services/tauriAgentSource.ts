@@ -15,7 +15,6 @@ import {
 import type { AgentSource } from "./agentSource";
 
 interface TerminalChannelEntry {
-  requestId: number;
   channel: Channel<TerminalEvent>;
   attachmentId: number | null;
 }
@@ -27,7 +26,6 @@ function terminalChannelKey(taskId: number, tab: TerminalTab): string {
 /** AgentSource backed by the Rust commands/events in docs/CONTRACT.md. */
 export function createTauriAgentSource(): AgentSource {
   const terminalChannels = new Map<string, TerminalChannelEntry>();
-  let nextTerminalChannelRequestId = 1;
 
   function makeTerminalChannel(
     key: string,
@@ -37,7 +35,7 @@ export function createTauriAgentSource(): AgentSource {
     if (previous) previous.channel.onmessage = () => {};
 
     const channel = new Channel<TerminalEvent>();
-    const entry = { requestId: nextTerminalChannelRequestId++, channel, attachmentId: null };
+    const entry = { channel, attachmentId: null };
     channel.onmessage = (event) => {
       if (terminalChannels.get(key) === entry) callback(event);
     };

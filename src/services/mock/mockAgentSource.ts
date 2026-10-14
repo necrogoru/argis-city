@@ -6,6 +6,7 @@ import type {
   TaskGitStatus,
   TaskStatus,
   TaskWorktree,
+  TerminalAgent,
   TerminalAttachment,
   TerminalEvent,
   TerminalSize,
@@ -160,7 +161,7 @@ export class MockAgentSource implements AgentSource {
   async startTerminalSession(
     _taskId: number,
     _tab: TerminalTab,
-    _agentCli: "claude" | "codex" | "opencode" | "pi" | null,
+    _agentCli: TerminalAgent | null,
     _size: TerminalSize,
     _onEvent: (event: TerminalEvent) => void,
   ): Promise<TerminalAttachment> {

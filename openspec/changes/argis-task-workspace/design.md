@@ -40,12 +40,12 @@ See `proposal.md` for motivation and `specs/` for user-visible behavior. Argis i
 - From an explicit task action, create branch `argis/<task-id>-<title-slug>` and worktree `<project>/.argis/worktrees/<task-id>-<title-slug>`. The task ID keeps names stable when the title changes; normalize the title only for the slug.
 - Disable creation with a useful reason for a non-Git project or a branch-name collision. Never run `git init` automatically. Check branch existence before attempting creation.
 - Add `.argis/worktrees/` idempotently to that clone's `.git/info/exclude`, preserving existing entries and leaving tracked ignore files unchanged. If preparation fails, report the failure rather than creating an unignored worktree.
-- When task deletion requests cleanup, remove the worktree without force and then delete its branch only if worktree removal succeeds. Task-record deletion proceeds regardless; if Git refuses cleanup, retain the Git resources and show their location.
+- Stop and reap a task's terminal processes before task deletion or Git cleanup. If process cleanup fails, abort deletion and preserve the task record and worktree. After processes stop, optional Git cleanup removes the worktree without force and then deletes its branch only if worktree removal succeeds. Task-record deletion proceeds regardless of Git cleanup; if Git refuses cleanup, retain the Git resources and show their location.
 
 ### Embedded terminal process lifecycle
 
 - Keep PTY ownership in a backend process manager keyed by task and tab. The Agent tab starts the user-selected supported CLI (Claude Code is the default); the `term` tab starts the user's interactive shell. Both use the associated worktree as their working directory.
-- Use Tauri commands for start/input/resize/stop operations and a Tauri Channel for ordered terminal output. Reopening the modal reattaches to live processes. Keep processes alive while users switch between task and city views; terminate and reap Argis-managed processes when the app exits.
+- Use Tauri commands for start/input/resize/stop operations and a Tauri Channel for ordered terminal output. Reopening the modal reattaches to live processes. Keep processes alive while users switch between task and city views; stop them before their task is deleted, and terminate/reap all remaining Argis-managed processes when the app exits.
 - If starting the agent CLI fails, show the error in the Agent tab and leave the shell tab usable. Do not silently mark the task stopped or otherwise mutate task status.
 - Place a stable terminal-host adapter between Rust PTY handling and the Vue terminal view.
 

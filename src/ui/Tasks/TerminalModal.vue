@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { X } from "@lucide/vue";
-import type { Task } from "../../domain/types";
-import TerminalSurface from "./TerminalSurface.vue";
+import type { Task, TerminalTab } from "../../domain/types";
+import TerminalSessionPane from "./TerminalSessionPane.vue";
+import type { TerminalStatus } from "./useTerminalSession";
 
-type TerminalTab = "agent" | "term";
+interface TerminalPaneHandle {
+  reattach: () => Promise<void>;
+  detach: () => Promise<void>;
+}
 
 const open = defineModel<boolean>("open", { required: true });
 const props = defineProps<{ task: Task }>();
@@ -13,9 +17,30 @@ const dialog = useTemplateRef<HTMLDialogElement>("dialog");
 const closeButton = useTemplateRef<HTMLButtonElement>("close-button");
 const agentTabButton = useTemplateRef<HTMLButtonElement>("agent-tab");
 const termTabButton = useTemplateRef<HTMLButtonElement>("term-tab");
+const agentPane = useTemplateRef<TerminalPaneHandle>("agent-pane");
+const termPane = useTemplateRef<TerminalPaneHandle>("term-pane");
 const activeTab = ref<TerminalTab>("agent");
 const terminalReady = ref(false);
+const restoring = ref(false);
+const agentStatus = ref<TerminalStatus>("notStarted");
+const termStatus = ref<TerminalStatus>("notStarted");
 let returnFocus: HTMLElement | null = null;
+
+function statusLabel(status: TerminalStatus): string {
+  switch (status) {
+    case "notStarted": return "Not started";
+    case "starting": return "Starting";
+    case "running": return "Running";
+    case "exited": return "Exited";
+    case "error": return "Unavailable";
+  }
+}
+
+async function restoreSessions(): Promise<void> {
+  restoring.value = true;
+  await Promise.all([agentPane.value?.reattach(), termPane.value?.reattach()]);
+  restoring.value = false;
+}
 
 function show(): void {
   const element = dialog.value;
@@ -24,15 +49,20 @@ function show(): void {
   activeTab.value = "agent";
   terminalReady.value = false;
   element.showModal();
-  void nextTick(() => {
+  void nextTick(async () => {
     if (!open.value) return;
     terminalReady.value = true;
     closeButton.value?.focus();
+    await nextTick();
+    if (open.value) await restoreSessions();
   });
 }
 
 function hide(): void {
   terminalReady.value = false;
+  restoring.value = false;
+  void agentPane.value?.detach();
+  void termPane.value?.detach();
   if (dialog.value?.open) dialog.value.close();
   if (returnFocus?.isConnected) returnFocus.focus();
   returnFocus = null;
@@ -66,7 +96,7 @@ function handleTabKeydown(event: KeyboardEvent): void {
     : event.key === "End" || (event.key === "ArrowRight" && activeTab.value === "agent")
       ? "term"
       : activeTab.value;
-  activeTab.value = tab;
+  selectTab(tab);
   void nextTick(() => (tab === "agent" ? agentTabButton.value : termTabButton.value)?.focus());
 }
 
@@ -113,7 +143,7 @@ onBeforeUnmount(() => {
         @click="selectTab('agent')"
       >
         Agent
-        <span class="tab-status">Not started</span>
+        <span class="tab-status">{{ statusLabel(agentStatus) }}</span>
       </button>
       <button
         id="term-terminal-tab"
@@ -127,31 +157,31 @@ onBeforeUnmount(() => {
         @click="selectTab('term')"
       >
         <code>term</code>
-        <span class="tab-status">Not started</span>
+        <span class="tab-status">{{ statusLabel(termStatus) }}</span>
       </button>
     </div>
 
     <div v-if="terminalReady" class="terminal-panels">
-      <section
-        id="agent-terminal-panel"
-        class="terminal-panel"
-        role="tabpanel"
-        aria-labelledby="agent-terminal-tab"
-        tabindex="0"
-        v-show="activeTab === 'agent'"
-      >
-        <TerminalSurface label="Agent terminal" :active="activeTab === 'agent'" :connected="false" />
-      </section>
-      <section
-        id="term-terminal-panel"
-        class="terminal-panel"
-        role="tabpanel"
-        aria-labelledby="term-terminal-tab"
-        tabindex="0"
-        v-show="activeTab === 'term'"
-      >
-        <TerminalSurface label="Shell terminal" :active="activeTab === 'term'" :connected="false" />
-      </section>
+      <TerminalSessionPane
+        ref="agent-pane"
+        :task-id="props.task.id"
+        tab="agent"
+        :active="activeTab === 'agent'"
+        :restoring="restoring"
+        panel-id="agent-terminal-panel"
+        tab-id="agent-terminal-tab"
+        @status-change="agentStatus = $event"
+      />
+      <TerminalSessionPane
+        ref="term-pane"
+        :task-id="props.task.id"
+        tab="term"
+        :active="activeTab === 'term'"
+        :restoring="restoring"
+        panel-id="term-terminal-panel"
+        tab-id="term-terminal-tab"
+        @status-change="termStatus = $event"
+      />
     </div>
 
     <footer class="terminal-footer">

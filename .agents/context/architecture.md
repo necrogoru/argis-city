@@ -35,25 +35,35 @@ scene/  (TresJS canvas)     ui/  (DOM overlay on top of the canvas)
 The optional task workflow is separate from provider observation:
 
 ```
-TaskWorkspace → AgentSource → Tauri task/Git commands → TaskStoreState
-                    ↑                  │                    │
-                    └── browser mock   │                    ▼
-                                      git_worktrees     app data/argis.sqlite
+TaskWorkspace + TerminalModal
+          │
+          ▼
+      AgentSource ─── browser mock
+          │ Tauri
+          ▼
+      commands.rs ─── TaskStoreState → app data/argis.sqlite
+          ├────────── git_worktrees
+          └────────── TerminalManager → PTYs → Tauri Channels → xterm
 ```
 
 `TaskStore` writes only Argis-owned data in the app data directory. It must not
 reuse provider databases or weaken their read-only access. Git worktree changes
 occur only from explicit task actions and are scoped to the registered project.
+The terminal manager owns one Agent and one shell process per task. Closing the
+modal detaches its Channels but leaves PTYs running for reattachment. Task
+deletion stops and reaps that task's PTYs before Git cleanup; a stop failure
+aborts deletion. App exit reaps all remaining managed PTYs.
 
 ## Backend (`src-tauri/src/`)
 
 | Module | Role | Notes |
 | --- | --- | --- |
 | `lib.rs` | Composition root: `build_registry`, `run()` | The only place providers are wired in |
-| `commands.rs` | Tauri commands | Thin; blocking work in `spawn_blocking`; errors → `String` |
-| `domain/` | Wire types (`Snapshot`, `AgentSession`, `Project`, `Task`, `Progress`, `Tokens`, `Status`, `ProviderId`) | `serde(rename_all = "camelCase")`, pure, no I/O |
+| `commands.rs` | Tauri commands | Thin; blocking filesystem, Git, and PTY work in `spawn_blocking`; errors → `String` |
+| `domain/` | Wire types (`Snapshot`, `AgentSession`, `Project`, `Task`, terminal session/channel types, `Progress`, `Tokens`, `Status`, `ProviderId`) | `serde(rename_all = "camelCase")`, pure, no I/O |
 | `task_store.rs` | Argis-owned project/task persistence | Versioned writable SQLite in app data; separate from provider stores |
 | `git_worktrees.rs` | Task branch/worktree checks, creation, and optional cleanup | Direct Git arguments; never force-removes; local `.git/info/exclude` only |
+| `terminal_manager.rs` | Task/tab PTY lifecycle and ordered output attachments | Allowlisted agent CLIs; validates task deletion barriers; stops on task deletion and app exit |
 | `providers/mod.rs` | `AgentProvider` trait, shared time windows | `RUNNING_WINDOW_MS`, `APPROVAL_STALE_MS`, `CANDIDATE_WINDOW_MS` |
 | `providers/claude/` | Live registry `sessions/<pid>.json` + transcripts + subagents | Token dedupe by `message.id` |
 | `providers/codex/` | `state_*.sqlite` thread index + rollout JSONL | |
@@ -102,6 +112,10 @@ tower, with a second ring after 8. A fifth provider needs a layout decision firs
 - Task/project changes: keep their SQLite store separate from provider observers;
   update `docs/CONTRACT.md`, `src/domain/types.ts`, both `AgentSource`
   implementations, and the task store/tests together.
+- Terminal changes: keep PTYs in `TerminalManager`; commands resolve the cwd
+  from the recorded task worktree and stream `TerminalEvent` values through
+  Channels. Keep processes on modal/view close, but stop them before task
+  deletion and at app exit; mirror transport shape in the Tauri/mock sources.
 - Git worktree behavior: validate paths and task-owned refs, use direct Git
   arguments, and test operations with temporary repositories; never modify a
   project's tracked ignore file for generated worktrees.

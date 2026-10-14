@@ -4,7 +4,7 @@ use crate::domain::{
 use anyhow::{anyhow, bail, Context};
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, Child, ChildKiller, CommandBuilder, MasterPty, PtySize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -52,6 +52,8 @@ pub type TerminalEventSink = Arc<dyn Fn(TerminalEvent) -> Result<(), String> + S
 #[derive(Default)]
 struct ManagerState {
     shutting_down: bool,
+    /// In-progress and deleted task IDs reject delayed starts and reattachments.
+    closed_tasks: HashSet<i64>,
     by_id: HashMap<u64, Arc<ManagedSession>>,
     by_key: HashMap<TerminalSessionKey, u64>,
 }
@@ -120,6 +122,9 @@ impl TerminalManager {
         let mut manager = self.state.lock();
         if manager.shutting_down {
             bail!("terminal manager is shutting down");
+        }
+        if manager.closed_tasks.contains(&spec.key.task_id) {
+            bail!("task terminal sessions are being deleted or the task has been deleted");
         }
         if let Some(existing_id) = manager.by_key.get(&spec.key).copied() {
             if let Some(session) = manager.by_id.get(&existing_id) {
@@ -210,11 +215,12 @@ impl TerminalManager {
         key: TerminalSessionKey,
         sink: TerminalEventSink,
     ) -> Option<TerminalAttachment> {
-        let session = {
-            let manager = self.state.lock();
-            let id = manager.by_key.get(&key)?;
-            Arc::clone(manager.by_id.get(id)?)
-        };
+        let manager = self.state.lock();
+        if manager.closed_tasks.contains(&key.task_id) {
+            return None;
+        }
+        let id = manager.by_key.get(&key)?;
+        let session = manager.by_id.get(id)?;
         let attachment_id = session.attach(sink);
         Some(TerminalAttachment { session: session.info(), attachment_id })
     }
@@ -272,6 +278,59 @@ impl TerminalManager {
         session.stop()
     }
 
+    /// Stops and reaps every terminal for a task, preventing new sessions until deletion finishes.
+    pub fn stop_task_sessions(&self, task_id: i64) -> anyhow::Result<()> {
+        if task_id <= 0 {
+            bail!("task ID must be positive");
+        }
+
+        let sessions = {
+            let mut manager = self.state.lock();
+            if manager.shutting_down {
+                bail!("terminal manager is shutting down");
+            }
+            if !manager.closed_tasks.insert(task_id) {
+                bail!("task terminal sessions are already being deleted");
+            }
+            manager
+                .by_key
+                .iter()
+                .filter(|(key, _)| key.task_id == task_id)
+                .filter_map(|(_, id)| manager.by_id.get(id).cloned())
+                .collect::<Vec<_>>()
+        };
+
+        let mut stopped = Vec::with_capacity(sessions.len());
+        let mut failures = Vec::new();
+        for session in sessions {
+            match session.stop() {
+                Ok(()) => stopped.push((session.info.id, session.info.key)),
+                Err(error) => failures.push(error.to_string()),
+            }
+        }
+
+        let mut manager = self.state.lock();
+        for (id, key) in stopped {
+            manager.by_id.remove(&id);
+            if manager.by_key.get(&key) == Some(&id) {
+                manager.by_key.remove(&key);
+            }
+        }
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            manager.closed_tasks.remove(&task_id);
+            bail!("failed to stop task terminal sessions: {}", failures.join("; "));
+        }
+    }
+
+    /// Releases the deletion barrier on failure; successful IDs remain tombstoned for this app lifetime.
+    pub fn finish_task_deletion(&self, task_id: i64, task_deleted: bool) {
+        if !task_deleted {
+            self.state.lock().closed_tasks.remove(&task_id);
+        }
+    }
+
     /// Stops and reaps every session. The manager cannot be restarted afterward.
     pub fn shutdown(&self) -> anyhow::Result<()> {
         let sessions = {
@@ -300,7 +359,12 @@ impl TerminalManager {
     }
 
     fn session(&self, id: u64) -> anyhow::Result<Arc<ManagedSession>> {
-        self.state.lock().by_id.get(&id).cloned().ok_or_else(|| anyhow!("terminal session {id} does not exist"))
+        let manager = self.state.lock();
+        let session = manager.by_id.get(&id).cloned().ok_or_else(|| anyhow!("terminal session {id} does not exist"))?;
+        if manager.closed_tasks.contains(&session.info.key.task_id) {
+            bail!("task terminal sessions are being deleted or the task has been deleted");
+        }
+        Ok(session)
     }
 }
 

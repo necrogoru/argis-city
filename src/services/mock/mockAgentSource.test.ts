@@ -80,6 +80,19 @@ describe("mock project and task operations", () => {
     });
     expect((await source.getTaskGitStatus(task.id)).canCreateBranch).toBe(false);
   });
+
+  it("does not pretend browser mock mode can start or reattach local PTYs", async () => {
+    const source = new MockAgentSource("empty");
+
+    await expect(source.reattachTerminalSession(1, "agent", () => {})).resolves.toBeNull();
+    await expect(source.startTerminalSession(1, "agent", "claude", { cols: 80, rows: 24 }, () => {}))
+      .rejects.toThrow("only available in the Argis desktop app");
+    await expect(source.sendTerminalInput(1, "pwd\n")).rejects.toThrow("only available in the Argis desktop app");
+    await expect(source.resizeTerminalSession(1, { cols: 80, rows: 24 })).rejects.toThrow(
+      "only available in the Argis desktop app",
+    );
+    await expect(source.detachTerminalSession(1, "agent", 1)).resolves.toBe(false);
+  });
 });
 
 describe("tickSnapshot", () => {

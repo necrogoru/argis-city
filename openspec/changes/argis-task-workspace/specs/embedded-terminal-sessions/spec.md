@@ -44,7 +44,7 @@ Argis SHALL provide interactive input and output for the Agent and shell process
 - **THEN** Argis sends input to and displays output from that agent process in the task worktree
 
 ### Requirement: Preserve terminal sessions while Argis is open
-Argis SHALL keep task terminal processes running when users close the terminal modal or switch to monitoring, and SHALL stop those processes when Argis exits.
+Argis SHALL keep task terminal processes running when users close the terminal modal or switch to monitoring, and SHALL stop those processes when Argis exits or their owning task is deleted.
 
 #### Scenario: Return to a running terminal
 - **WHEN** a user closes the terminal modal or switches back to the city and later reopens the task terminal
@@ -53,3 +53,7 @@ Argis SHALL keep task terminal processes running when users close the terminal m
 #### Scenario: Exit Argis
 - **WHEN** Argis exits
 - **THEN** Argis terminates the terminal processes it manages
+
+#### Scenario: Delete a task with active terminal processes
+- **WHEN** a user confirms deletion of a task with active terminal processes
+- **THEN** Argis stops and reaps the task's processes before Git cleanup and task-record deletion

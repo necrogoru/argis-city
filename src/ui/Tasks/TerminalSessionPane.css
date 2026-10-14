@@ -1,0 +1,110 @@
+.terminal-session-pane {
+  position: absolute;
+  inset: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--bg);
+  visibility: hidden;
+}
+
+.terminal-session-pane[data-active="true"] {
+  visibility: visible;
+}
+
+.terminal-session-toolbar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.terminal-agent-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.terminal-agent-controls label {
+  color: var(--text-3);
+}
+
+.terminal-agent-controls select,
+.terminal-agent-controls button,
+.terminal-session-toolbar > button {
+  box-sizing: border-box;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  background: var(--fill-subtle);
+  color: var(--text);
+  font: inherit;
+}
+
+.terminal-agent-controls select {
+  max-width: 180px;
+  padding: 0 32px 0 12px;
+}
+
+.terminal-agent-controls button,
+.terminal-session-toolbar > button {
+  padding: 0 14px;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.terminal-agent-controls button:hover:not(:disabled),
+.terminal-session-toolbar > button:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--fill-hover);
+}
+
+.terminal-agent-controls button:focus-visible,
+.terminal-agent-controls select:focus-visible,
+.terminal-session-toolbar > button:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.terminal-agent-controls button:disabled,
+.terminal-agent-controls select:disabled,
+.terminal-session-toolbar > button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.terminal-session-status {
+  color: var(--text-2);
+}
+
+.terminal-session-error {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--red);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.terminal-surface-wrap {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (width < 700px) {
+  .terminal-session-pane {
+    inset: 12px;
+  }
+}

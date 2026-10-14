@@ -55,7 +55,7 @@ Argis SHALL show tasks in Pending, In progress, and Other statuses groups, prese
 - **THEN** the board shows only tasks assigned to that project while retaining the status groups
 
 ### Requirement: Task deletion does not depend on Git cleanup
-When a task has an associated branch or worktree, Argis SHALL ask whether to remove those resources during task deletion; deleting the task SHALL proceed if cleanup is declined or fails.
+When a task has an associated branch or worktree, Argis SHALL ask whether to remove those resources during task deletion. If the task has active terminal processes, Argis SHALL stop and reap them before deleting the task or attempting Git cleanup. Task deletion SHALL proceed if Git cleanup is declined or fails, but SHALL abort if an active terminal process cannot be stopped.
 
 #### Scenario: Delete a task and keep its Git resources
 - **WHEN** a user confirms task deletion and chooses to keep its branch and worktree
@@ -64,6 +64,14 @@ When a task has an associated branch or worktree, Argis SHALL ask whether to rem
 #### Scenario: Delete a task when Git cleanup cannot complete
 - **WHEN** a user confirms task deletion and chooses Git cleanup but the worktree cannot be safely removed
 - **THEN** Argis deletes the task record, does not force-remove the worktree, and reports the remaining Git resource location
+
+#### Scenario: Delete a task with active terminal sessions
+- **WHEN** a user confirms deletion of a task with a running Agent or shell process
+- **THEN** Argis stops and reaps those processes before Git cleanup or task-record deletion
+
+#### Scenario: A terminal process cannot be stopped during task deletion
+- **WHEN** Argis cannot stop and reap an active process for the task
+- **THEN** Argis aborts deletion, preserves the task record and Git resources, and reports the process cleanup error
 
 ### Requirement: Task and project data remains local to Argis
 Argis SHALL persist task and project records on the local machine and SHALL NOT import coding-agent plan entries as managed tasks.

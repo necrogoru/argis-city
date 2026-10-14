@@ -19,10 +19,15 @@ one tower per tool (provider), one house per live session, subagents as cards.
 | command | `delete_task`             | `{ id, removeGitResources }` → `TaskDeletionOutcome` |
 | command | `inspect_task_git_status` | `{ taskId }` → `TaskGitStatus`                    |
 | command | `create_task_worktree`    | `{ taskId }` → `TaskWorktree`                     |
+| command | `start_terminal_session`  | `{ taskId, tab, agentCli, size, onEvent }` → `TerminalAttachment` |
+| command | `reattach_terminal_session` | `{ taskId, tab, onEvent }` → `TerminalAttachment \| null` |
+| command | `terminal_input`          | `{ sessionId, data }` → `()`                     |
+| command | `resize_terminal_session` | `{ sessionId, size }` → `()`                     |
+| command | `detach_terminal_session` | `{ taskId, tab, attachmentId }` → `boolean`      |
 | event   | `agents://snapshot`       | `Snapshot`, emitted every poll (2 s)              |
 
-Snapshot, project, and task types live in `src/domain/types.ts` (TS) and
-`src-tauri/src/domain/` (Rust). Git operation result types live in
+Snapshot, project, task, and terminal wire types live in `src/domain/types.ts`
+(TS) and `src-tauri/src/domain/` (Rust). Git operation result types live in
 `src-tauri/src/git_worktrees.rs`. Rust wire types serialize with
 `rename_all = "camelCase"`; optional fields serialize as `null`, never omitted.
 All timestamps are Unix epoch **milliseconds**.
@@ -35,7 +40,10 @@ until created. `register_project` creates a missing directory only when
 `createIfMissing` is true. Task status changes are explicit user operations;
 agent plan data is not imported into the task list.
 
-`delete_task` removes the task record even when Git cleanup is declined or
+Before `delete_task` attempts Git cleanup or removes the task record, it stops
+and reaps every active terminal process for that task. If process cleanup fails,
+the command errors before changing the task or its Git resources. After sessions
+stop, `delete_task` removes the task record even when Git cleanup is declined or
 fails. Its result reports which Git resources were removed and any cleanup
 error; worktree cleanup never uses force.
 
@@ -64,6 +72,39 @@ creates and records both resources only for an eligible task.
   operation fails, the task record is still deleted and `TaskDeletionOutcome.git`
   reports the error and any branch/worktree paths that remain. Declining cleanup
   deletes only the task record and leaves its Git resources untouched.
+
+## Embedded terminal sessions
+
+- Each task has at most one process in each tab: `agent` or `term`. Both process
+  working directories are resolved from the task's persisted worktree record;
+  the frontend cannot provide a cwd or arbitrary executable. Argis checks that
+  the worktree exists under the registered project and that its checked-out
+  branch matches the task's recorded branch before starting or reattaching.
+- Agent executable selection is an allowlist: `claude`, `codex`, `opencode`, or
+  `pi`. `agentCli` is required for the Agent tab and `null` for the shell tab.
+  The shell uses the user's configured shell (`SHELL`, or `COMSPEC` on Windows).
+  Task names and descriptions are never passed as process arguments.
+- `start_terminal_session` starts the selected PTY and returns a
+  `TerminalAttachment`; if the same agent is already running in that task tab,
+  it reattaches to it. A different agent cannot replace a running Agent tab.
+  `reattach_terminal_session` returns `null` when that tab has no managed
+  process. A completed process is reattached with `running: false` and its exit
+  event is replayed.
+- `TerminalAttachment` contains `session` and an opaque `attachmentId`. Detach
+  only removes the matching output-channel attachment; it does not stop the
+  process. A stale attachment ID cannot detach a newer reattachment.
+- `onEvent` is a Tauri Channel carrying ordered `TerminalEvent` values:
+  `output` has `sessionId` and `bytes` (a JSON byte array), `error` has
+  `sessionId` and `message`, and `exited` has `sessionId`, `exitCode`, and a
+  nullable `signal`. The UI converts output bytes to `Uint8Array` for xterm.
+- `terminal_input` accepts UTF-8 text up to 64 KiB. `resize_terminal_session`
+  accepts positive `cols` and `rows` up to 1,000; pixel dimensions default to
+  zero when omitted. Closing the modal or switching views detaches channels
+  while leaving PTYs alive. Argis stops and reaps all remaining PTYs on app exit
+  and stops a task's PTYs before task deletion.
+- Browser mock mode does not launch local processes: reattach returns `null`,
+  start/input/resize report that embedded processes require the desktop app, and
+  detach returns `false`.
 
 ## Semantics
 

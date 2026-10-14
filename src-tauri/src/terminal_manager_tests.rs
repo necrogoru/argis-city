@@ -201,6 +201,32 @@ fn start_or_reattach_reuses_a_running_session_only_for_the_same_agent() {
 
 #[cfg(unix)]
 #[test]
+fn task_deletion_stops_sessions_and_blocks_new_processes_until_the_outcome_is_known() {
+    let manager = TerminalManager::default();
+    let (agent_sender, _agent_events) = mpsc::channel();
+    let (shell_sender, _shell_events) = mpsc::channel();
+    manager.start(spec(52, TerminalTab::Agent, "/bin/sleep", &["30"]), sink(agent_sender)).unwrap();
+    manager.start(spec(52, TerminalTab::Term, "/bin/sleep", &["30"]), sink(shell_sender)).unwrap();
+
+    manager.stop_task_sessions(52).unwrap();
+
+    assert_eq!(manager.active_session_count(), 0);
+    let (blocked_sender, _blocked_events) = mpsc::channel();
+    assert!(manager.start(spec(52, TerminalTab::Term, "/bin/sleep", &["30"]), sink(blocked_sender)).is_err());
+
+    manager.finish_task_deletion(52, false);
+    let (retry_sender, _retry_events) = mpsc::channel();
+    let _retry = manager.start(spec(52, TerminalTab::Term, "/bin/sleep", &["30"]), sink(retry_sender)).unwrap();
+    manager.stop_task_sessions(52).unwrap();
+    manager.finish_task_deletion(52, true);
+
+    let (deleted_sender, _deleted_events) = mpsc::channel();
+    assert!(manager.start(spec(52, TerminalTab::Term, "/bin/sleep", &["30"]), sink(deleted_sender)).is_err());
+    assert_eq!(manager.active_session_count(), 0);
+}
+
+#[cfg(unix)]
+#[test]
 fn terminal_manager_reaps_all_sessions_on_shutdown_and_is_idempotent() {
     let manager = TerminalManager::default();
     let (first_sender, first_events) = mpsc::channel();

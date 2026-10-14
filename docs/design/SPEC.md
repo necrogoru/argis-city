@@ -98,13 +98,19 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   New task and edit task use a modal form for task name and description; task
   creation additionally requires a project. Editing a task exposes Delete
   task inside the editor; confirmation asks whether to also remove its branch
-  and worktree. A failed safe cleanup leaves a notice with the remaining paths,
-  while the task is still removed. Keep the approved palette, type, radii, and
-  spacing tokens unchanged.
+  and worktree and warns that active Agent/shell sessions will be stopped. If
+  a session cannot be stopped and reaped, deletion is aborted and the task and
+  worktree remain. A failed safe Git cleanup leaves a notice with the remaining
+  paths, while the task is still removed. Keep the approved palette, type,
+  radii, and spacing tokens unchanged.
 - Opening a task worktree shows a large centered terminal modal over the board.
   Its header identifies the task and worktree, with Agent and `term` tabs above
-  a full-size xterm viewport. Before process startup, keep the viewport blank
-  and label each tab `Not started`. Closing returns to the board.
+  full-size xterm viewports. Before process startup, each viewport stays blank
+  and its tab reads `Not started`. The Agent pane offers a CLI selector defaulted
+  to Claude Code and a Start Agent action; the `term` pane has an explicit Start
+  shell action. Tab labels reflect startup, running, exited, and unavailable
+  states, with launch errors shown inside only the affected pane. Closing returns
+  to the board while leaving processes available for reattachment.
 
 ## Progress readouts
 Progress is a real estimate only when it comes from a plan (`execution`) or

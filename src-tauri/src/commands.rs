@@ -89,8 +89,13 @@ pub async fn delete_task(
     id: i64,
     remove_git_resources: bool,
     state: State<'_, TaskStoreState>,
+    terminal_state: State<'_, Arc<TerminalManager>>,
 ) -> Result<TaskDeletionOutcome, String> {
-    task_store_operation(state, move |store| delete_task_with_git_cleanup(&store, id, remove_git_resources)).await
+    let manager = Arc::clone(&terminal_state);
+    task_store_operation(state, move |store| {
+        delete_task_with_terminal_cleanup(&store, &manager, id, remove_git_resources)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -186,6 +191,19 @@ fn terminal_event_sink(channel: Channel<TerminalEvent>) -> TerminalEventSink {
     Arc::new(move |event| channel.send(event).map_err(|error| error.to_string()))
 }
 
+fn delete_task_with_terminal_cleanup(
+    store: &TaskStore,
+    manager: &TerminalManager,
+    task_id: i64,
+    remove_git_resources: bool,
+) -> anyhow::Result<TaskDeletionOutcome> {
+    store.get_task(task_id)?;
+    manager.stop_task_sessions(task_id)?;
+    let outcome = delete_task_with_git_cleanup(store, task_id, remove_git_resources);
+    manager.finish_task_deletion(task_id, outcome.as_ref().is_ok_and(|result| result.task_deleted));
+    outcome
+}
+
 fn terminal_process_spec(
     task_id: i64,
     tab: TerminalTab,
@@ -249,6 +267,7 @@ fn existing_dir(path: &str) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Command;
 
     #[test]
     fn validates_directories() {
@@ -288,5 +307,91 @@ mod tests {
         assert!(terminal_process_spec(13, TerminalTab::Agent, None, cwd.clone(), TerminalSize::default(),).is_err());
         assert!(terminal_process_spec(13, TerminalTab::Term, Some(TerminalAgent::Pi), cwd, TerminalSize::default(),)
             .is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn task_deletion_stops_a_terminal_before_removing_its_worktree() {
+        let parent = tempfile::tempdir().unwrap();
+        let (store, task, worktree) = task_with_worktree(parent.path());
+        let manager = TerminalManager::default();
+        let spec = TerminalProcessSpec {
+            key: TerminalSessionKey { task_id: task.id, tab: TerminalTab::Term },
+            agent_cli: None,
+            program: PathBuf::from("/bin/sh"),
+            args: vec!["-c".to_owned(), "sleep 30".to_owned()],
+            cwd: PathBuf::from(&worktree.worktree_path),
+            size: TerminalSize::default(),
+        };
+        manager.start(spec, Arc::new(|_| Ok(()))).unwrap();
+
+        let result = delete_task_with_terminal_cleanup(&store, &manager, task.id, true).unwrap();
+
+        assert!(result.task_deleted);
+        assert!(result.git.worktree_removed);
+        assert_eq!(manager.active_session_count(), 0);
+        assert!(!Path::new(&worktree.worktree_path).exists());
+        assert!(store.get_task(task.id).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn task_deletion_stops_sessions_even_when_git_resources_are_kept() {
+        let parent = tempfile::tempdir().unwrap();
+        let (store, task, worktree) = task_with_worktree(parent.path());
+        let manager = TerminalManager::default();
+        let spec = TerminalProcessSpec {
+            key: TerminalSessionKey { task_id: task.id, tab: TerminalTab::Term },
+            agent_cli: None,
+            program: PathBuf::from("/bin/sh"),
+            args: vec!["-c".to_owned(), "sleep 30".to_owned()],
+            cwd: PathBuf::from(&worktree.worktree_path),
+            size: TerminalSize::default(),
+        };
+        manager.start(spec, Arc::new(|_| Ok(()))).unwrap();
+
+        let result = delete_task_with_terminal_cleanup(&store, &manager, task.id, false).unwrap();
+
+        assert!(result.task_deleted);
+        assert!(!result.git.worktree_removed);
+        assert_eq!(manager.active_session_count(), 0);
+        assert!(Path::new(&worktree.worktree_path).is_dir());
+        assert!(store.get_task(task.id).is_err());
+    }
+
+    #[test]
+    fn task_deletion_aborts_and_preserves_git_resources_if_terminal_manager_cannot_stop() {
+        let parent = tempfile::tempdir().unwrap();
+        let (store, task, worktree) = task_with_worktree(parent.path());
+        let manager = TerminalManager::default();
+        manager.shutdown().unwrap();
+
+        let error = delete_task_with_terminal_cleanup(&store, &manager, task.id, true).unwrap_err();
+
+        assert!(error.to_string().contains("shutting down"));
+        assert!(store.get_task(task.id).is_ok());
+        assert!(Path::new(&worktree.worktree_path).is_dir());
+    }
+
+    fn task_with_worktree(parent: &Path) -> (TaskStore, Task, TaskWorktree) {
+        let project_path = parent.join("project");
+        fs::create_dir(&project_path).unwrap();
+        git_success(&project_path, &["init", "-q"]);
+        git_success(&project_path, &["config", "user.email", "test@example.invalid"]);
+        git_success(&project_path, &["config", "user.name", "Argis Test"]);
+        fs::write(project_path.join("README.md"), "test\n").unwrap();
+        git_success(&project_path, &["add", "README.md"]);
+        git_success(&project_path, &["commit", "-qm", "initial"]);
+
+        let store = TaskStore::open(&parent.join("argis.sqlite")).unwrap();
+        let project = register_project_path(&store, &project_path, false).unwrap();
+        let task = store.create_task(project.id, "Terminal cleanup", "").unwrap();
+        let worktree = create_git_worktree(&store, task.id).unwrap();
+        (store, task, worktree)
+    }
+
+    fn git_success(path: &Path, args: &[&str]) {
+        let output = Command::new("git").arg("-C").arg(path).args(args).output().unwrap();
+        assert!(output.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&output.stderr));
     }
 }

@@ -133,6 +133,9 @@ async function confirmDelete(): Promise<void> {
       </div>
     </form>
     <section v-else class="delete-confirmation" aria-labelledby="task-dialog-title">
+      <p class="delete-copy">
+        Any active Agent or shell sessions will stop before deletion. If Argis cannot stop them, the task and any worktree will remain.
+      </p>
       <p v-if="hasGitResources" class="delete-copy">
         Keep the Git workspace, or ask Argis to remove its branch and worktree directory too.
       </p>
