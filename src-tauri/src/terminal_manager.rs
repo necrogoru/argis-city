@@ -1,7 +1,9 @@
+use crate::domain::{
+    TerminalAgent, TerminalAttachment, TerminalEvent, TerminalSessionInfo, TerminalSessionKey, TerminalSize,
+};
 use anyhow::{anyhow, bail, Context};
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, Child, ChildKiller, CommandBuilder, MasterPty, PtySize};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
@@ -15,38 +17,6 @@ const MAX_INPUT_SIZE: usize = 64 * 1024;
 const MAX_COMMAND_ARGUMENTS: usize = 256;
 const MAX_COMMAND_ARGUMENT_BYTES: usize = 8 * 1024;
 const MAX_TERMINAL_DIMENSION: u16 = 1_000;
-
-/// The two task-scoped PTY slots managed by Argis.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum TerminalTab {
-    Agent,
-    Term,
-}
-
-/// The identity of a terminal slot. A task has at most one process per tab.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TerminalSessionKey {
-    pub task_id: i64,
-    pub tab: TerminalTab,
-}
-
-/// A bounded terminal size, in character cells and optional pixel dimensions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TerminalSize {
-    pub cols: u16,
-    pub rows: u16,
-    pub pixel_width: u16,
-    pub pixel_height: u16,
-}
-
-impl Default for TerminalSize {
-    fn default() -> Self {
-        Self { cols: 80, rows: 24, pixel_width: 0, pixel_height: 0 }
-    }
-}
 
 impl TerminalSize {
     fn validate(self) -> anyhow::Result<Self> {
@@ -69,33 +39,15 @@ impl TerminalSize {
 #[derive(Debug, Clone)]
 pub struct TerminalProcessSpec {
     pub key: TerminalSessionKey,
+    pub agent_cli: Option<TerminalAgent>,
     pub program: PathBuf,
     pub args: Vec<String>,
     pub cwd: PathBuf,
     pub size: TerminalSize,
 }
 
-/// PTY data delivered to the frontend channel.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "type")]
-pub enum TerminalEvent {
-    Output { session_id: u64, bytes: Vec<u8> },
-    Error { session_id: u64, message: String },
-    Exited { session_id: u64, exit_code: u32, signal: Option<String> },
-}
-
 /// A callback used by Tauri Channels or by tests to receive ordered PTY events.
 pub type TerminalEventSink = Arc<dyn Fn(TerminalEvent) -> Result<(), String> + Send + Sync + 'static>;
-
-/// Public process information; no PTY handles or child-process controls cross IPC.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TerminalSessionInfo {
-    pub id: u64,
-    pub key: TerminalSessionKey,
-    pub process_id: Option<u32>,
-    pub running: bool,
-}
 
 #[derive(Default)]
 struct ManagerState {
@@ -129,6 +81,7 @@ struct ManagedSession {
 
 #[derive(Default)]
 struct SessionLifecycle {
+    sink_generation: u64,
     sink: Option<TerminalEventSink>,
     completed: Option<TerminalEvent>,
 }
@@ -136,14 +89,50 @@ struct SessionLifecycle {
 impl TerminalManager {
     /// Starts a process in a PTY and subscribes `sink` before the PTY reader starts.
     pub fn start(&self, spec: TerminalProcessSpec, sink: TerminalEventSink) -> anyhow::Result<TerminalSessionInfo> {
+        self.start_with_attachment(spec, sink).map(|attachment| attachment.session)
+    }
+
+    /// Starts a process and returns its first output-channel attachment generation.
+    pub fn start_with_attachment(
+        &self,
+        spec: TerminalProcessSpec,
+        sink: TerminalEventSink,
+    ) -> anyhow::Result<TerminalAttachment> {
+        self.start_internal(spec, sink, false)
+    }
+
+    /// Reuses the task/tab process when it is already running; otherwise it starts a new PTY.
+    pub fn start_or_reattach_with_attachment(
+        &self,
+        spec: TerminalProcessSpec,
+        sink: TerminalEventSink,
+    ) -> anyhow::Result<TerminalAttachment> {
+        self.start_internal(spec, sink, true)
+    }
+
+    fn start_internal(
+        &self,
+        spec: TerminalProcessSpec,
+        sink: TerminalEventSink,
+        reuse_existing: bool,
+    ) -> anyhow::Result<TerminalAttachment> {
         let cwd = validate_process_spec(&spec)?;
         let mut manager = self.state.lock();
         if manager.shutting_down {
             bail!("terminal manager is shutting down");
         }
         if let Some(existing_id) = manager.by_key.get(&spec.key).copied() {
-            if manager.by_id.get(&existing_id).is_some_and(|session| session.running.load(Ordering::Acquire)) {
-                bail!("a terminal process is already running for this task tab");
+            if let Some(session) = manager.by_id.get(&existing_id) {
+                if session.running.load(Ordering::Acquire) {
+                    if !reuse_existing {
+                        bail!("a terminal process is already running for this task tab");
+                    }
+                    if session.info.agent_cli != spec.agent_cli {
+                        bail!("task tab already has a running process for a different agent CLI");
+                    }
+                    let attachment_id = session.attach(sink);
+                    return Ok(TerminalAttachment { session: session.info(), attachment_id });
+                }
             }
             manager.by_id.remove(&existing_id);
             manager.by_key.remove(&spec.key);
@@ -167,14 +156,14 @@ impl TerminalManager {
         let killer = child.clone_killer();
 
         let session = Arc::new(ManagedSession {
-            info: TerminalSessionInfo { id, key: spec.key, process_id, running: true },
+            info: TerminalSessionInfo { id, key: spec.key, agent_cli: spec.agent_cli, process_id, running: true },
             master: Mutex::new(Some(pair.master)),
             writer: Mutex::new(writer),
             killer: Mutex::new(killer),
             child: Mutex::new(Some(child)),
             worker: Mutex::new(None),
             running: AtomicBool::new(true),
-            lifecycle: Mutex::new(SessionLifecycle { sink: Some(sink), completed: None }),
+            lifecycle: Mutex::new(SessionLifecycle { sink_generation: 1, sink: Some(sink), completed: None }),
         });
 
         let worker_session = Arc::clone(&session);
@@ -192,18 +181,57 @@ impl TerminalManager {
 
         manager.by_key.insert(spec.key, id);
         manager.by_id.insert(id, Arc::clone(&session));
-        Ok(session.info())
+        Ok(TerminalAttachment { session: session.info(), attachment_id: 1 })
     }
 
     /// Replaces the PTY event sink for a live session without starting a new process.
     pub fn reattach(&self, key: TerminalSessionKey, sink: TerminalEventSink) -> anyhow::Result<TerminalSessionInfo> {
+        self.reattach_with_attachment(key, sink).map(|attachment| attachment.session)
+    }
+
+    /// Replaces an output sink and returns an attachment token for safe later detachment.
+    pub fn reattach_with_attachment(
+        &self,
+        key: TerminalSessionKey,
+        sink: TerminalEventSink,
+    ) -> anyhow::Result<TerminalAttachment> {
+        self.reattach_if_present_with_attachment(key, sink)
+            .ok_or_else(|| anyhow!("no terminal session exists for this task tab"))
+    }
+
+    /// Reattaches when a process record exists; a missing task tab is not an error.
+    pub fn reattach_if_present(&self, key: TerminalSessionKey, sink: TerminalEventSink) -> Option<TerminalSessionInfo> {
+        self.reattach_if_present_with_attachment(key, sink).map(|attachment| attachment.session)
+    }
+
+    /// Reattaches when present and returns a token that prevents stale detach calls from affecting newer channels.
+    pub fn reattach_if_present_with_attachment(
+        &self,
+        key: TerminalSessionKey,
+        sink: TerminalEventSink,
+    ) -> Option<TerminalAttachment> {
         let session = {
             let manager = self.state.lock();
-            let id = manager.by_key.get(&key).ok_or_else(|| anyhow!("no terminal session exists for this task tab"))?;
-            Arc::clone(manager.by_id.get(id).ok_or_else(|| anyhow!("terminal session is unavailable"))?)
+            let id = manager.by_key.get(&key)?;
+            Arc::clone(manager.by_id.get(id)?)
         };
-        session.attach(sink);
-        Ok(session.info())
+        let attachment_id = session.attach(sink);
+        Some(TerminalAttachment { session: session.info(), attachment_id })
+    }
+
+    /// Detaches only the matching channel generation, leaving a newer reattachment intact.
+    pub fn detach_attachment(&self, key: TerminalSessionKey, attachment_id: u64) -> bool {
+        let session = {
+            let manager = self.state.lock();
+            let Some(id) = manager.by_key.get(&key) else {
+                return false;
+            };
+            let Some(session) = manager.by_id.get(id) else {
+                return false;
+            };
+            Arc::clone(session)
+        };
+        session.detach_if_generation(attachment_id)
     }
 
     /// Writes a bounded input chunk to an active PTY.
@@ -295,14 +323,25 @@ impl ManagedSession {
         }
     }
 
-    fn attach(&self, sink: TerminalEventSink) {
+    fn attach(&self, sink: TerminalEventSink) -> u64 {
         let mut lifecycle = self.lifecycle.lock();
+        lifecycle.sink_generation = lifecycle.sink_generation.wrapping_add(1).max(1);
         lifecycle.sink = Some(sink);
         if let Some(completed) = lifecycle.completed.clone() {
             if lifecycle.sink.as_ref().is_some_and(|sink| sink(completed).is_err()) {
                 lifecycle.sink = None;
             }
         }
+        lifecycle.sink_generation
+    }
+
+    fn detach_if_generation(&self, generation: u64) -> bool {
+        let mut lifecycle = self.lifecycle.lock();
+        if lifecycle.sink_generation != generation || lifecycle.sink.is_none() {
+            return false;
+        }
+        lifecycle.sink = None;
+        true
     }
 
     fn emit(&self, event: TerminalEvent) {

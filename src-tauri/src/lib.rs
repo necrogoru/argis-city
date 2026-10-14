@@ -36,6 +36,7 @@ use std::time::Duration;
 use system::{HomePaths, SysinfoProcessSource, SystemClock};
 use task_store::TaskStoreState;
 use tauri::{Emitter, Manager};
+use terminal_manager::TerminalManager;
 
 /// Event the UI listens on (`SNAPSHOT_EVENT` in `src/domain/types.ts`).
 pub const SNAPSHOT_EVENT: &str = "agents://snapshot";
@@ -65,6 +66,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(monitor)
+        .manage(Arc::new(TerminalManager::default()))
         .setup(move |app| {
             let task_store_path = app
                 .path()
@@ -92,8 +94,21 @@ pub fn run() {
             commands::update_task_status,
             commands::delete_task,
             commands::inspect_task_git_status,
-            commands::create_task_worktree
+            commands::create_task_worktree,
+            commands::start_terminal_session,
+            commands::reattach_terminal_session,
+            commands::terminal_input,
+            commands::resize_terminal_session,
+            commands::detach_terminal_session
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                let terminal_manager = app_handle.state::<Arc<TerminalManager>>();
+                if let Err(error) = terminal_manager.shutdown() {
+                    eprintln!("failed to stop managed terminal processes: {error}");
+                }
+            }
+        });
 }

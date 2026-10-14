@@ -100,6 +100,34 @@ pub fn inspect_task_git(store: &TaskStore, task_id: i64) -> anyhow::Result<TaskG
     })
 }
 
+/// Returns the existing, task-owned Git worktree after checking its recorded path and branch.
+pub fn validated_task_worktree_path(store: &TaskStore, task_id: i64) -> anyhow::Result<PathBuf> {
+    let task = store.get_task(task_id)?;
+    let project = store.get_project(task.project_id)?;
+    let project_path =
+        fs::canonicalize(&project.path).with_context(|| format!("resolving project {}", project.path))?;
+    let worktree_path = task.worktree_path.as_deref().ok_or_else(|| anyhow!("task has no worktree"))?;
+    let branch_name = task.branch_name.as_deref().ok_or_else(|| anyhow!("task has no branch"))?;
+    validate_task_branch_name(task.id, branch_name)?;
+
+    let worktree_path = validate_task_worktree_path(&project_path, task.id, worktree_path)?;
+    if !worktree_path.is_dir() {
+        bail!("task worktree is not an existing directory: {}", worktree_path.display());
+    }
+    if git_root(&worktree_path)?.as_deref() != Some(worktree_path.as_path()) {
+        bail!("recorded task path is not a Git worktree: {}", worktree_path.display());
+    }
+
+    let branch_output = run_git(&worktree_path, &["branch", "--show-current"])?;
+    ensure_success(&branch_output, "checking task worktree branch")?;
+    let actual_branch = String::from_utf8(branch_output.stdout).context("Git returned a non-UTF-8 branch name")?;
+    if actual_branch.trim() != branch_name {
+        bail!("task worktree branch does not match its recorded branch: {}", worktree_path.display());
+    }
+
+    Ok(worktree_path)
+}
+
 pub fn create_task_worktree(store: &TaskStore, task_id: i64) -> anyhow::Result<TaskWorktree> {
     let status = inspect_task_git(store, task_id)?;
     if !status.can_create_branch {

@@ -1,4 +1,7 @@
-use crate::git_worktrees::{create_task_worktree, delete_task_with_git_cleanup, inspect_task_git, task_branch_name};
+use crate::git_worktrees::{
+    create_task_worktree, delete_task_with_git_cleanup, inspect_task_git, task_branch_name,
+    validated_task_worktree_path,
+};
 use crate::task_store::TaskStore;
 use rusqlite::Connection;
 use std::fs;
@@ -214,4 +217,28 @@ fn cleanup_validates_branch_ownership_before_removing_the_worktree() {
     assert!(Path::new(&worktree.worktree_path).is_dir());
     assert!(git(&repo, &["show-ref", "--verify", "--quiet", "refs/heads/main"]).status.success());
     assert!(store.list_tasks(None).unwrap().is_empty());
+}
+
+#[test]
+fn task_terminal_worktree_path_is_returned_only_for_the_recorded_task_worktree() {
+    let parent = tempfile::tempdir().unwrap();
+    let repo = init_repository(&parent);
+    let database_path = parent.path().join("argis.sqlite");
+    let (store, task_id) = task_store_for(&parent, &repo, "Terminal task");
+    let worktree = create_task_worktree(&store, task_id).unwrap();
+
+    assert_eq!(validated_task_worktree_path(&store, task_id).unwrap(), PathBuf::from(&worktree.worktree_path));
+
+    drop(store);
+    let connection = Connection::open(&database_path).unwrap();
+    connection
+        .execute(
+            "UPDATE tasks SET worktree_path = ?2 WHERE id = ?1",
+            rusqlite::params![task_id, parent.path().join("repo/README.md").to_string_lossy().as_ref()],
+        )
+        .unwrap();
+    drop(connection);
+    let store = TaskStore::open(&database_path).unwrap();
+
+    assert!(validated_task_worktree_path(&store, task_id).is_err());
 }

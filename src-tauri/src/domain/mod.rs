@@ -8,6 +8,7 @@ mod session;
 mod snapshot;
 mod status;
 mod task;
+mod terminal;
 mod tokens;
 
 pub use progress::{PlanCounts, Progress, ProgressSource};
@@ -17,4 +18,8 @@ pub use session::{AgentSession, SubAgent};
 pub use snapshot::{ProviderSummary, Snapshot};
 pub use status::AgentStatus;
 pub use task::{Task, TaskStatus};
+pub use terminal::{
+    TerminalAgent, TerminalAttachment, TerminalEvent, TerminalSessionInfo, TerminalSessionKey, TerminalSize,
+    TerminalTab,
+};
 pub use tokens::TokenUsage;

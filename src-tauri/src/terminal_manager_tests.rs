@@ -1,7 +1,5 @@
-use crate::terminal_manager::{
-    TerminalEvent, TerminalEventSink, TerminalManager, TerminalProcessSpec, TerminalSessionKey, TerminalSize,
-    TerminalTab,
-};
+use crate::domain::{TerminalAgent, TerminalEvent, TerminalSessionKey, TerminalSize, TerminalTab};
+use crate::terminal_manager::{TerminalEventSink, TerminalManager, TerminalProcessSpec};
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
@@ -21,14 +19,71 @@ fn terminal_events_use_camel_case_fields_for_the_channel_contract() {
     );
 }
 
+#[test]
+fn terminal_agent_choices_map_to_fixed_executable_names() {
+    assert_eq!(TerminalAgent::Claude.executable(), "claude");
+    assert_eq!(TerminalAgent::Codex.executable(), "codex");
+    assert_eq!(TerminalAgent::OpenCode.executable(), "opencode");
+    assert_eq!(TerminalAgent::Pi.executable(), "pi");
+}
+
+#[test]
+fn terminal_size_accepts_webview_character_dimensions_without_pixel_fields() {
+    let size: TerminalSize = serde_json::from_value(serde_json::json!({ "cols": 100, "rows": 40 })).unwrap();
+
+    assert_eq!(size, TerminalSize { cols: 100, rows: 40, pixel_width: 0, pixel_height: 0 });
+}
+
 fn spec(task_id: i64, tab: TerminalTab, program: &str, args: &[&str]) -> TerminalProcessSpec {
     TerminalProcessSpec {
         key: key(task_id, tab),
+        agent_cli: None,
         program: PathBuf::from(program),
         args: args.iter().map(|arg| (*arg).to_owned()).collect(),
         cwd: PathBuf::from(env!("CARGO_MANIFEST_DIR")),
         size: TerminalSize::default(),
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn detached_terminal_keeps_running_and_receives_output_after_reattachment() {
+    let manager = TerminalManager::default();
+    let (first_sender, first_events) = mpsc::channel();
+    let command = spec(
+        47,
+        TerminalTab::Term,
+        "/bin/sh",
+        &["-c", "printf 'READY\\n'; while IFS= read -r line; do printf 'RECEIVED:%s\\n' \"$line\"; done"],
+    );
+    let initial_attachment = manager.start_with_attachment(command, sink(first_sender)).unwrap();
+    let session = initial_attachment.session;
+    assert!(output_until(&first_events, "READY").contains("READY"));
+
+    assert!(manager.detach_attachment(key(47, TerminalTab::Term), initial_attachment.attachment_id));
+    manager.input(session.id, b"discard-while-detached\n").unwrap();
+    let (reattached_sender, reattached_events) = mpsc::channel();
+    let reattached =
+        manager.reattach_if_present_with_attachment(key(47, TerminalTab::Term), sink(reattached_sender)).unwrap();
+
+    assert_eq!(reattached.session.id, session.id);
+    assert!(reattached.session.running);
+    assert!(!manager.detach_attachment(key(47, TerminalTab::Term), initial_attachment.attachment_id));
+    manager.input(session.id, b"visible-after-reattach\n").unwrap();
+    assert!(
+        output_until(&reattached_events, "RECEIVED:visible-after-reattach").contains("RECEIVED:visible-after-reattach")
+    );
+    assert!(manager.detach_attachment(key(47, TerminalTab::Term), reattached.attachment_id));
+    manager.stop(session.id).unwrap();
+}
+
+#[test]
+fn reattach_if_present_returns_none_without_creating_a_process() {
+    let manager = TerminalManager::default();
+    let (sender, _events) = mpsc::channel();
+
+    assert!(manager.reattach_if_present(key(48, TerminalTab::Agent), sink(sender)).is_none());
+    assert_eq!(manager.active_session_count(), 0);
 }
 
 fn sink(sender: Sender<TerminalEvent>) -> TerminalEventSink {
@@ -121,6 +176,31 @@ fn terminal_manager_rejects_duplicate_tab_sessions_and_invalid_input() {
 
 #[cfg(unix)]
 #[test]
+fn start_or_reattach_reuses_a_running_session_only_for_the_same_agent() {
+    let manager = TerminalManager::default();
+    let (first_sender, _first_events) = mpsc::channel();
+    let mut first_spec = spec(50, TerminalTab::Agent, "/bin/sleep", &["30"]);
+    first_spec.agent_cli = Some(TerminalAgent::Codex);
+    let first = manager.start_with_attachment(first_spec, sink(first_sender)).unwrap();
+
+    let (second_sender, _second_events) = mpsc::channel();
+    let mut same_cli = spec(50, TerminalTab::Agent, "/not/needed/for/an/existing/session", &[]);
+    same_cli.agent_cli = Some(TerminalAgent::Codex);
+    let attached = manager.start_or_reattach_with_attachment(same_cli, sink(second_sender)).unwrap();
+    assert_eq!(attached.session.id, first.session.id);
+    assert_ne!(attached.attachment_id, first.attachment_id);
+
+    let (wrong_sender, _wrong_events) = mpsc::channel();
+    let mut different_cli = spec(50, TerminalTab::Agent, "/bin/sleep", &["30"]);
+    different_cli.agent_cli = Some(TerminalAgent::Claude);
+    assert!(manager.start_or_reattach_with_attachment(different_cli, sink(wrong_sender)).is_err());
+    assert!(!manager.detach_attachment(key(50, TerminalTab::Agent), first.attachment_id));
+    assert!(manager.detach_attachment(key(50, TerminalTab::Agent), attached.attachment_id));
+    manager.stop(first.session.id).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
 fn terminal_manager_reaps_all_sessions_on_shutdown_and_is_idempotent() {
     let manager = TerminalManager::default();
     let (first_sender, first_events) = mpsc::channel();
@@ -147,9 +227,18 @@ fn terminal_manager_reports_launch_errors_without_reserving_the_task_tab() {
     assert!(manager.start(invalid, sink(sender)).is_err());
     assert_eq!(manager.active_session_count(), 0);
 
-    let (sender, _events) = mpsc::channel();
-    manager.start(spec(45, TerminalTab::Agent, "/bin/sleep", &["30"]), sink(sender)).unwrap();
-    assert_eq!(manager.active_session_count(), 1);
+    let (sender, shell_events) = mpsc::channel();
+    let shell = spec(
+        45,
+        TerminalTab::Term,
+        "/bin/sh",
+        &["-c", "printf 'SHELL_READY\\n'; IFS= read -r line; printf 'SHELL_RECEIVED:%s\\n' \"$line\""],
+    );
+    let shell = manager.start(shell, sink(sender)).unwrap();
+
+    assert!(output_until(&shell_events, "SHELL_READY").contains("SHELL_READY"));
+    manager.input(shell.id, b"still-usable\n").unwrap();
+    assert!(output_until(&shell_events, "SHELL_RECEIVED:still-usable").contains("SHELL_RECEIVED:still-usable"));
     manager.shutdown().unwrap();
 }
 

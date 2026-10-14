@@ -1,16 +1,21 @@
 //! Tauri commands (see docs/CONTRACT.md → Transport).
 
-use crate::domain::{Project, Snapshot, Task, TaskStatus};
+use crate::domain::{
+    Project, Snapshot, Task, TaskStatus, TerminalAgent, TerminalAttachment, TerminalEvent, TerminalSessionKey,
+    TerminalSize, TerminalTab,
+};
 use crate::git_worktrees::{
-    create_task_worktree as create_git_worktree, delete_task_with_git_cleanup, inspect_task_git, TaskDeletionOutcome,
-    TaskGitStatus, TaskWorktree,
+    create_task_worktree as create_git_worktree, delete_task_with_git_cleanup, inspect_task_git,
+    validated_task_worktree_path, TaskDeletionOutcome, TaskGitStatus, TaskWorktree,
 };
 use crate::monitor::Monitor;
 use crate::project_paths::register_project as register_project_path;
 use crate::task_store::{TaskStore, TaskStoreState};
+use crate::terminal_manager::{TerminalEventSink, TerminalManager, TerminalProcessSpec};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tauri::ipc::Channel;
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 
@@ -98,6 +103,123 @@ pub async fn create_task_worktree(task_id: i64, state: State<'_, TaskStoreState>
     task_store_operation(state, move |store| create_git_worktree(&store, task_id)).await
 }
 
+#[tauri::command]
+pub async fn start_terminal_session(
+    task_id: i64,
+    tab: TerminalTab,
+    agent_cli: Option<TerminalAgent>,
+    size: TerminalSize,
+    on_event: Channel<TerminalEvent>,
+    task_state: State<'_, TaskStoreState>,
+    terminal_state: State<'_, Arc<TerminalManager>>,
+) -> Result<TerminalAttachment, String> {
+    let store = task_state.store()?;
+    let manager = Arc::clone(&terminal_state);
+    let sink = terminal_event_sink(on_event);
+    tauri::async_runtime::spawn_blocking(move || {
+        let cwd = validated_task_worktree_path(&store, task_id)?;
+        let spec = terminal_process_spec(task_id, tab, agent_cli, cwd, size)?;
+        manager.start_or_reattach_with_attachment(spec, sink)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn reattach_terminal_session(
+    task_id: i64,
+    tab: TerminalTab,
+    on_event: Channel<TerminalEvent>,
+    task_state: State<'_, TaskStoreState>,
+    terminal_state: State<'_, Arc<TerminalManager>>,
+) -> Result<Option<TerminalAttachment>, String> {
+    let store = task_state.store()?;
+    let manager = Arc::clone(&terminal_state);
+    let sink = terminal_event_sink(on_event);
+    tauri::async_runtime::spawn_blocking(move || {
+        validated_task_worktree_path(&store, task_id)?;
+        Ok(manager.reattach_if_present_with_attachment(TerminalSessionKey { task_id, tab }, sink))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+    .map_err(|error: anyhow::Error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn terminal_input(
+    session_id: u64,
+    data: String,
+    terminal_state: State<'_, Arc<TerminalManager>>,
+) -> Result<(), String> {
+    let manager = Arc::clone(&terminal_state);
+    tauri::async_runtime::spawn_blocking(move || {
+        manager.input(session_id, data.as_bytes()).map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn resize_terminal_session(
+    session_id: u64,
+    size: TerminalSize,
+    terminal_state: State<'_, Arc<TerminalManager>>,
+) -> Result<(), String> {
+    let manager = Arc::clone(&terminal_state);
+    tauri::async_runtime::spawn_blocking(move || manager.resize(session_id, size).map_err(|error| error.to_string()))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn detach_terminal_session(
+    task_id: i64,
+    tab: TerminalTab,
+    attachment_id: u64,
+    terminal_state: State<'_, Arc<TerminalManager>>,
+) -> bool {
+    terminal_state.detach_attachment(TerminalSessionKey { task_id, tab }, attachment_id)
+}
+
+fn terminal_event_sink(channel: Channel<TerminalEvent>) -> TerminalEventSink {
+    Arc::new(move |event| channel.send(event).map_err(|error| error.to_string()))
+}
+
+fn terminal_process_spec(
+    task_id: i64,
+    tab: TerminalTab,
+    agent_cli: Option<TerminalAgent>,
+    cwd: PathBuf,
+    size: TerminalSize,
+) -> anyhow::Result<TerminalProcessSpec> {
+    let (program, args) = match (tab, agent_cli) {
+        (TerminalTab::Agent, Some(agent)) => (PathBuf::from(agent.executable()), Vec::new()),
+        (TerminalTab::Agent, None) => return Err(anyhow::anyhow!("select an agent CLI before starting the Agent tab")),
+        (TerminalTab::Term, Some(_)) => return Err(anyhow::anyhow!("the shell tab cannot start an agent CLI")),
+        (TerminalTab::Term, None) => shell_program(),
+    };
+    Ok(TerminalProcessSpec { key: TerminalSessionKey { task_id, tab }, agent_cli, program, args, cwd, size })
+}
+
+#[cfg(windows)]
+fn shell_program() -> (PathBuf, Vec<String>) {
+    let program = std::env::var_os("COMSPEC").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("cmd.exe"));
+    (program, Vec::new())
+}
+
+#[cfg(target_os = "macos")]
+fn shell_program() -> (PathBuf, Vec<String>) {
+    let program = std::env::var_os("SHELL").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/bin/zsh"));
+    (program, Vec::new())
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn shell_program() -> (PathBuf, Vec<String>) {
+    let program = std::env::var_os("SHELL").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/bin/sh"));
+    (program, Vec::new())
+}
+
 async fn task_store_operation<T>(
     state: State<'_, TaskStoreState>,
     operation: impl FnOnce(Arc<TaskStore>) -> anyhow::Result<T> + Send + 'static,
@@ -137,5 +259,34 @@ mod tests {
         assert!(existing_dir(&file.to_string_lossy()).unwrap_err().contains("not a directory"));
         assert!(existing_dir("/definitely/not/here").unwrap_err().contains("does not exist"));
         assert!(existing_dir("relative/dir").unwrap_err().contains("absolute"));
+    }
+
+    #[test]
+    fn agent_terminal_specs_use_only_the_selected_allowlisted_executable() {
+        let cwd = PathBuf::from("/project/.argis/worktrees/12-terminal-task");
+        let spec = terminal_process_spec(
+            12,
+            TerminalTab::Agent,
+            Some(TerminalAgent::Claude),
+            cwd.clone(),
+            TerminalSize::default(),
+        )
+        .unwrap();
+
+        assert_eq!(spec.key.task_id, 12);
+        assert_eq!(spec.key.tab, TerminalTab::Agent);
+        assert_eq!(spec.agent_cli, Some(TerminalAgent::Claude));
+        assert_eq!(spec.program, PathBuf::from("claude"));
+        assert!(spec.args.is_empty());
+        assert_eq!(spec.cwd, cwd);
+    }
+
+    #[test]
+    fn terminal_process_specs_reject_agent_and_shell_selection_mismatches() {
+        let cwd = PathBuf::from("/project/.argis/worktrees/13-terminal-task");
+
+        assert!(terminal_process_spec(13, TerminalTab::Agent, None, cwd.clone(), TerminalSize::default(),).is_err());
+        assert!(terminal_process_spec(13, TerminalTab::Term, Some(TerminalAgent::Pi), cwd, TerminalSize::default(),)
+            .is_err());
     }
 }
