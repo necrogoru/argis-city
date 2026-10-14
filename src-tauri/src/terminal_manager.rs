@@ -1,0 +1,449 @@
+use anyhow::{anyhow, bail, Context};
+use parking_lot::Mutex;
+use portable_pty::{native_pty_system, Child, ChildKiller, CommandBuilder, MasterPty, PtySize};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs;
+use std::io::{Read, Write};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
+use std::thread::{self, JoinHandle};
+
+const OUTPUT_CHUNK_SIZE: usize = 8 * 1024;
+const MAX_INPUT_SIZE: usize = 64 * 1024;
+const MAX_COMMAND_ARGUMENTS: usize = 256;
+const MAX_COMMAND_ARGUMENT_BYTES: usize = 8 * 1024;
+const MAX_TERMINAL_DIMENSION: u16 = 1_000;
+
+/// The two task-scoped PTY slots managed by Argis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TerminalTab {
+    Agent,
+    Term,
+}
+
+/// The identity of a terminal slot. A task has at most one process per tab.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalSessionKey {
+    pub task_id: i64,
+    pub tab: TerminalTab,
+}
+
+/// A bounded terminal size, in character cells and optional pixel dimensions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalSize {
+    pub cols: u16,
+    pub rows: u16,
+    pub pixel_width: u16,
+    pub pixel_height: u16,
+}
+
+impl Default for TerminalSize {
+    fn default() -> Self {
+        Self { cols: 80, rows: 24, pixel_width: 0, pixel_height: 0 }
+    }
+}
+
+impl TerminalSize {
+    fn validate(self) -> anyhow::Result<Self> {
+        if self.cols == 0 || self.rows == 0 {
+            bail!("terminal columns and rows must be greater than zero");
+        }
+        if self.cols > MAX_TERMINAL_DIMENSION || self.rows > MAX_TERMINAL_DIMENSION {
+            bail!("terminal dimensions exceed the supported limit");
+        }
+        Ok(self)
+    }
+
+    fn into_pty_size(self) -> PtySize {
+        PtySize { cols: self.cols, rows: self.rows, pixel_width: self.pixel_width, pixel_height: self.pixel_height }
+    }
+}
+
+/// A process invocation with discrete arguments; `program` is never interpreted by a shell.
+/// The command boundary must resolve `cwd` from the persisted task worktree, not from a UI path.
+#[derive(Debug, Clone)]
+pub struct TerminalProcessSpec {
+    pub key: TerminalSessionKey,
+    pub program: PathBuf,
+    pub args: Vec<String>,
+    pub cwd: PathBuf,
+    pub size: TerminalSize,
+}
+
+/// PTY data delivered to the frontend channel.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "type")]
+pub enum TerminalEvent {
+    Output { session_id: u64, bytes: Vec<u8> },
+    Error { session_id: u64, message: String },
+    Exited { session_id: u64, exit_code: u32, signal: Option<String> },
+}
+
+/// A callback used by Tauri Channels or by tests to receive ordered PTY events.
+pub type TerminalEventSink = Arc<dyn Fn(TerminalEvent) -> Result<(), String> + Send + Sync + 'static>;
+
+/// Public process information; no PTY handles or child-process controls cross IPC.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalSessionInfo {
+    pub id: u64,
+    pub key: TerminalSessionKey,
+    pub process_id: Option<u32>,
+    pub running: bool,
+}
+
+#[derive(Default)]
+struct ManagerState {
+    shutting_down: bool,
+    by_id: HashMap<u64, Arc<ManagedSession>>,
+    by_key: HashMap<TerminalSessionKey, u64>,
+}
+
+/// Owns interactive PTY processes for the lifetime of the Argis app.
+pub struct TerminalManager {
+    next_id: AtomicU64,
+    state: Mutex<ManagerState>,
+}
+
+impl Default for TerminalManager {
+    fn default() -> Self {
+        Self { next_id: AtomicU64::new(1), state: Mutex::new(ManagerState::default()) }
+    }
+}
+
+struct ManagedSession {
+    info: TerminalSessionInfo,
+    master: Mutex<Option<Box<dyn MasterPty + Send>>>,
+    writer: Mutex<Box<dyn Write + Send>>,
+    killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
+    child: Mutex<Option<Box<dyn Child + Send + Sync>>>,
+    worker: Mutex<Option<JoinHandle<()>>>,
+    running: AtomicBool,
+    lifecycle: Mutex<SessionLifecycle>,
+}
+
+#[derive(Default)]
+struct SessionLifecycle {
+    sink: Option<TerminalEventSink>,
+    completed: Option<TerminalEvent>,
+}
+
+impl TerminalManager {
+    /// Starts a process in a PTY and subscribes `sink` before the PTY reader starts.
+    pub fn start(&self, spec: TerminalProcessSpec, sink: TerminalEventSink) -> anyhow::Result<TerminalSessionInfo> {
+        let cwd = validate_process_spec(&spec)?;
+        let mut manager = self.state.lock();
+        if manager.shutting_down {
+            bail!("terminal manager is shutting down");
+        }
+        if let Some(existing_id) = manager.by_key.get(&spec.key).copied() {
+            if manager.by_id.get(&existing_id).is_some_and(|session| session.running.load(Ordering::Acquire)) {
+                bail!("a terminal process is already running for this task tab");
+            }
+            manager.by_id.remove(&existing_id);
+            manager.by_key.remove(&spec.key);
+        }
+
+        let id = self
+            .next_id
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |current| current.checked_add(1))
+            .map_err(|_| anyhow!("terminal session identifier space is exhausted"))?;
+
+        let pty_system = native_pty_system();
+        let pair = pty_system.openpty(spec.size.validate()?.into_pty_size()).context("opening PTY")?;
+        let reader = pair.master.try_clone_reader().context("opening PTY output reader")?;
+        let writer = pair.master.take_writer().context("opening PTY input writer")?;
+        let mut command = CommandBuilder::new(&spec.program);
+        command.args(&spec.args);
+        command.cwd(&cwd);
+        let child =
+            pair.slave.spawn_command(command).with_context(|| format!("starting {}", spec.program.display()))?;
+        let process_id = child.process_id();
+        let killer = child.clone_killer();
+
+        let session = Arc::new(ManagedSession {
+            info: TerminalSessionInfo { id, key: spec.key, process_id, running: true },
+            master: Mutex::new(Some(pair.master)),
+            writer: Mutex::new(writer),
+            killer: Mutex::new(killer),
+            child: Mutex::new(Some(child)),
+            worker: Mutex::new(None),
+            running: AtomicBool::new(true),
+            lifecycle: Mutex::new(SessionLifecycle { sink: Some(sink), completed: None }),
+        });
+
+        let worker_session = Arc::clone(&session);
+        let worker = match thread::Builder::new()
+            .name(format!("argis-terminal-{id}"))
+            .spawn(move || stream_pty_output(worker_session, reader))
+        {
+            Ok(worker) => worker,
+            Err(error) => {
+                terminate_unstarted_session(&session);
+                return Err(error).context("starting terminal output worker");
+            }
+        };
+        *session.worker.lock() = Some(worker);
+
+        manager.by_key.insert(spec.key, id);
+        manager.by_id.insert(id, Arc::clone(&session));
+        Ok(session.info())
+    }
+
+    /// Replaces the PTY event sink for a live session without starting a new process.
+    pub fn reattach(&self, key: TerminalSessionKey, sink: TerminalEventSink) -> anyhow::Result<TerminalSessionInfo> {
+        let session = {
+            let manager = self.state.lock();
+            let id = manager.by_key.get(&key).ok_or_else(|| anyhow!("no terminal session exists for this task tab"))?;
+            Arc::clone(manager.by_id.get(id).ok_or_else(|| anyhow!("terminal session is unavailable"))?)
+        };
+        session.attach(sink);
+        Ok(session.info())
+    }
+
+    /// Writes a bounded input chunk to an active PTY.
+    pub fn input(&self, id: u64, bytes: &[u8]) -> anyhow::Result<()> {
+        if bytes.len() > MAX_INPUT_SIZE {
+            bail!("terminal input exceeds the {} byte limit", MAX_INPUT_SIZE);
+        }
+        let session = self.session(id)?;
+        session.ensure_running()?;
+        let mut writer = session.writer.lock();
+        writer.write_all(bytes).context("writing terminal input")?;
+        writer.flush().context("flushing terminal input")
+    }
+
+    /// Resizes an active PTY after validating its character-cell dimensions.
+    pub fn resize(&self, id: u64, size: TerminalSize) -> anyhow::Result<()> {
+        let size = size.validate()?;
+        let session = self.session(id)?;
+        session.ensure_running()?;
+        let master = session.master.lock();
+        master
+            .as_ref()
+            .ok_or_else(|| anyhow!("terminal PTY is closed"))?
+            .resize(size.into_pty_size())
+            .context("resizing PTY")
+    }
+
+    /// Stops, waits for, and removes a PTY process. Calling it more than once is safe.
+    pub fn stop(&self, id: u64) -> anyhow::Result<()> {
+        let session = {
+            let mut manager = self.state.lock();
+            let Some(session) = manager.by_id.remove(&id) else {
+                return Ok(());
+            };
+            manager.by_key.remove(&session.info.key);
+            session
+        };
+        session.stop()
+    }
+
+    /// Stops and reaps every session. The manager cannot be restarted afterward.
+    pub fn shutdown(&self) -> anyhow::Result<()> {
+        let sessions = {
+            let mut manager = self.state.lock();
+            manager.shutting_down = true;
+            manager.by_key.clear();
+            manager.by_id.drain().map(|(_, session)| session).collect::<Vec<_>>()
+        };
+
+        let mut failures = Vec::new();
+        for session in sessions {
+            if let Err(error) = session.stop() {
+                failures.push(error.to_string());
+            }
+        }
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            bail!("failed to stop terminal sessions: {}", failures.join("; "));
+        }
+    }
+
+    /// Number of child processes that have not yet exited.
+    pub fn active_session_count(&self) -> usize {
+        self.state.lock().by_id.values().filter(|session| session.running.load(Ordering::Acquire)).count()
+    }
+
+    fn session(&self, id: u64) -> anyhow::Result<Arc<ManagedSession>> {
+        self.state.lock().by_id.get(&id).cloned().ok_or_else(|| anyhow!("terminal session {id} does not exist"))
+    }
+}
+
+impl Drop for TerminalManager {
+    fn drop(&mut self) {
+        let _ = self.shutdown();
+    }
+}
+
+impl ManagedSession {
+    fn info(&self) -> TerminalSessionInfo {
+        TerminalSessionInfo { running: self.running.load(Ordering::Acquire), ..self.info }
+    }
+
+    fn ensure_running(&self) -> anyhow::Result<()> {
+        if self.running.load(Ordering::Acquire) {
+            Ok(())
+        } else {
+            bail!("terminal session has exited");
+        }
+    }
+
+    fn attach(&self, sink: TerminalEventSink) {
+        let mut lifecycle = self.lifecycle.lock();
+        lifecycle.sink = Some(sink);
+        if let Some(completed) = lifecycle.completed.clone() {
+            if lifecycle.sink.as_ref().is_some_and(|sink| sink(completed).is_err()) {
+                lifecycle.sink = None;
+            }
+        }
+    }
+
+    fn emit(&self, event: TerminalEvent) {
+        let mut lifecycle = self.lifecycle.lock();
+        if lifecycle.sink.as_ref().is_some_and(|sink| sink(event).is_err()) {
+            lifecycle.sink = None;
+        }
+    }
+
+    fn finish(&self, exit_code: u32, signal: Option<String>) {
+        self.running.store(false, Ordering::Release);
+        let mut lifecycle = self.lifecycle.lock();
+        let event = TerminalEvent::Exited { session_id: self.info.id, exit_code, signal };
+        lifecycle.completed = Some(event.clone());
+        if lifecycle.sink.as_ref().is_some_and(|sink| sink(event).is_err()) {
+            lifecycle.sink = None;
+        }
+    }
+
+    fn finish_with_error(&self, message: String) {
+        self.running.store(false, Ordering::Release);
+        let mut lifecycle = self.lifecycle.lock();
+        let event = TerminalEvent::Error { session_id: self.info.id, message };
+        lifecycle.completed = Some(event.clone());
+        if lifecycle.sink.as_ref().is_some_and(|sink| sink(event).is_err()) {
+            lifecycle.sink = None;
+        }
+    }
+
+    fn stop(&self) -> anyhow::Result<()> {
+        if self.running.load(Ordering::Acquire) {
+            // Ctrl-C reaches the PTY's foreground process group before the direct child is killed.
+            let mut writer = self.writer.lock();
+            let _ = writer.write_all(&[0x03]);
+            let _ = writer.flush();
+            drop(writer);
+            let kill_error = self.killer.lock().kill().err();
+            let worker = self.worker.lock().take();
+            if let Some(worker) = worker {
+                worker.join().map_err(|_| anyhow!("terminal output worker panicked"))?;
+            }
+            if self.running.load(Ordering::Acquire) {
+                return Err(kill_error
+                    .map(anyhow::Error::msg)
+                    .unwrap_or_else(|| anyhow!("terminal process did not stop")));
+            }
+        } else if let Some(worker) = self.worker.lock().take() {
+            worker.join().map_err(|_| anyhow!("terminal output worker panicked"))?;
+        }
+
+        self.lifecycle.lock().sink = None;
+        self.master.lock().take();
+        Ok(())
+    }
+}
+
+impl Drop for ManagedSession {
+    fn drop(&mut self) {
+        if self.running.load(Ordering::Acquire) {
+            let _ = self.killer.get_mut().kill();
+        }
+    }
+}
+
+fn validate_process_spec(spec: &TerminalProcessSpec) -> anyhow::Result<PathBuf> {
+    if spec.key.task_id <= 0 {
+        bail!("task ID must be positive");
+    }
+    if spec.program.as_os_str().is_empty() {
+        bail!("terminal program must not be empty");
+    }
+    if spec.args.len() > MAX_COMMAND_ARGUMENTS {
+        bail!("terminal command has too many arguments");
+    }
+    if spec.args.iter().any(|argument| argument.len() > MAX_COMMAND_ARGUMENT_BYTES) {
+        bail!("terminal command argument exceeds the {} byte limit", MAX_COMMAND_ARGUMENT_BYTES);
+    }
+    spec.size.validate()?;
+    if !spec.cwd.is_absolute() {
+        bail!("terminal working directory must be an absolute path");
+    }
+
+    let cwd =
+        fs::canonicalize(&spec.cwd).with_context(|| format!("resolving working directory {}", spec.cwd.display()))?;
+    if !cwd.is_dir() {
+        bail!("terminal working directory is not a directory: {}", cwd.display());
+    }
+    Ok(cwd)
+}
+
+fn stream_pty_output(session: Arc<ManagedSession>, mut reader: Box<dyn Read + Send>) {
+    let Some(mut child) = session.child.lock().take() else {
+        session.finish_with_error("terminal child handle is unavailable".to_owned());
+        return;
+    };
+
+    let mut buffer = [0_u8; OUTPUT_CHUNK_SIZE];
+    loop {
+        match reader.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(read) => {
+                session.emit(TerminalEvent::Output { session_id: session.info.id, bytes: buffer[..read].to_vec() })
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) if is_pty_closed(&error) => break,
+            Err(error) => {
+                session.emit(TerminalEvent::Error { session_id: session.info.id, message: error.to_string() });
+                break;
+            }
+        }
+    }
+
+    let exit = child.wait();
+    match exit {
+        Ok(exit) => {
+            let exit_code = exit.exit_code();
+            let signal = exit.signal().map(str::to_owned);
+            session.finish(exit_code, signal);
+        }
+        Err(error) => session.finish_with_error(error.to_string()),
+    }
+}
+
+fn is_pty_closed(error: &std::io::Error) -> bool {
+    if matches!(error.kind(), std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::UnexpectedEof) {
+        return true;
+    }
+    #[cfg(unix)]
+    {
+        // PTY masters commonly report EIO after the slave side closes (POSIX errno 5).
+        error.raw_os_error() == Some(5)
+    }
+    #[cfg(not(unix))]
+    {
+        false
+    }
+}
+
+fn terminate_unstarted_session(session: &ManagedSession) {
+    let _ = session.killer.lock().kill();
+    if let Some(mut child) = session.child.lock().take() {
+        let _ = child.wait();
+    }
+}

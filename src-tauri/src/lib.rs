@@ -10,6 +10,7 @@ pub mod providers;
 pub mod shared;
 pub mod system;
 pub mod task_store;
+pub mod terminal_manager;
 
 #[cfg(test)]
 mod git_worktrees_tests;
@@ -19,6 +20,9 @@ mod project_paths_tests;
 
 #[cfg(test)]
 mod task_store_tests;
+
+#[cfg(test)]
+mod terminal_manager_tests;
 
 use monitor::{Monitor, Poller, ProviderRegistry};
 use providers::claude::ClaudeProvider;
