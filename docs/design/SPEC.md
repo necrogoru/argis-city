@@ -29,17 +29,23 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   over 16/500 value: Active agents, Subagents, Tokens today/total, Needs you
   [amber icon; a button that opens the Agents list filtered to "Needs you"])
   · right: search field (260×48 glass, search icon,
-  "Search agents & actions" text-3, `⌘K` key cap; Ctrl K off macOS),
-  "Live · scanning 2s" teal-tinted pill with glowing dot, settings button.
-- **Command palette** (click the search field or ⌘K/Ctrl K; ⌘K again or
-  Esc closes without clearing the selection): 640px glass modal, 112px from
-  the top over a dimmed, blurred backdrop. 60px search row, then an
-  "AGENTS" section (status dot, highlighted title, `provider · model ·
-  ~/dir`, status pill; the 6 most urgent until the user types) and an
-  "ACTIONS" section (selected-agent shortcuts: open folder, copy path,
-  close details; go to each district; show whole city; camera moves;
-  refresh). ↑↓ moves (wraps), ↵ runs, hover moves the cursor; matches are
-  teal. Footer with key hints.
+  "Search agents, tasks & actions" text-3, `⌘K` key cap; Ctrl K off macOS), Tasks
+  icon button with a `⌘2` key-cap hint (Ctrl+2 off macOS), "Live · scanning
+  2s" teal-tinted pill with glowing dot, settings button.
+- **Command palette** (click the Dashboard search trigger or press ⌘K/Ctrl+K
+  from either primary view; the shortcut toggles it closed and Esc closes it):
+  640px glass modal, 112px from the top over a dimmed, blurred backdrop. 60px
+  search row, then an "AGENTS" section (status dot, highlighted title,
+  `provider · model · ~/dir`, status pill; the 6 most urgent until the user
+  types), a "TASKS" section (shown after typing; matches task ID, title,
+  description, and project path; row shows title, `#id · project · status`,
+  and an Open terminal action when a worktree exists; without a worktree, show
+  "No worktree · Go to Tasks"), and an "ACTIONS" section (Show Dashboard
+  `⌘1` / Ctrl+1 and Open Tasks `⌘2` / Ctrl+2; selected-agent shortcuts: open
+  folder, copy path, close details; go to each district; show whole city; camera
+  moves; refresh). No-match copy covers agents, tasks, and actions. ↑↓ moves
+  through every section (wraps), ↵ runs the selected result, hover moves the
+  cursor; matches are teal. Footer with key hints.
 - **Hero** (x 40, y 124, w 300): "Agent\nInfrastructure" 36/400, lh 1.08,
   tracking −1; 14px text-2 description; "DISTRICTS" list: rows with 10px
   rounded swatch, provider name, "N houses" right (text-3); selected row has
@@ -47,6 +53,10 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
 - **Camera controls** (x 40, bottom-left above the strip): 44px round glass
   buttons: zoom in, zoom out, reset/rotate, fit. Keys (Ctrl off macOS):
   ⌘+ or ⌘= zooms in, ⌘− zooms out, ⌘0 fits; holding repeats.
+- **View shortcuts** (available from either primary view): `⌘1` shows Dashboard
+  and `⌘2` opens Tasks (Ctrl+1 / Ctrl+2 off macOS). Dashboard remains the
+  startup view. Hints are exposed with `aria-keyshortcuts`; view shortcuts do
+  not intercept text entry, terminal input, or an open modal dialog.
 - **Tower labels** (in-scene HTML): glass pill (swatch + name + count chip),
   thin gradient line down to a glowing anchor dot on the tower top. The
   selected tower's pill has a 1px provider-colour stroke.
@@ -84,7 +94,8 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
 - The city remains the startup and primary monitoring view. A top-bar Tasks
   icon opens an optional full-window task workspace; Back to city returns to
   monitoring without changing snapshot polling.
-- The workspace header contains "Projects & tasks" and Back to city. The board
+- The workspace header contains "Projects & tasks" and Back to city with a
+  `⌘1` key-cap hint (Ctrl+1 off macOS). The board
   has an All projects filter, Manage projects action, New task action, and
   three columns: Pending, In progress, and Other statuses. Stopped, Canceled,
   and Completed remain individually labeled in the final column.
@@ -103,17 +114,23 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   worktree remain. A failed safe Git cleanup leaves a notice with the remaining
   paths, while the task is still removed. Keep the approved palette, type,
   radii, and spacing tokens unchanged.
-- Opening a task worktree shows a large centered terminal modal over the board.
+- Opening a task terminal shows a large centered terminal modal over the current view.
   Its header identifies the task and worktree, with Agent and `term` tabs above
   full-size xterm viewports. Before process startup, each viewport stays blank
   and its tab reads `Not started`. The Agent pane offers a CLI selector defaulted
   to Claude Code and a Start Agent action; the `term` pane has an explicit Start
   shell action. Tab labels reflect startup, running, exited, and unavailable
   states, with launch errors shown inside only the affected pane. Closing returns
-  to the board while leaving processes and mounted xterm buffers available. If
-  Argis unmounts the task board, reattachment restores retained recent PTY output
-  before streaming new output. Terminal text uses a system monospace font with
-  zero letter spacing; Outfit remains the surrounding UI font.
+  to the current view while leaving processes and mounted xterm buffers
+  available. The terminal host lives outside the conditional Dashboard/Tasks
+  view tree, so switching views does not detach its tabs. A task result selected
+  in `⌘K` opens the same modal over the current view without navigating to Tasks;
+  running Agent and shell sessions reattach, and absent sessions show the
+  existing start controls. Tasks without worktrees remain searchable and show
+  "No worktree · Go to Tasks"; search never creates Git resources. When a
+  terminal target is later reopened after detachment, retained recent PTY output
+  is restored before live output. Terminal text uses a system monospace font
+  with zero letter spacing; Outfit remains the surrounding UI font.
 
 ## Progress readouts
 Progress is a real estimate only when it comes from a plan (`execution`) or

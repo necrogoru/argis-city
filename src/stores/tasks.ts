@@ -14,7 +14,45 @@ export const useTaskStore = defineStore("tasks", () => {
   const tasks = shallowRef<Task[]>([]);
   const gitStatuses = shallowRef<Record<number, TaskGitStatus>>({});
   const loading = ref(false);
+  const searchLoading = ref(false);
   const error = ref<string | null>(null);
+  let searchDataRevision = 0;
+  let loadedSearchDataRevision = -1;
+  let searchDataPromise: Promise<void> | null = null;
+
+  function invalidateSearchData(): void {
+    searchDataRevision += 1;
+  }
+
+  async function ensureSearchDataLoaded(): Promise<void> {
+    if (loadedSearchDataRevision === searchDataRevision) return;
+    if (searchDataPromise) {
+      await searchDataPromise;
+      if (loadedSearchDataRevision === searchDataRevision) return;
+    }
+
+    const revision = searchDataRevision;
+    const promise = Promise.all([source.listProjects(), source.listTasks()]).then(([nextProjects, nextTasks]) => {
+      if (revision !== searchDataRevision) return;
+      projects.value = nextProjects;
+      tasks.value = nextTasks;
+      loadedSearchDataRevision = revision;
+    });
+    searchDataPromise = promise;
+    searchLoading.value = true;
+    try {
+      await promise;
+      error.value = null;
+    } catch (reason) {
+      error.value = errorMessage(reason);
+      throw reason;
+    } finally {
+      if (searchDataPromise === promise) searchDataPromise = null;
+      searchLoading.value = false;
+    }
+
+    if (loadedSearchDataRevision !== searchDataRevision) await ensureSearchDataLoaded();
+  }
 
   async function perform<T>(operation: () => Promise<T>): Promise<T | null> {
     try {
@@ -30,12 +68,11 @@ export const useTaskStore = defineStore("tasks", () => {
   async function load(): Promise<void> {
     loading.value = true;
     error.value = null;
+    invalidateSearchData();
     try {
-      const [nextProjects, nextTasks] = await Promise.all([source.listProjects(), source.listTasks()]);
-      projects.value = nextProjects;
-      tasks.value = nextTasks;
+      await ensureSearchDataLoaded();
       gitStatuses.value = {};
-      await Promise.all(nextTasks.map((task) => refreshTaskGitStatus(task.id)));
+      await Promise.all(tasks.value.map((task) => refreshTaskGitStatus(task.id)));
     } catch (reason) {
       error.value = errorMessage(reason);
     } finally {
@@ -45,7 +82,10 @@ export const useTaskStore = defineStore("tasks", () => {
 
   async function addProject(path: string, createIfMissing: boolean): Promise<Project | null> {
     const project = await perform(() => source.addProject(path, createIfMissing));
-    if (project) projects.value = [...projects.value, project];
+    if (project) {
+      projects.value = [...projects.value, project];
+      invalidateSearchData();
+    }
     return project;
   }
 
@@ -53,6 +93,7 @@ export const useTaskStore = defineStore("tasks", () => {
     const task = await perform(() => source.createTask(projectId, title, description));
     if (task) {
       tasks.value = [...tasks.value, task];
+      invalidateSearchData();
       await refreshTaskGitStatus(task.id);
     }
     return task;
@@ -62,6 +103,7 @@ export const useTaskStore = defineStore("tasks", () => {
     const updated = await perform(() => source.updateTaskDetails(id, title, description));
     if (updated) {
       tasks.value = tasks.value.map((task) => (task.id === id ? updated : task));
+      invalidateSearchData();
       await refreshTaskGitStatus(id);
     }
     return updated;
@@ -69,7 +111,10 @@ export const useTaskStore = defineStore("tasks", () => {
 
   async function updateTaskStatus(id: number, status: TaskStatus): Promise<Task | null> {
     const updated = await perform(() => source.updateTaskStatus(id, status));
-    if (updated) tasks.value = tasks.value.map((task) => (task.id === id ? updated : task));
+    if (updated) {
+      tasks.value = tasks.value.map((task) => (task.id === id ? updated : task));
+      invalidateSearchData();
+    }
     return updated;
   }
 
@@ -77,6 +122,7 @@ export const useTaskStore = defineStore("tasks", () => {
     const outcome = await perform(() => source.deleteTask(id, removeGitResources));
     if (!outcome?.taskDeleted) return null;
     tasks.value = tasks.value.filter((task) => task.id !== id);
+    invalidateSearchData();
     const nextStatuses = { ...gitStatuses.value };
     delete nextStatuses[id];
     gitStatuses.value = nextStatuses;
@@ -114,6 +160,7 @@ export const useTaskStore = defineStore("tasks", () => {
     tasks.value = tasks.value.map((task) =>
       task.id === id ? { ...task, branchName: worktree.branchName, worktreePath: worktree.worktreePath } : task,
     );
+    invalidateSearchData();
     await refreshTaskGitStatus(id);
     return worktree;
   }
@@ -123,7 +170,9 @@ export const useTaskStore = defineStore("tasks", () => {
     tasks,
     gitStatuses,
     loading,
+    searchLoading,
     error,
+    ensureSearchDataLoaded,
     load,
     addProject,
     createTask,

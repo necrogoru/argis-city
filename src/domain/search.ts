@@ -1,5 +1,5 @@
 /** Pure matching / ranking for the ⌘K command palette. */
-import type { AgentSession } from "./types";
+import type { AgentSession, Project, Task } from "./types";
 import { compareSessions } from "./agentList";
 import { tildify } from "./format";
 import { PROVIDERS } from "./providers";
@@ -86,6 +86,34 @@ export function searchSessions(
     .filter((hit): hit is { session: AgentSession; score: number } => hit.score != null)
     .sort((a, b) => b.score - a.score || compareSessions(a.session, b.session))
     .map((hit) => hit.session);
+}
+
+function taskFields(task: Task, projectPath: string): SearchField[] {
+  const fields: SearchField[] = [
+    { text: task.title, weight: 4 },
+    { text: `${task.id} #${task.id}`, weight: 3 },
+    { text: task.description, weight: 2 },
+    { text: projectPath, weight: 1 },
+  ];
+  if (task.worktreePath) fields.push({ text: "terminal agent shell", weight: 0.5 });
+  return fields;
+}
+
+/** Task search is opt-in: an empty query leaves the palette's default results uncluttered. */
+export function searchTasks(tasks: readonly Task[], projects: readonly Project[], query: string): Task[] {
+  const tokens = tokenize(query);
+  if (tokens.length === 0) return [];
+
+  const projectPaths = new Map(projects.map((project) => [project.id, project.path]));
+  return tasks
+    .map((task, index) => ({
+      task,
+      index,
+      score: scoreFields(tokens, taskFields(task, projectPaths.get(task.projectId) ?? "")),
+    }))
+    .filter((hit): hit is { task: Task; index: number; score: number } => hit.score !== null)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((hit) => hit.task);
 }
 
 /** Empty query keeps the given order; otherwise matches by label, then keywords. */

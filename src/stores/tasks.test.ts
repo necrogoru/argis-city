@@ -69,6 +69,45 @@ function setup(overrides: Partial<AgentSource> = {}) {
 }
 
 describe("useTaskStore", () => {
+  it("loads and reuses task search data without checking Git status", async () => {
+    const { store, source } = setup();
+
+    await store.ensureSearchDataLoaded();
+    await store.ensureSearchDataLoaded();
+
+    expect(source.listProjects).toHaveBeenCalledOnce();
+    expect(source.listTasks).toHaveBeenCalledOnce();
+    expect(source.getTaskGitStatus).not.toHaveBeenCalled();
+    expect(store.projects).toEqual([project]);
+    expect(store.tasks).toEqual([task]);
+  });
+
+  it("reloads cached search data after a task mutation", async () => {
+    const createdTask = { ...task, id: 8, title: "New task" };
+    const listTasks = vi.fn().mockResolvedValueOnce([task]).mockResolvedValueOnce([task, createdTask]);
+    const { store, source } = setup({ listTasks });
+
+    await store.ensureSearchDataLoaded();
+    await store.createTask(project.id, createdTask.title, createdTask.description);
+    await store.ensureSearchDataLoaded();
+
+    expect(source.listTasks).toHaveBeenCalledTimes(2);
+    expect(store.tasks).toEqual([task, createdTask]);
+  });
+
+  it("reloads cached search data after a project mutation", async () => {
+    const addedProject = { id: 2, path: "/projects/other" };
+    const listProjects = vi.fn().mockResolvedValueOnce([project]).mockResolvedValueOnce([project, addedProject]);
+    const { store, source } = setup({ listProjects });
+
+    await store.ensureSearchDataLoaded();
+    await store.addProject(addedProject.path, true);
+    await store.ensureSearchDataLoaded();
+
+    expect(source.listProjects).toHaveBeenCalledTimes(2);
+    expect(store.projects).toEqual([project, addedProject]);
+  });
+
   it("loads projects and tasks through the injected source", async () => {
     const { store, source } = setup();
 

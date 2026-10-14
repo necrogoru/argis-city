@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { SquareTerminal } from "@lucide/vue";
 import { tildify } from "../../domain/format";
 import { cssVar } from "../../domain/palette";
 import { PROVIDERS } from "../../domain/providers";
 import { statusMeta } from "../../domain/status";
+import { TASK_STATUS_LABELS } from "../../domain/tasks";
 import StatusPill from "../common/StatusPill.vue";
 import Swatch from "../common/Swatch.vue";
 import Highlight from "./Highlight.vue";
@@ -14,6 +16,10 @@ const emit = defineEmits<{ hover: []; run: [] }>();
 const tint = computed(() =>
   props.option.kind === "agent" ? { "--tint": cssVar(statusMeta(props.option.session.status).color) } : undefined,
 );
+
+function projectName(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
+}
 </script>
 
 <!--
@@ -39,6 +45,20 @@ const tint = computed(() =>
         <span class="sub">{{ PROVIDERS[option.session.provider].label }} · {{ option.session.model ?? "unknown model" }} · {{ tildify(option.session.cwd) }}</span>
       </span>
       <StatusPill :status="option.session.status" />
+    </template>
+    <template v-else-if="option.kind === 'task'">
+      <span class="tile">
+        <SquareTerminal :size="16" aria-hidden="true" />
+      </span>
+      <span class="main">
+        <span class="label"><Highlight :text="option.task.title" :query="query" /></span>
+        <span class="sub">
+          #{{ option.task.id }} · {{ projectName(option.projectPath) }} · {{ TASK_STATUS_LABELS[option.task.status] }}
+        </span>
+      </span>
+      <span class="hint">
+        {{ option.task.worktreePath ? "Open terminal" : "No worktree · Go to Tasks" }}
+      </span>
     </template>
     <template v-else>
       <span class="tile">

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
 import { ArrowLeft } from "@lucide/vue";
+import { formatModKeyLabel, MOD_KEY_ARIA } from "../../composables/useModKey";
 import { useAppViewStore } from "../../stores/appView";
 import { useTaskStore } from "../../stores/tasks";
+import Kbd from "../common/Kbd.vue";
 import TaskBoard from "./TaskBoard.vue";
 
 const appView = useAppViewStore();
@@ -20,9 +22,15 @@ onMounted(() => {
         <h1>Projects & tasks</h1>
         <p class="description">Organize work by project, then open an isolated workspace when you’re ready.</p>
       </div>
-      <button class="back-button" type="button" @click="appView.showCity()">
+      <button
+        class="back-button"
+        type="button"
+        :aria-keyshortcuts="`${MOD_KEY_ARIA}+1`"
+        @click="appView.showCity()"
+      >
         <ArrowLeft :size="16" aria-hidden="true" />
         <span>Back to city</span>
+        <Kbd aria-hidden="true">{{ formatModKeyLabel("1") }}</Kbd>
       </button>
     </header>
 

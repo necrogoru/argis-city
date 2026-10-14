@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isModKey } from "./useModKey";
+import { formatModKeyLabel, isModKey } from "./useModKey";
 
 const key = (k: string, mods: Partial<Record<"metaKey" | "ctrlKey" | "altKey" | "shiftKey", boolean>> = {}) => ({
   key: k,
@@ -22,5 +22,12 @@ describe("isModKey", () => {
     expect(isModKey(key("k", { metaKey: true, shiftKey: true }), "k", true)).toBe(false);
     expect(isModKey(key("k", { metaKey: true, altKey: true }), "k", true)).toBe(false);
     expect(isModKey(key("j", { metaKey: true }), "k", true)).toBe(false);
+  });
+});
+
+describe("formatModKeyLabel", () => {
+  it("uses platform-appropriate visible shortcut labels", () => {
+    expect(formatModKeyLabel("1", true)).toBe("⌘1");
+    expect(formatModKeyLabel("2", false)).toBe("Ctrl+2");
   });
 });

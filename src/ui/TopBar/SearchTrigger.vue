@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { ref } from "vue";
 import { Search } from "@lucide/vue";
-import { MOD_KEY_ARIA, MOD_KEY_LABEL, useModKey } from "../../composables/useModKey";
-import CommandPalette from "../CommandPalette/CommandPalette.vue";
+import { MOD_KEY_ARIA, MOD_KEY_LABEL } from "../../composables/useModKey";
 import Kbd from "../common/Kbd.vue";
 
-const open = ref(false);
-useModKey("k", () => (open.value = !open.value));
+const props = defineProps<{ open: boolean }>();
+const emit = defineEmits<{ open: [] }>();
 </script>
 
 <!-- Search field look-alike in the top bar; click or ⌘K opens the command palette. -->
@@ -15,15 +13,14 @@ useModKey("k", () => (open.value = !open.value));
     type="button"
     class="glass trigger"
     aria-haspopup="dialog"
-    :aria-expanded="open"
+    :aria-expanded="props.open"
     :aria-keyshortcuts="`${MOD_KEY_ARIA}+K`"
-    @click="open = true"
+    @click="emit('open')"
   >
     <Search :size="16" aria-hidden="true" />
-    <span class="placeholder">Search agents &amp; actions</span>
+    <span class="placeholder">Search agents, tasks &amp; actions</span>
     <Kbd>{{ MOD_KEY_LABEL }}K</Kbd>
   </button>
-  <CommandPalette v-model:open="open" />
 </template>
 
 <style scoped>

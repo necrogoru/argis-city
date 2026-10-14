@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { ChevronDown, ChevronUp, GitBranch, SquareTerminal } from "@lucide/vue";
 import type { Task, TaskGitStatus, TaskStatus } from "../../domain/types";
-import { nextTaskStatus, previousTaskStatus } from "../../domain/tasks";
+import { nextTaskStatus, previousTaskStatus, TASK_STATUS_LABELS } from "../../domain/tasks";
 
 const props = defineProps<{
   task: Task;
@@ -33,13 +33,6 @@ const terminalLabel = computed(() => {
 const terminalDisabled = computed(() => !props.canOpenTerminal || props.task.worktreePath === null);
 const projectName = computed(() => props.projectPath.split(/[\\/]/).filter(Boolean).at(-1) ?? props.projectPath);
 
-const STATUS_LABELS: Readonly<Record<TaskStatus, string>> = {
-  pending: "Pending",
-  inProgress: "In progress",
-  stopped: "Stopped",
-  canceled: "Canceled",
-  completed: "Completed",
-};
 </script>
 
 <template>
@@ -54,7 +47,7 @@ const STATUS_LABELS: Readonly<Record<TaskStatus, string>> = {
 
     <div class="task-card-meta">
       <span class="project-name" :title="props.projectPath">{{ projectName }}</span>
-      <span class="status-label" :data-status="props.task.status">{{ STATUS_LABELS[props.task.status] }}</span>
+      <span class="status-label" :data-status="props.task.status">{{ TASK_STATUS_LABELS[props.task.status] }}</span>
     </div>
 
     <div class="task-actions" role="group" :aria-label="`Actions for ${props.task.title}`">
@@ -82,7 +75,7 @@ const STATUS_LABELS: Readonly<Record<TaskStatus, string>> = {
         class="task-action"
         type="button"
         :aria-label="`Move ${props.task.title} to previous status`"
-        :title="previousStatus ? `Move to ${STATUS_LABELS[previousStatus]}` : 'Already at the first status'"
+        :title="previousStatus ? `Move to ${TASK_STATUS_LABELS[previousStatus]}` : 'Already at the first status'"
         :disabled="previousStatus === null"
         @click="previousStatus && emit('moveStatus', previousStatus)"
       >
@@ -92,7 +85,7 @@ const STATUS_LABELS: Readonly<Record<TaskStatus, string>> = {
         class="task-action"
         type="button"
         :aria-label="`Move ${props.task.title} to next status`"
-        :title="nextStatus ? `Move to ${STATUS_LABELS[nextStatus]}` : 'Already at the last status'"
+        :title="nextStatus ? `Move to ${TASK_STATUS_LABELS[nextStatus]}` : 'Already at the last status'"
         :disabled="nextStatus === null"
         @click="nextStatus && emit('moveStatus', nextStatus)"
       >

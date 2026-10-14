@@ -7,6 +7,7 @@ import {
   taskBranchName,
   taskWorktreePath,
   TASK_STATUS_ORDER,
+  TASK_STATUS_LABELS,
 } from "./tasks";
 
 function task(id: number, status: TaskStatus, projectId = 1): Task {
@@ -41,6 +42,16 @@ describe("task status order", () => {
       "completed",
       null,
     ]);
+  });
+
+  it("provides one shared human-readable label for every task status", () => {
+    expect(TASK_STATUS_LABELS).toEqual({
+      pending: "Pending",
+      inProgress: "In progress",
+      stopped: "Stopped",
+      canceled: "Canceled",
+      completed: "Completed",
+    });
   });
 });
 

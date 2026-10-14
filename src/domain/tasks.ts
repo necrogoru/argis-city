@@ -2,6 +2,14 @@ import type { Task, TaskStatus } from "./types";
 
 export const TASK_STATUS_ORDER: readonly TaskStatus[] = ["pending", "inProgress", "stopped", "canceled", "completed"];
 
+export const TASK_STATUS_LABELS: Readonly<Record<TaskStatus, string>> = {
+  pending: "Pending",
+  inProgress: "In progress",
+  stopped: "Stopped",
+  canceled: "Canceled",
+  completed: "Completed",
+};
+
 export interface TaskGroups {
   pending: Task[];
   inProgress: Task[];

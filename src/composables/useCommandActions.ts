@@ -1,9 +1,11 @@
 import { computed, type ComputedRef } from "vue";
 import { storeToRefs } from "pinia";
-import { Copy, FolderOpen, Map as MapIcon, MapPin, RefreshCw, X, type LucideIcon } from "@lucide/vue";
+import { Copy, FolderOpen, List, Map as MapIcon, MapPin, RefreshCw, X, type LucideIcon } from "@lucide/vue";
 import type { PaletteColor } from "../domain/palette";
 import { PROVIDER_ORDER, PROVIDERS } from "../domain/providers";
 import type { Searchable } from "../domain/search";
+import { formatModKeyLabel } from "./useModKey";
+import { useAppViewStore } from "../stores/appView";
 import { useCameraRigStore } from "../stores/cameraRig";
 import { useSelectionStore } from "../stores/selection";
 import { useSnapshotStore } from "../stores/snapshot";
@@ -20,8 +22,34 @@ export interface CommandAction extends Searchable {
   run: () => void;
 }
 
-/** Palette actions: selected-agent shortcuts first, then districts, camera, refresh. */
+export function appViewNavigationActions(
+  showCity: () => void,
+  showTasks: () => void,
+  shortcutLabel: (key: string) => string = formatModKeyLabel,
+): CommandAction[] {
+  return [
+    {
+      id: "view:city",
+      label: "Show Dashboard",
+      hint: shortcutLabel("1"),
+      keywords: ["city", "monitoring", "home", "overview", shortcutLabel("1")],
+      Icon: MapIcon,
+      run: showCity,
+    },
+    {
+      id: "view:tasks",
+      label: "Open Tasks",
+      hint: shortcutLabel("2"),
+      keywords: ["task", "workspace", "board", shortcutLabel("2")],
+      Icon: List,
+      run: showTasks,
+    },
+  ];
+}
+
+/** Palette actions: app navigation, selected-agent shortcuts, districts, camera, refresh. */
 export function useCommandActions(): ComputedRef<CommandAction[]> {
+  const appView = useAppViewStore();
   const rig = useCameraRigStore();
   const source = useAgentSource();
   const snapshots = useSnapshotStore();
@@ -29,7 +57,7 @@ export function useCommandActions(): ComputedRef<CommandAction[]> {
   const { selection, selectedSession } = storeToRefs(selectionStore);
 
   return computed(() => {
-    const actions: CommandAction[] = [];
+    const actions = appViewNavigationActions(() => appView.showCity(), () => appView.showTasks());
     const selected = selectedSession.value;
 
     if (selected) {

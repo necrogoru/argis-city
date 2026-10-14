@@ -51,7 +51,7 @@ function onClick(event: MouseEvent): void {
   <dialog
     ref="dialog"
     class="glass dialog"
-    aria-label="Search agents and actions"
+    aria-label="Search agents, tasks, terminals, and actions"
     @keydown="onKeydown"
     @close="onClose"
     @mousedown="onMousedown"

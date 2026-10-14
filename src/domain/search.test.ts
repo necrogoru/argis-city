@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { highlight, scoreFields, searchActions, searchSessions, tokenize, wrapIndex } from "./search";
+import { highlight, scoreFields, searchActions, searchSessions, searchTasks, tokenize, wrapIndex } from "./search";
+import type { Project, Task } from "./types";
 import { session } from "./testFixtures";
 
 const sessions = [
@@ -9,7 +10,32 @@ const sessions = [
   session({ id: "pi:docs", provider: "pi", title: "docs", status: "done", startedAt: 1, cwd: "/Users/dev/docs", currentStep: "Writing the web guide" }),
 ];
 
-const ids = (list: { id: string }[]) => list.map((s) => s.id);
+const ids = <T extends { id: string | number }>(list: T[]) => list.map((item) => item.id);
+
+const projects: Project[] = [
+  { id: 1, path: "/Users/dev/argis" },
+  { id: 2, path: "/Users/dev/payment-service" },
+];
+const tasks: Task[] = [
+  {
+    id: 17,
+    projectId: 1,
+    title: "Add navigation shortcuts",
+    description: "Switch between city and tasks",
+    status: "inProgress",
+    branchName: null,
+    worktreePath: null,
+  },
+  {
+    id: 18,
+    projectId: 2,
+    title: "Search command palette",
+    description: "Find tasks by project path",
+    status: "pending",
+    branchName: "argis/18-search-command-palette",
+    worktreePath: "/Users/dev/payment-service/.argis/worktrees/18-search-command-palette",
+  },
+];
 
 describe("tokenize", () => {
   it("lower-cases and splits on whitespace", () => {
@@ -54,6 +80,35 @@ describe("searchSessions", () => {
     expect(ids(searchSessions(sessions, "web"))).toEqual(["codex:web", "pi:docs"]);
     expect(ids(searchSessions(sessions, "web idle"))).toEqual(["codex:web"]);
     expect(searchSessions(sessions, "zzz")).toEqual([]);
+  });
+});
+
+describe("searchTasks", () => {
+  it("matches task IDs, titles, descriptions, and project paths", () => {
+    expect(ids(searchTasks(tasks, projects, "18"))).toEqual([18]);
+    expect(ids(searchTasks(tasks, projects, "navigation"))).toEqual([17]);
+    expect(ids(searchTasks(tasks, projects, "city tasks"))).toEqual([17]);
+    expect(ids(searchTasks(tasks, projects, "payment-service"))).toEqual([18]);
+  });
+
+  it("ranks title matches above lower-priority task context", () => {
+    const rankedTasks = [
+      { ...tasks[0], description: "Search all project tasks" },
+      { ...tasks[1], title: "Search command palette", description: "Task records" },
+    ];
+    const matches = searchTasks(rankedTasks, projects, "search");
+
+    expect(ids(matches)).toEqual([18, 17]);
+  });
+
+  it("requires all query tokens and returns no tasks for an empty query", () => {
+    expect(searchTasks(tasks, projects, "navigation missing")).toEqual([]);
+    expect(searchTasks(tasks, projects, " ")).toEqual([]);
+  });
+
+  it("matches terminal terms only for tasks with a worktree", () => {
+    expect(ids(searchTasks(tasks, projects, "terminal"))).toEqual([18]);
+    expect(ids(searchTasks(tasks, projects, "shell"))).toEqual([18]);
   });
 });
 

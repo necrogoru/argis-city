@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef, watch } from "vue";
+import { computed, ref, shallowRef } from "vue";
 import type { Task, TaskDeletionOutcome, TaskStatus } from "../../domain/types";
 import { groupTasks } from "../../domain/tasks";
 import { useTaskStore } from "../../stores/tasks";
 import ProjectManagerDialog from "./ProjectManagerDialog.vue";
 import TaskCard from "./TaskCard.vue";
 import TaskEditorDialog from "./TaskEditorDialog.vue";
-import TerminalModal from "./TerminalModal.vue";
+import { useTerminalNavigationStore } from "../../stores/terminalNavigation";
 
 const store = useTaskStore();
+const terminalNavigation = useTerminalNavigationStore();
 const projectFilter = ref<number | null>(null);
 const projectFilterValue = computed({
   get: () => (projectFilter.value == null ? "" : String(projectFilter.value)),
@@ -28,21 +29,7 @@ const projectPaths = computed(() => new Map(store.projects.map((project) => [pro
 const projectsOpen = ref(false);
 const taskEditorOpen = ref(false);
 const editingTask = shallowRef<Task | null>(null);
-const terminalTask = shallowRef<Task | null>(null);
-const terminalOpen = ref(false);
 const deletionNotice = ref<string | null>(null);
-
-watch(
-  () => store.tasks.find((task) => task.id === terminalTask.value?.id) ?? null,
-  (task) => {
-    if (task) {
-      terminalTask.value = task;
-    } else if (terminalTask.value) {
-      terminalOpen.value = false;
-      terminalTask.value = null;
-    }
-  },
-);
 
 function createTask(): void {
   editingTask.value = null;
@@ -63,15 +50,11 @@ function createBranch(task: Task): void {
 }
 
 function openTerminal(task: Task): void {
-  terminalTask.value = task;
-  terminalOpen.value = true;
+  terminalNavigation.openTaskTerminal(task.id);
 }
 
 function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
-  if (terminalTask.value?.id === editingTask.value?.id) {
-    terminalOpen.value = false;
-    terminalTask.value = null;
-  }
+  if (editingTask.value) terminalNavigation.clearTaskTerminal(editingTask.value.id);
   if (!outcome.git.error) {
     deletionNotice.value = null;
     return;
@@ -145,13 +128,6 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
       :projects="store.projects"
       :task="editingTask"
       @deleted="handleTaskDeleted"
-    />
-    <TerminalModal
-      v-if="terminalTask"
-      :key="terminalTask.id"
-      v-model:open="terminalOpen"
-      :task="terminalTask"
-      @close="terminalOpen = false"
     />
   </section>
 </template>

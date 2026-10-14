@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { computed, ref, useId, useTemplateRef } from "vue";
+import { computed, nextTick, onMounted, ref, useId, useTemplateRef } from "vue";
 import { storeToRefs } from "pinia";
 import { Search } from "@lucide/vue";
-import { searchActions, searchSessions, tokenize, wrapIndex } from "../../domain/search";
+import { searchActions, searchSessions, searchTasks, tokenize, wrapIndex } from "../../domain/search";
 import { useCommandActions } from "../../composables/useCommandActions";
 import { useCameraRigStore } from "../../stores/cameraRig";
 import { useSelectionStore } from "../../stores/selection";
 import { useSnapshotStore } from "../../stores/snapshot";
+import { useAppViewStore } from "../../stores/appView";
+import { useTaskStore } from "../../stores/tasks";
+import { useTerminalNavigationStore } from "../../stores/terminalNavigation";
+import { taskPaletteAction } from "./taskPaletteAction";
 import Kbd from "../common/Kbd.vue";
 import PaletteOption from "./PaletteOption.vue";
 import PaletteSection from "./PaletteSection.vue";
@@ -19,8 +23,12 @@ const emit = defineEmits<{ close: [] }>();
 const { snapshot } = storeToRefs(useSnapshotStore());
 const selection = useSelectionStore();
 const rig = useCameraRigStore();
+const appView = useAppViewStore();
+const taskStore = useTaskStore();
+const terminalNavigation = useTerminalNavigationStore();
 const actions = useCommandActions();
 const query = ref("");
+const taskSearchError = ref<string | null>(null);
 // Track the cursor by key so live snapshot reordering doesn't move it.
 const activeKey = ref<string | null>(null);
 const listId = useId();
@@ -28,11 +36,20 @@ const list = useTemplateRef<HTMLDivElement>("list");
 
 const sessions = computed(() => snapshot.value?.sessions ?? []);
 const agents = computed(() => searchSessions(sessions.value, query.value, IDLE_AGENT_LIMIT));
+const tasks = computed(() => searchTasks(taskStore.tasks, taskStore.projects, query.value));
 const matchedActions = computed(() => searchActions(actions.value, query.value));
 const options = computed<PaletteOptionModel[]>(() => [
   ...agents.value.map((session) => ({ key: `agent:${session.id}`, kind: "agent" as const, session })),
+  ...tasks.value.map((task) => ({
+    key: `task:${task.id}`,
+    kind: "task" as const,
+    task,
+    projectPath: taskStore.projects.find((project) => project.id === task.projectId)?.path ?? "Unknown project",
+  })),
   ...matchedActions.value.map((action) => ({ key: `action:${action.id}`, kind: "action" as const, action })),
 ]);
+const taskStart = computed(() => agents.value.length);
+const actionStart = computed(() => agents.value.length + tasks.value.length);
 const activeIndex = computed(() => {
   const found = options.value.findIndex((o) => o.key === activeKey.value);
   return found >= 0 ? found : options.value.length > 0 ? 0 : -1;
@@ -45,11 +62,25 @@ const agentsAside = computed(() => {
     : null;
 });
 
+onMounted(() => {
+  void taskStore.ensureSearchDataLoaded().catch((reason: unknown) => {
+    taskSearchError.value = reason instanceof Error ? reason.message : String(reason);
+  });
+});
+
 function run(option: PaletteOptionModel): void {
   emit("close");
   if (option.kind === "action") return option.action.run();
-  selection.selectSession(option.session.id);
-  rig.focusSession(option.session.id);
+  if (option.kind === "agent") {
+    selection.selectSession(option.session.id);
+    rig.focusSession(option.session.id);
+    return;
+  }
+
+  void nextTick(() => {
+    if (taskPaletteAction(option.task) === "open-terminal") terminalNavigation.openTaskTerminal(option.task.id);
+    else appView.showTasks();
+  });
 }
 
 function onInput(event: Event): void {
@@ -85,8 +116,8 @@ function onKeydown(event: KeyboardEvent): void {
       :aria-controls="listId"
       aria-autocomplete="list"
       :aria-activedescendant="activeIndex >= 0 ? optionId(activeIndex) : undefined"
-      aria-label="Search agents and actions"
-      placeholder="Search agents or run an action…"
+      aria-label="Search agents, tasks, terminals, and actions"
+      placeholder="Search agents, tasks, terminals, or actions…"
       autocomplete="off"
       spellcheck="false"
       :value="query"
@@ -109,19 +140,35 @@ function onKeydown(event: KeyboardEvent): void {
         @run="run(option)"
       />
     </PaletteSection>
-    <PaletteSection v-if="matchedActions.length > 0" title="Actions">
+    <PaletteSection v-if="tasks.length > 0" title="Tasks" :aside="String(tasks.length)">
       <PaletteOption
-        v-for="(option, i) in options.slice(agents.length)"
+        v-for="(option, i) in options.slice(taskStart, actionStart)"
         :key="option.key"
         :option="option"
-        :dom-id="optionId(agents.length + i)"
-        :active="agents.length + i === activeIndex"
+        :dom-id="optionId(taskStart + i)"
+        :active="taskStart + i === activeIndex"
         :query="query"
         @hover="activeKey = option.key"
         @run="run(option)"
       />
     </PaletteSection>
-    <p v-if="options.length === 0" class="empty">No agents or actions match “{{ query.trim() }}”.</p>
+    <PaletteSection v-if="matchedActions.length > 0" title="Actions">
+      <PaletteOption
+        v-for="(option, i) in options.slice(actionStart)"
+        :key="option.key"
+        :option="option"
+        :dom-id="optionId(actionStart + i)"
+        :active="actionStart + i === activeIndex"
+        :query="query"
+        @hover="activeKey = option.key"
+        @run="run(option)"
+      />
+    </PaletteSection>
+    <p v-if="options.length === 0 && taskStore.searchLoading" class="empty" role="status">Loading task search…</p>
+    <p v-else-if="options.length === 0 && taskSearchError" class="empty" role="alert">
+      Task search unavailable: {{ taskSearchError }}
+    </p>
+    <p v-else-if="options.length === 0" class="empty">No agents, tasks, or actions match “{{ query.trim() }}”.</p>
   </div>
 
   <footer class="footer" aria-hidden="true">
