@@ -58,10 +58,14 @@ async function start(): Promise<void> {
   if (session.connected.value) surface.value?.focus();
 }
 
+function fit(): void {
+  surface.value?.fit();
+}
+
 watch(session.status, (status) => emit("statusChange", status), { immediate: true });
 onBeforeUnmount(() => void session.dispose());
 
-defineExpose({ reattach, detach: session.detach });
+defineExpose({ reattach, detach: session.detach, fit });
 </script>
 
 <template>

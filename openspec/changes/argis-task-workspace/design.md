@@ -45,9 +45,10 @@ See `proposal.md` for motivation and `specs/` for user-visible behavior. Argis i
 ### Embedded terminal process lifecycle
 
 - Keep PTY ownership in a backend process manager keyed by task and tab. The Agent tab starts the user-selected supported CLI (Claude Code is the default); the `term` tab starts the user's interactive shell. Both use the associated worktree as their working directory.
-- Use Tauri commands for start/input/resize/stop operations and a Tauri Channel for ordered terminal output. Reopening the modal reattaches to live processes. Keep processes alive while users switch between task and city views; stop them before their task is deleted, and terminate/reap all remaining Argis-managed processes when the app exits.
+- Use Tauri commands for start/input/resize/stop operations and a Tauri Channel for ordered terminal output. Keep a bounded 1 MiB output tail per PTY and replay it before live output on reattachment. Keep xterm instances mounted while the task board remains mounted and the modal is closed, preserving their full xterm scrollback for a quick close/reopen. Keep processes alive while users switch between task and city views; stop them before their task is deleted, and terminate/reap all remaining Argis-managed processes when the app exits.
 - If starting the agent CLI fails, show the error in the Agent tab and leave the shell tab usable. Do not silently mark the task stopped or otherwise mutate task status.
 - Place a stable terminal-host adapter between Rust PTY handling and the Vue terminal view.
+- Render xterm with a system monospace font and zero letter spacing; keep the app's Outfit UI font for the surrounding controls.
 
 ### Approved terminal dependencies
 

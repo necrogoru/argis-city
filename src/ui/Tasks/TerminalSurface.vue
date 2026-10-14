@@ -55,10 +55,11 @@ function initialize(): void {
   initialized = true;
 
   terminal = new Terminal({
-    cursorBlink: true,
-    disableStdin: !props.connected,
-    fontFamily: token("--font"),
+    cursorBlink: props.connected && props.active,
+    disableStdin: !props.connected || !props.active,
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
     fontSize: 13,
+    letterSpacing: 0,
     scrollback: 5_000,
     theme: {
       background: token("--bg"),
@@ -71,7 +72,7 @@ function initialize(): void {
   terminal.open(element);
 
   dataSubscription = terminal.onData((value) => {
-    if (props.connected) emit("data", value);
+    if (props.connected && props.active) emit("data", value);
   });
   resizeSubscription = terminal.onResize(({ cols, rows }) => {
     if (props.connected) emit("resize", { cols, rows });
@@ -102,9 +103,11 @@ watch(
 );
 
 watch(
-  () => props.connected,
-  (connected) => {
-    if (terminal) terminal.options.disableStdin = !connected;
+  () => props.connected && props.active,
+  (interactive) => {
+    if (!terminal) return;
+    terminal.options.disableStdin = !interactive;
+    terminal.options.cursorBlink = interactive;
   },
 );
 

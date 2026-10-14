@@ -49,10 +49,12 @@ TaskWorkspace + TerminalModal
 `TaskStore` writes only Argis-owned data in the app data directory. It must not
 reuse provider databases or weaken their read-only access. Git worktree changes
 occur only from explicit task actions and are scoped to the registered project.
-The terminal manager owns one Agent and one shell process per task. Closing the
-modal detaches its Channels but leaves PTYs running for reattachment. Task
-deletion stops and reaps that task's PTYs before Git cleanup; a stop failure
-aborts deletion. App exit reaps all remaining managed PTYs.
+The terminal manager owns one Agent and one shell process per task and retains
+up to 1 MiB of recent output per PTY. Closing the modal while the task board is
+mounted preserves the xterm instances and Channels. Switching to the city
+unmounts the pane and detaches its Channel; later reattachment replays retained
+output before live chunks. Task deletion stops and reaps that task's PTYs before
+Git cleanup; a stop failure aborts deletion. App exit reaps all remaining PTYs.
 
 ## Backend (`src-tauri/src/`)
 

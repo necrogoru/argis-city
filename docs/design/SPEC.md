@@ -110,7 +110,10 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   to Claude Code and a Start Agent action; the `term` pane has an explicit Start
   shell action. Tab labels reflect startup, running, exited, and unavailable
   states, with launch errors shown inside only the affected pane. Closing returns
-  to the board while leaving processes available for reattachment.
+  to the board while leaving processes and mounted xterm buffers available. If
+  Argis unmounts the task board, reattachment restores retained recent PTY output
+  before streaming new output. Terminal text uses a system monospace font with
+  zero letter spacing; Outfit remains the surrounding UI font.
 
 ## Progress readouts
 Progress is a real estimate only when it comes from a plan (`execution`) or

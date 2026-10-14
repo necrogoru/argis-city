@@ -47,7 +47,7 @@ fn spec(task_id: i64, tab: TerminalTab, program: &str, args: &[&str]) -> Termina
 
 #[cfg(unix)]
 #[test]
-fn detached_terminal_keeps_running_and_receives_output_after_reattachment() {
+fn detached_terminal_replays_output_produced_before_reattachment() {
     let manager = TerminalManager::default();
     let (first_sender, first_events) = mpsc::channel();
     let command = spec(
@@ -61,7 +61,7 @@ fn detached_terminal_keeps_running_and_receives_output_after_reattachment() {
     assert!(output_until(&first_events, "READY").contains("READY"));
 
     assert!(manager.detach_attachment(key(47, TerminalTab::Term), initial_attachment.attachment_id));
-    manager.input(session.id, b"discard-while-detached\n").unwrap();
+    manager.input(session.id, b"printed-while-detached\n").unwrap();
     let (reattached_sender, reattached_events) = mpsc::channel();
     let reattached =
         manager.reattach_if_present_with_attachment(key(47, TerminalTab::Term), sink(reattached_sender)).unwrap();
@@ -69,12 +69,43 @@ fn detached_terminal_keeps_running_and_receives_output_after_reattachment() {
     assert_eq!(reattached.session.id, session.id);
     assert!(reattached.session.running);
     assert!(!manager.detach_attachment(key(47, TerminalTab::Term), initial_attachment.attachment_id));
+
+    let replayed = output_until(&reattached_events, "RECEIVED:printed-while-detached");
+    assert!(replayed.contains("READY"));
+
     manager.input(session.id, b"visible-after-reattach\n").unwrap();
     assert!(
         output_until(&reattached_events, "RECEIVED:visible-after-reattach").contains("RECEIVED:visible-after-reattach")
     );
     assert!(manager.detach_attachment(key(47, TerminalTab::Term), reattached.attachment_id));
     manager.stop(session.id).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn terminal_output_replay_is_bounded_to_the_most_recent_megabyte() {
+    let manager = TerminalManager::default();
+    let (sender, events) = mpsc::channel();
+    let session = manager
+        .start(spec(53, TerminalTab::Term, "/bin/sh", &["-c", "head -c 2097152 /dev/zero"]), sink(sender))
+        .unwrap();
+    wait_for_exit(&events, session.id);
+
+    let (reattached_sender, reattached_events) = mpsc::channel();
+    manager.reattach(key(53, TerminalTab::Term), sink(reattached_sender)).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut replayed_bytes = 0;
+    loop {
+        match reattached_events.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+            Ok(TerminalEvent::Output { bytes, .. }) => replayed_bytes += bytes.len(),
+            Ok(TerminalEvent::Exited { session_id, .. }) if session_id == session.id => break,
+            Ok(TerminalEvent::Error { message, .. }) => panic!("terminal emitted an error: {message}"),
+            Ok(TerminalEvent::Exited { .. }) => panic!("received exit event for a different session"),
+            Err(error) => panic!("timed out waiting for replayed exit: {error}"),
+        }
+    }
+
+    assert_eq!(replayed_bytes, 1_048_576);
 }
 
 #[test]

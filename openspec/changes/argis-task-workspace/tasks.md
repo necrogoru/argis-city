@@ -25,8 +25,8 @@
 - [x] 4.1 Compare maintained Rust PTY and Vue-compatible terminal-renderer options, then obtain explicit approval for the chosen dependencies and any Tauri permission/configuration changes before installing them; verify the decision and approved scope are recorded.
 - [x] 4.2 Implement a backend terminal process manager with start, input, resize, output, reattach, and shutdown operations behind the approved PTY adapter; verify lifecycle and error handling with controlled test processes.
 - [x] 4.3 Build the large terminal modal with Agent and `term` tabs and a terminal renderer; verify it opens over the task workspace, closes back to the board, and does not directly depend on Tauri APIs.
-- [x] 4.4 Implement the agent chooser (Claude Code default), agent/shell startup in the task worktree, background reattachment, missing-CLI errors, and app-exit cleanup; stop and reap task sessions before task deletion, abort deletion if stopping fails, and verify the shell remains usable after an agent launch error and process cleanup is tested.
-- [x] 4.5 Document terminal commands/channels and lifecycle in `docs/CONTRACT.md` and architecture context; verify the transport contract matches both Tauri and mock implementations.
+- [x] 4.4 Implement the agent chooser (Claude Code default), agent/shell startup in the task worktree, background reattachment with recent output restoration, missing-CLI errors, and app-exit cleanup; stop and reap task sessions before task deletion, abort deletion if stopping fails, use a monospace xterm font with zero letter spacing, and verify reattach content, shell usability after an agent launch error, and process cleanup.
+- [x] 4.5 Document terminal commands/channels, bounded output replay, font choice, and lifecycle in `docs/CONTRACT.md` and architecture context; verify the transport contract matches both Tauri and mock implementations.
 
 ## 5. Integration verification
 

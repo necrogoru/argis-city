@@ -8,6 +8,7 @@ import type { TerminalStatus } from "./useTerminalSession";
 interface TerminalPaneHandle {
   reattach: () => Promise<void>;
   detach: () => Promise<void>;
+  fit: () => void;
 }
 
 const open = defineModel<boolean>("open", { required: true });
@@ -46,23 +47,24 @@ function show(): void {
   const element = dialog.value;
   if (!element || element.open) return;
   returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const firstOpen = !terminalReady.value;
   activeTab.value = "agent";
-  terminalReady.value = false;
   element.showModal();
   void nextTick(async () => {
     if (!open.value) return;
-    terminalReady.value = true;
     closeButton.value?.focus();
-    await nextTick();
-    if (open.value) await restoreSessions();
+    if (firstOpen) {
+      terminalReady.value = true;
+      await nextTick();
+      if (open.value) await restoreSessions();
+    } else {
+      agentPane.value?.fit();
+      termPane.value?.fit();
+    }
   });
 }
 
 function hide(): void {
-  terminalReady.value = false;
-  restoring.value = false;
-  void agentPane.value?.detach();
-  void termPane.value?.detach();
   if (dialog.value?.open) dialog.value.close();
   if (returnFocus?.isConnected) returnFocus.focus();
   returnFocus = null;
@@ -166,7 +168,7 @@ onBeforeUnmount(() => {
         ref="agent-pane"
         :task-id="props.task.id"
         tab="agent"
-        :active="activeTab === 'agent'"
+        :active="open && activeTab === 'agent'"
         :restoring="restoring"
         panel-id="agent-terminal-panel"
         tab-id="agent-terminal-tab"
@@ -176,7 +178,7 @@ onBeforeUnmount(() => {
         ref="term-pane"
         :task-id="props.task.id"
         tab="term"
-        :active="activeTab === 'term'"
+        :active="open && activeTab === 'term'"
         :restoring="restoring"
         panel-id="term-terminal-panel"
         tab-id="term-terminal-tab"

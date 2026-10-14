@@ -17,6 +17,10 @@
   color: var(--text);
 }
 
+.terminal-dialog:not([open]) {
+  display: none;
+}
+
 .terminal-dialog::backdrop {
   background: rgb(10 11 12 / 82%);
   backdrop-filter: blur(8px);

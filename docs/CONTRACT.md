@@ -97,11 +97,17 @@ creates and records both resources only for an eligible task.
   `output` has `sessionId` and `bytes` (a JSON byte array), `error` has
   `sessionId` and `message`, and `exited` has `sessionId`, `exitCode`, and a
   nullable `signal`. The UI converts output bytes to `Uint8Array` for xterm.
+- `TerminalManager` retains a bounded 1 MiB tail of PTY output per session.
+  Reattachment replays that ordered output before forwarding new chunks, so a
+  newly mounted xterm can restore recent terminal contents. An xterm instance
+  also remains mounted while its modal is closed but the task board stays open.
 - `terminal_input` accepts UTF-8 text up to 64 KiB. `resize_terminal_session`
   accepts positive `cols` and `rows` up to 1,000; pixel dimensions default to
-  zero when omitted. Closing the modal or switching views detaches channels
-  while leaving PTYs alive. Argis stops and reaps all remaining PTYs on app exit
-  and stops a task's PTYs before task deletion.
+  zero when omitted. Closing only the modal keeps its Channels and xterm buffers
+  attached. Switching away from the task board detaches Channels while leaving
+  PTYs alive. Argis stops and reaps all remaining PTYs on app exit and stops a
+  task's PTYs before task deletion. xterm uses a system monospace font with zero
+  letter spacing; the surrounding UI continues to use Outfit.
 - Browser mock mode does not launch local processes: reattach returns `null`,
   start/input/resize report that embedded processes require the desktop app, and
   detach returns `false`.

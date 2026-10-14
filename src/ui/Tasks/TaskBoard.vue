@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 import type { Task, TaskDeletionOutcome, TaskStatus } from "../../domain/types";
 import { groupTasks } from "../../domain/tasks";
 import { useTaskStore } from "../../stores/tasks";
@@ -32,6 +32,18 @@ const terminalTask = shallowRef<Task | null>(null);
 const terminalOpen = ref(false);
 const deletionNotice = ref<string | null>(null);
 
+watch(
+  () => store.tasks.find((task) => task.id === terminalTask.value?.id) ?? null,
+  (task) => {
+    if (task) {
+      terminalTask.value = task;
+    } else if (terminalTask.value) {
+      terminalOpen.value = false;
+      terminalTask.value = null;
+    }
+  },
+);
+
 function createTask(): void {
   editingTask.value = null;
   taskEditorOpen.value = true;
@@ -56,6 +68,10 @@ function openTerminal(task: Task): void {
 }
 
 function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
+  if (terminalTask.value?.id === editingTask.value?.id) {
+    terminalOpen.value = false;
+    terminalTask.value = null;
+  }
   if (!outcome.git.error) {
     deletionNotice.value = null;
     return;
@@ -132,9 +148,10 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
     />
     <TerminalModal
       v-if="terminalTask"
+      :key="terminalTask.id"
       v-model:open="terminalOpen"
       :task="terminalTask"
-      @close="terminalTask = null"
+      @close="terminalOpen = false"
     />
   </section>
 </template>

@@ -4,7 +4,7 @@ use crate::domain::{
 use anyhow::{anyhow, bail, Context};
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, Child, ChildKiller, CommandBuilder, MasterPty, PtySize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -17,6 +17,7 @@ const MAX_INPUT_SIZE: usize = 64 * 1024;
 const MAX_COMMAND_ARGUMENTS: usize = 256;
 const MAX_COMMAND_ARGUMENT_BYTES: usize = 8 * 1024;
 const MAX_TERMINAL_DIMENSION: u16 = 1_000;
+const OUTPUT_HISTORY_MAX_BYTES: usize = 1024 * 1024;
 
 impl TerminalSize {
     fn validate(self) -> anyhow::Result<Self> {
@@ -86,6 +87,38 @@ struct SessionLifecycle {
     sink_generation: u64,
     sink: Option<TerminalEventSink>,
     completed: Option<TerminalEvent>,
+    output_history: TerminalOutputHistory,
+}
+
+#[derive(Default)]
+struct TerminalOutputHistory {
+    chunks: VecDeque<Vec<u8>>,
+    bytes: usize,
+}
+
+impl TerminalOutputHistory {
+    fn push(&mut self, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
+        }
+        let bytes = if bytes.len() > OUTPUT_HISTORY_MAX_BYTES {
+            &bytes[bytes.len() - OUTPUT_HISTORY_MAX_BYTES..]
+        } else {
+            bytes
+        };
+        while self.bytes + bytes.len() > OUTPUT_HISTORY_MAX_BYTES {
+            let Some(oldest) = self.chunks.pop_front() else {
+                break;
+            };
+            self.bytes -= oldest.len();
+        }
+        self.chunks.push_back(bytes.to_vec());
+        self.bytes += bytes.len();
+    }
+
+    fn replay(&self, session_id: u64, sink: &TerminalEventSink) -> bool {
+        self.chunks.iter().all(|bytes| sink(TerminalEvent::Output { session_id, bytes: bytes.clone() }).is_ok())
+    }
 }
 
 impl TerminalManager {
@@ -168,7 +201,12 @@ impl TerminalManager {
             child: Mutex::new(Some(child)),
             worker: Mutex::new(None),
             running: AtomicBool::new(true),
-            lifecycle: Mutex::new(SessionLifecycle { sink_generation: 1, sink: Some(sink), completed: None }),
+            lifecycle: Mutex::new(SessionLifecycle {
+                sink_generation: 1,
+                sink: Some(sink),
+                completed: None,
+                output_history: TerminalOutputHistory::default(),
+            }),
         });
 
         let worker_session = Arc::clone(&session);
@@ -390,12 +428,17 @@ impl ManagedSession {
     fn attach(&self, sink: TerminalEventSink) -> u64 {
         let mut lifecycle = self.lifecycle.lock();
         lifecycle.sink_generation = lifecycle.sink_generation.wrapping_add(1).max(1);
-        lifecycle.sink = Some(sink);
+        if !lifecycle.output_history.replay(self.info.id, &sink) {
+            lifecycle.sink = None;
+            return lifecycle.sink_generation;
+        }
         if let Some(completed) = lifecycle.completed.clone() {
-            if lifecycle.sink.as_ref().is_some_and(|sink| sink(completed).is_err()) {
+            if sink(completed).is_err() {
                 lifecycle.sink = None;
+                return lifecycle.sink_generation;
             }
         }
+        lifecycle.sink = Some(sink);
         lifecycle.sink_generation
     }
 
@@ -410,6 +453,9 @@ impl ManagedSession {
 
     fn emit(&self, event: TerminalEvent) {
         let mut lifecycle = self.lifecycle.lock();
+        if let TerminalEvent::Output { bytes, .. } = &event {
+            lifecycle.output_history.push(bytes);
+        }
         if lifecycle.sink.as_ref().is_some_and(|sink| sink(event).is_err()) {
             lifecycle.sink = None;
         }
