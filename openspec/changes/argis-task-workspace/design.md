@@ -45,9 +45,16 @@ See `proposal.md` for motivation and `specs/` for user-visible behavior. Argis i
 ### Embedded terminal process lifecycle
 
 - Keep PTY ownership in a backend process manager keyed by task and tab. The Agent tab starts the user-selected supported CLI (Claude Code is the default); the `term` tab starts the user's interactive shell. Both use the associated worktree as their working directory.
-- Use Tauri commands for start/input/resize/stop operations and Tauri events for terminal output. Reopening the modal reattaches to live processes. Keep processes alive while users switch between task and city views; terminate and reap Argis-managed processes when the app exits.
+- Use Tauri commands for start/input/resize/stop operations and a Tauri Channel for ordered terminal output. Reopening the modal reattaches to live processes. Keep processes alive while users switch between task and city views; terminate and reap Argis-managed processes when the app exits.
 - If starting the agent CLI fails, show the error in the Agent tab and leave the shell tab usable. Do not silently mark the task stopped or otherwise mutate task status.
-- Place a stable terminal-host adapter between Rust PTY handling and the Vue terminal view. Evaluate concrete PTY and terminal-renderer dependencies before implementation and request approval before adding a dependency or Tauri permission/plugin.
+- Place a stable terminal-host adapter between Rust PTY handling and the Vue terminal view.
+
+### Approved terminal dependencies
+
+- Use `portable-pty` 0.9.0 for backend PTY creation, input/output, resize, and child-process management. Keep process ownership in Argis rather than delegating it to a Tauri plugin.
+- Use `@xterm/xterm` 6.0.0 for terminal rendering and `@xterm/addon-fit` 0.11.0 to fit the terminal to its visible modal container.
+- Stream terminal output through Tauri Channels rather than firing frequent events; keep start/input/resize/stop as typed Tauri commands.
+- The user approved these dependencies and the Channel approach before installation. Do not add a PTY plugin or new Tauri permission; pause if implementation demonstrates one is required.
 
 ### Performance and safety
 
@@ -56,7 +63,7 @@ See `proposal.md` for motivation and `specs/` for user-visible behavior. Argis i
 
 ## Risks / Trade-offs
 
-- **Interactive PTY and terminal rendering add a new dependency and process boundary** → Keep them behind a narrow adapter; compare maintained options and get approval before installation or permission changes.
+- **Interactive PTY and terminal rendering add a new dependency and process boundary** → Keep them behind the approved narrow adapter; test process lifecycle and review the dependency/lockfile changes.
 - **A task worktree is nested within its main checkout** → Add only a local `.git/info/exclude` rule; test in temporary repositories and never edit tracked ignore files.
 - **A worktree can contain user changes when task deletion is requested** → Never force-remove it; proceed with task deletion and report any retained branch/worktree paths.
 - **Agent CLI installations and PATH vary by machine** → Resolve the selected executable at launch, report failures in the Agent tab, and keep the shell tab available.
@@ -68,7 +75,3 @@ See `proposal.md` for motivation and `specs/` for user-visible behavior. Argis i
 2. Add the task workspace and Git operations behind the optional Tasks entry point; retain the city as the startup view.
 3. Add the approved PTY/renderer integration and process cleanup lifecycle.
 4. If rolling back the feature, disable its entry point and retain the app-owned task database and user-created worktrees. Do not automatically remove project data, Git branches, or local exclude entries during rollback.
-
-## Open Questions
-
-- Which maintained PTY backend and Vue-compatible terminal renderer to use. Evaluate this before implementation; preserve the adapter contract and obtain approval before adding dependencies or Tauri permissions.
