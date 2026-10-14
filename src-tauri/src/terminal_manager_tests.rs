@@ -219,7 +219,7 @@ fn terminal_manager_reaps_all_sessions_on_shutdown_and_is_idempotent() {
 
 #[cfg(unix)]
 #[test]
-fn terminal_manager_reports_launch_errors_without_reserving_the_task_tab() {
+fn terminal_manager_keeps_shell_usable_after_agent_launch_error() {
     let manager = TerminalManager::default();
     let (sender, _events) = mpsc::channel();
     let invalid = spec(45, TerminalTab::Agent, "/definitely/not/an/executable", &[]);
