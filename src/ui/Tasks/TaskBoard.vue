@@ -6,6 +6,7 @@ import { useTaskStore } from "../../stores/tasks";
 import ProjectManagerDialog from "./ProjectManagerDialog.vue";
 import TaskCard from "./TaskCard.vue";
 import TaskEditorDialog from "./TaskEditorDialog.vue";
+import TerminalModal from "./TerminalModal.vue";
 
 const store = useTaskStore();
 const projectFilter = ref<number | null>(null);
@@ -27,6 +28,8 @@ const projectPaths = computed(() => new Map(store.projects.map((project) => [pro
 const projectsOpen = ref(false);
 const taskEditorOpen = ref(false);
 const editingTask = shallowRef<Task | null>(null);
+const terminalTask = shallowRef<Task | null>(null);
+const terminalOpen = ref(false);
 const deletionNotice = ref<string | null>(null);
 
 function createTask(): void {
@@ -45,6 +48,11 @@ function updateStatus(task: Task, status: TaskStatus): void {
 
 function createBranch(task: Task): void {
   void store.createTaskWorktree(task.id);
+}
+
+function openTerminal(task: Task): void {
+  terminalTask.value = task;
+  terminalOpen.value = true;
 }
 
 function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
@@ -103,10 +111,11 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
               :task="task"
               :project-path="projectPaths.get(task.projectId) ?? 'Unknown project'"
               :git-status="store.gitStatuses[task.id] ?? null"
-              :can-open-terminal="false"
+              :can-open-terminal="task.worktreePath !== null"
               @edit="editTask(task)"
               @move-status="updateStatus(task, $event)"
               @create-branch="createBranch(task)"
+              @open-terminal="openTerminal(task)"
             />
           </li>
         </ul>
@@ -120,6 +129,12 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
       :projects="store.projects"
       :task="editingTask"
       @deleted="handleTaskDeleted"
+    />
+    <TerminalModal
+      v-if="terminalTask"
+      v-model:open="terminalOpen"
+      :task="terminalTask"
+      @close="terminalTask = null"
     />
   </section>
 </template>

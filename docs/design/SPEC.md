@@ -101,6 +101,10 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   and worktree. A failed safe cleanup leaves a notice with the remaining paths,
   while the task is still removed. Keep the approved palette, type, radii, and
   spacing tokens unchanged.
+- Opening a task worktree shows a large centered terminal modal over the board.
+  Its header identifies the task and worktree, with Agent and `term` tabs above
+  a full-size xterm viewport. Before process startup, keep the viewport blank
+  and label each tab `Not started`. Closing returns to the board.
 
 ## Progress readouts
 Progress is a real estimate only when it comes from a plan (`execution`) or
