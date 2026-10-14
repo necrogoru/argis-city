@@ -53,6 +53,11 @@ function setup(overrides: Partial<AgentSource> = {}) {
       branchName: `argis/${id}-task`,
       worktreePath: `/projects/argis/.argis/worktrees/${id}-task`,
     })),
+    startTerminalSession: async () => { throw new Error("unused test operation"); },
+    reattachTerminalSession: async () => null,
+    sendTerminalInput: async () => {},
+    resizeTerminalSession: async () => {},
+    detachTerminalSession: async () => false,
     ...overrides,
   };
   const app = createApp({});

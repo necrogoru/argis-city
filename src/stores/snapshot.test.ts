@@ -49,6 +49,11 @@ function fakeSource(refresh: () => Promise<Snapshot> = async () => at(99)) {
       branchName: `argis/${id}-task`,
       worktreePath: `/projects/argis/.argis/worktrees/${id}-task`,
     }),
+    startTerminalSession: async () => { throw new Error("unused test operation"); },
+    reattachTerminalSession: async () => null,
+    sendTerminalInput: async () => {},
+    resizeTerminalSession: async () => {},
+    detachTerminalSession: async () => false,
   };
   return { source, resolveInitial: (s: Snapshot) => resolveInitial(s), rejectInitial: (e: unknown) => rejectInitial(e), push: (s: Snapshot) => push(s) };
 }

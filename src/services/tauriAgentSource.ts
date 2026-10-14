@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   SNAPSHOT_EVENT,
@@ -7,12 +7,78 @@ import {
   type Task,
   type TaskDeletionOutcome,
   type TaskGitStatus,
+  type TerminalAttachment,
+  type TerminalEvent,
+  type TerminalTab,
   type TaskWorktree,
 } from "../domain/types";
 import type { AgentSource } from "./agentSource";
 
+interface TerminalChannelEntry {
+  requestId: number;
+  channel: Channel<TerminalEvent>;
+  attachmentId: number | null;
+}
+
+function terminalChannelKey(taskId: number, tab: TerminalTab): string {
+  return `${taskId}:${tab}`;
+}
+
 /** AgentSource backed by the Rust commands/events in docs/CONTRACT.md. */
 export function createTauriAgentSource(): AgentSource {
+  const terminalChannels = new Map<string, TerminalChannelEntry>();
+  let nextTerminalChannelRequestId = 1;
+
+  function makeTerminalChannel(
+    key: string,
+    callback: (event: TerminalEvent) => void,
+  ): TerminalChannelEntry {
+    const previous = terminalChannels.get(key);
+    if (previous) previous.channel.onmessage = () => {};
+
+    const channel = new Channel<TerminalEvent>();
+    const entry = { requestId: nextTerminalChannelRequestId++, channel, attachmentId: null };
+    channel.onmessage = (event) => {
+      if (terminalChannels.get(key) === entry) callback(event);
+    };
+    terminalChannels.set(key, entry);
+    return entry;
+  }
+
+  function discardTerminalChannel(key: string, entry: TerminalChannelEntry): void {
+    entry.channel.onmessage = () => {};
+    if (terminalChannels.get(key) === entry) terminalChannels.delete(key);
+  }
+
+  async function keepTerminalAttachment(
+    taskId: number,
+    tab: TerminalTab,
+    key: string,
+    entry: TerminalChannelEntry,
+    operation: Promise<TerminalAttachment | null>,
+  ): Promise<TerminalAttachment | null> {
+    try {
+      const attachment = await operation;
+      if (!attachment) {
+        discardTerminalChannel(key, entry);
+        return null;
+      }
+      entry.attachmentId = attachment.attachmentId;
+      if (terminalChannels.get(key) !== entry) {
+        entry.channel.onmessage = () => {};
+        await invoke<boolean>("detach_terminal_session", {
+          taskId,
+          tab,
+          attachmentId: attachment.attachmentId,
+        });
+      }
+      return attachment;
+    } catch (error) {
+      discardTerminalChannel(key, entry);
+      throw error;
+    }
+  }
+
   return {
     kind: "live",
     getSnapshot: () => invoke<Snapshot>("get_snapshot"),
@@ -30,6 +96,39 @@ export function createTauriAgentSource(): AgentSource {
       invoke<TaskDeletionOutcome>("delete_task", { id, removeGitResources }),
     getTaskGitStatus: (id) => invoke<TaskGitStatus>("inspect_task_git_status", { taskId: id }),
     createTaskWorktree: (id) => invoke<TaskWorktree>("create_task_worktree", { taskId: id }),
+    startTerminalSession(taskId, tab, agentCli, size, onEvent) {
+      const key = terminalChannelKey(taskId, tab);
+      const entry = makeTerminalChannel(key, onEvent);
+      return keepTerminalAttachment(
+        taskId,
+        tab,
+        key,
+        entry,
+        invoke<TerminalAttachment>("start_terminal_session", { taskId, tab, agentCli, size, onEvent: entry.channel }),
+      ).then((attachment) => {
+        if (!attachment) throw new Error("terminal session could not be started");
+        return attachment;
+      });
+    },
+    reattachTerminalSession(taskId, tab, onEvent) {
+      const key = terminalChannelKey(taskId, tab);
+      const entry = makeTerminalChannel(key, onEvent);
+      return keepTerminalAttachment(
+        taskId,
+        tab,
+        key,
+        entry,
+        invoke<TerminalAttachment | null>("reattach_terminal_session", { taskId, tab, onEvent: entry.channel }),
+      );
+    },
+    sendTerminalInput: (sessionId, data) => invoke<void>("terminal_input", { sessionId, data }),
+    resizeTerminalSession: (sessionId, size) => invoke<void>("resize_terminal_session", { sessionId, size }),
+    async detachTerminalSession(taskId, tab, attachmentId) {
+      const key = terminalChannelKey(taskId, tab);
+      const entry = terminalChannels.get(key);
+      if (entry?.attachmentId === attachmentId) discardTerminalChannel(key, entry);
+      return invoke<boolean>("detach_terminal_session", { taskId, tab, attachmentId });
+    },
     subscribe(callback) {
       let unlisten: UnlistenFn | null = null;
       let disposed = false;

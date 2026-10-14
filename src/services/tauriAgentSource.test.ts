@@ -1,10 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Project, Task } from "../domain/types";
+import type { Project, Task, TerminalAttachment, TerminalEvent } from "../domain/types";
 import { createTauriAgentSource } from "./tauriAgentSource";
 
-const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
+const { invoke, channelHandlers } = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  channelHandlers: [] as Array<(message: unknown) => void>,
+}));
 
-vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke,
+  Channel: class {
+    private handler: (message: unknown) => void = () => {};
+
+    constructor() {
+      channelHandlers.push((message) => this.handler(message));
+    }
+
+    set onmessage(handler: (message: unknown) => void) {
+      this.handler = handler;
+    }
+
+    get onmessage(): (message: unknown) => void {
+      return this.handler;
+    }
+  },
+}));
 
 const project: Project = { id: 4, path: "/projects/argis" };
 const task: Task = {
@@ -18,7 +38,10 @@ const task: Task = {
 };
 
 describe("TauriAgentSource project and task operations", () => {
-  beforeEach(() => invoke.mockReset());
+  beforeEach(() => {
+    invoke.mockReset();
+    channelHandlers.length = 0;
+  });
 
   it("registers a project path and returns the saved project", async () => {
     invoke.mockResolvedValue(project);
@@ -89,5 +112,78 @@ describe("TauriAgentSource project and task operations", () => {
 
     expect(invoke).toHaveBeenNthCalledWith(1, "inspect_task_git_status", { taskId: task.id });
     expect(invoke).toHaveBeenNthCalledWith(2, "create_task_worktree", { taskId: task.id });
+  });
+
+  it("streams terminal channel events and forwards terminal input and size", async () => {
+    const attachment: TerminalAttachment = {
+      session: {
+        id: 22,
+        key: { taskId: task.id, tab: "agent" },
+        agentCli: "claude",
+        processId: 771,
+        running: true,
+      },
+      attachmentId: 5,
+    };
+    const output = vi.fn<(event: TerminalEvent) => void>();
+    const event: TerminalEvent = { type: "output", sessionId: attachment.session.id, bytes: [65, 10] };
+    invoke.mockResolvedValueOnce(attachment).mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined);
+    const source = createTauriAgentSource();
+
+    await expect(source.startTerminalSession(task.id, "agent", "claude", { cols: 90, rows: 30 }, output))
+      .resolves.toEqual(attachment);
+    channelHandlers[0](event);
+    await source.sendTerminalInput(attachment.session.id, "hello\n");
+    await source.resizeTerminalSession(attachment.session.id, { cols: 110, rows: 36 });
+
+    expect(output).toHaveBeenCalledWith(event);
+    expect(invoke).toHaveBeenNthCalledWith(1, "start_terminal_session", {
+      taskId: task.id,
+      tab: "agent",
+      agentCli: "claude",
+      size: { cols: 90, rows: 30 },
+      onEvent: expect.any(Object),
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, "terminal_input", {
+      sessionId: attachment.session.id,
+      data: "hello\n",
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, "resize_terminal_session", {
+      sessionId: attachment.session.id,
+      size: { cols: 110, rows: 36 },
+    });
+  });
+
+  it("reattaches to a running task tab and detaches its output channel without stopping it", async () => {
+    const attachment: TerminalAttachment = {
+      session: {
+        id: 23,
+        key: { taskId: task.id, tab: "term" },
+        agentCli: null,
+        processId: 772,
+        running: true,
+      },
+      attachmentId: 6,
+    };
+    const output = vi.fn<(event: TerminalEvent) => void>();
+    invoke.mockResolvedValueOnce(attachment).mockResolvedValueOnce(true);
+    const source = createTauriAgentSource();
+
+    await expect(source.reattachTerminalSession(task.id, "term", output)).resolves.toEqual(attachment);
+    channelHandlers[0]({ type: "output", sessionId: attachment.session.id, bytes: [65] } satisfies TerminalEvent);
+    await source.detachTerminalSession(task.id, "term", attachment.attachmentId);
+    channelHandlers[0]({ type: "output", sessionId: attachment.session.id, bytes: [66] } satisfies TerminalEvent);
+
+    expect(output).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenNthCalledWith(1, "reattach_terminal_session", {
+      taskId: task.id,
+      tab: "term",
+      onEvent: expect.any(Object),
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, "detach_terminal_session", {
+      taskId: task.id,
+      tab: "term",
+      attachmentId: attachment.attachmentId,
+    });
   });
 });

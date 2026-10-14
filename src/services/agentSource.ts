@@ -1,4 +1,17 @@
-import type { Project, Snapshot, Task, TaskDeletionOutcome, TaskGitStatus, TaskStatus, TaskWorktree } from "../domain/types";
+import type {
+  Project,
+  Snapshot,
+  Task,
+  TaskDeletionOutcome,
+  TaskGitStatus,
+  TaskStatus,
+  TaskWorktree,
+  TerminalAgent,
+  TerminalAttachment,
+  TerminalEvent,
+  TerminalSize,
+  TerminalTab,
+} from "../domain/types";
 
 /**
  * Where snapshots come from. Components depend on this abstraction only
@@ -23,6 +36,21 @@ export interface AgentSource {
   deleteTask(id: number, removeGitResources: boolean): Promise<TaskDeletionOutcome>;
   getTaskGitStatus(id: number): Promise<TaskGitStatus>;
   createTaskWorktree(id: number): Promise<TaskWorktree>;
+  startTerminalSession(
+    taskId: number,
+    tab: TerminalTab,
+    agentCli: TerminalAgent | null,
+    size: TerminalSize,
+    onEvent: (event: TerminalEvent) => void,
+  ): Promise<TerminalAttachment>;
+  reattachTerminalSession(
+    taskId: number,
+    tab: TerminalTab,
+    onEvent: (event: TerminalEvent) => void,
+  ): Promise<TerminalAttachment | null>;
+  sendTerminalInput(sessionId: number, data: string): Promise<void>;
+  resizeTerminalSession(sessionId: number, size: TerminalSize): Promise<void>;
+  detachTerminalSession(taskId: number, tab: TerminalTab, attachmentId: number): Promise<boolean>;
 }
 
 /** Poll interval the backend (and the mock) emit snapshots at. */

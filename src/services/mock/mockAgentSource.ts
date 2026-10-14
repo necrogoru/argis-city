@@ -6,6 +6,10 @@ import type {
   TaskGitStatus,
   TaskStatus,
   TaskWorktree,
+  TerminalAttachment,
+  TerminalEvent,
+  TerminalSize,
+  TerminalTab,
 } from "../../domain/types";
 import { taskBranchName, taskWorktreePath } from "../../domain/tasks";
 import { POLL_INTERVAL_MS, type AgentSource } from "../agentSource";
@@ -151,6 +155,36 @@ export class MockAgentSource implements AgentSource {
     task.branchName = status.branchName;
     task.worktreePath = status.worktreePath;
     return { branchName: status.branchName, worktreePath: status.worktreePath };
+  }
+
+  async startTerminalSession(
+    _taskId: number,
+    _tab: TerminalTab,
+    _agentCli: "claude" | "codex" | "opencode" | "pi" | null,
+    _size: TerminalSize,
+    _onEvent: (event: TerminalEvent) => void,
+  ): Promise<TerminalAttachment> {
+    throw new Error("Embedded terminal processes are only available in the Argis desktop app");
+  }
+
+  async reattachTerminalSession(
+    _taskId: number,
+    _tab: TerminalTab,
+    _onEvent: (event: TerminalEvent) => void,
+  ): Promise<TerminalAttachment | null> {
+    return null;
+  }
+
+  async sendTerminalInput(_sessionId: number, _data: string): Promise<void> {
+    throw new Error("Embedded terminal processes are only available in the Argis desktop app");
+  }
+
+  async resizeTerminalSession(_sessionId: number, _size: TerminalSize): Promise<void> {
+    throw new Error("Embedded terminal processes are only available in the Argis desktop app");
+  }
+
+  async detachTerminalSession(_taskId: number, _tab: TerminalTab, _attachmentId: number): Promise<boolean> {
+    return false;
   }
 
   private findTask(id: number): Task {

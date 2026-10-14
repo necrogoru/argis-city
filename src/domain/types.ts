@@ -125,5 +125,36 @@ export interface TaskWorktree {
   worktreePath: string;
 }
 
+export type TerminalTab = "agent" | "term";
+export type TerminalAgent = ProviderId;
+
+export interface TerminalSize {
+  cols: number;
+  rows: number;
+}
+
+export interface TerminalSessionKey {
+  taskId: number;
+  tab: TerminalTab;
+}
+
+export interface TerminalSessionInfo {
+  id: number;
+  key: TerminalSessionKey;
+  agentCli: TerminalAgent | null;
+  processId: number | null;
+  running: boolean;
+}
+
+export interface TerminalAttachment {
+  session: TerminalSessionInfo;
+  attachmentId: number;
+}
+
+export type TerminalEvent =
+  | { type: "output"; sessionId: number; bytes: number[] }
+  | { type: "error"; sessionId: number; message: string }
+  | { type: "exited"; sessionId: number; exitCode: number; signal: string | null };
+
 /** Tauri event name the backend emits a `Snapshot` on, every poll tick. */
 export const SNAPSHOT_EVENT = "agents://snapshot";

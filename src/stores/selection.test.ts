@@ -44,6 +44,11 @@ function setup() {
       branchName: `argis/${id}-task`,
       worktreePath: `/projects/argis/.argis/worktrees/${id}-task`,
     }),
+    startTerminalSession: async () => { throw new Error("unused test operation"); },
+    reattachTerminalSession: async () => null,
+    sendTerminalInput: async () => {},
+    resizeTerminalSession: async () => {},
+    detachTerminalSession: async () => false,
   };
   const app = createApp({});
   const pinia = createPinia();
