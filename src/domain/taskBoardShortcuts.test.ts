@@ -4,6 +4,7 @@ import {
   canCreateTaskBranch,
   canOpenTaskTerminal,
   focusedVisibleTask,
+  resolveTaskBoardJumpShortcut,
   taskBoardActionForShortcut,
   taskBoardNavigationDirection,
 } from "./taskBoardShortcuts";
@@ -98,6 +99,92 @@ describe("taskBoardNavigationDirection", () => {
 
   it("ignores keys other than up and down", () => {
     expect(taskBoardNavigationDirection(key("Enter"), target("button"))).toBeNull();
+  });
+});
+
+describe("resolveTaskBoardJumpShortcut", () => {
+  const visibleTaskIds = [12, 5, 30];
+
+  it("recognizes gg within 500 ms and targets the first visible task", () => {
+    const firstG = resolveTaskBoardJumpShortcut(key("g"), target("button"), visibleTaskIds, null, 100);
+    const secondG = resolveTaskBoardJumpShortcut(key("g"), target("button"), visibleTaskIds, firstG.pendingGAtMs, 600);
+
+    expect(firstG).toEqual({ taskId: null, pendingGAtMs: 100 });
+    expect(secondG).toEqual({ taskId: 12, pendingGAtMs: null });
+  });
+
+  it("expires an old g and starts a fresh sequence", () => {
+    const result = resolveTaskBoardJumpShortcut(key("g"), target("button"), visibleTaskIds, 100, 601);
+
+    expect(result).toEqual({ taskId: null, pendingGAtMs: 601 });
+  });
+
+  it("uses uppercase G to target the last visible task", () => {
+    const result = resolveTaskBoardJumpShortcut(
+      key("G", { shiftKey: true }),
+      target("button"),
+      visibleTaskIds,
+      100,
+      150,
+    );
+
+    expect(result).toEqual({ taskId: 30, pendingGAtMs: null });
+  });
+
+  it("clears a pending g when another key interrupts the sequence", () => {
+    const result = resolveTaskBoardJumpShortcut(key("x"), target("button"), visibleTaskIds, 100, 150);
+
+    expect(result).toEqual({ taskId: null, pendingGAtMs: null });
+  });
+
+  it.each([
+    ["Meta", { metaKey: true }],
+    ["Control", { ctrlKey: true }],
+    ["Alt", { altKey: true }],
+    ["repeated", { repeat: true }],
+    ["composing", { isComposing: true }],
+    ["already handled", { defaultPrevented: true }],
+  ] as const)("does not resolve a modified, %s, or composing event", (_label, modifiers) => {
+    const result = resolveTaskBoardJumpShortcut(
+      key("g", modifiers),
+      target("button"),
+      visibleTaskIds,
+      100,
+      150,
+    );
+
+    expect(result).toEqual({ taskId: null, pendingGAtMs: null });
+  });
+
+  it.each(["input", "textarea", "select"])("does not take a sequence from %s", (tagName) => {
+    const result = resolveTaskBoardJumpShortcut(key("g"), target(tagName), visibleTaskIds, 100, 150);
+
+    expect(result).toEqual({ taskId: null, pendingGAtMs: null });
+  });
+
+  it("clears a pending sequence while a dialog is open or focus is editable", () => {
+    expect(resolveTaskBoardJumpShortcut(key("g"), target("button"), visibleTaskIds, 100, 150, true)).toEqual({
+      taskId: null,
+      pendingGAtMs: null,
+    });
+    expect(
+      resolveTaskBoardJumpShortcut(key("g"), target("div", { isContentEditable: true }), visibleTaskIds, 100, 150),
+    ).toEqual({ taskId: null, pendingGAtMs: null });
+    expect(
+      resolveTaskBoardJumpShortcut(key("g"), target("div", { matches: ".xterm-helper-textarea" }), visibleTaskIds, 100, 150),
+    ).toEqual({ taskId: null, pendingGAtMs: null });
+  });
+
+  it("does not return a jump target for an empty or filtered-out board", () => {
+    expect(resolveTaskBoardJumpShortcut(key("G", { shiftKey: true }), target("button"), [], null, 100)).toEqual({
+      taskId: null,
+      pendingGAtMs: null,
+    });
+    const firstG = resolveTaskBoardJumpShortcut(key("g"), target("button"), [], null, 100);
+    expect(resolveTaskBoardJumpShortcut(key("g"), target("button"), [], firstG.pendingGAtMs, 200)).toEqual({
+      taskId: null,
+      pendingGAtMs: null,
+    });
   });
 });
 

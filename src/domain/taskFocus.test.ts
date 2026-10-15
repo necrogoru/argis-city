@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   adjacentVisibleTaskId,
+  adjacentVerticalTaskId,
   nextVisibleTaskId,
   taskFocusDirectionForEvent,
   taskFocusDirectionForKey,
@@ -52,6 +53,36 @@ describe("adjacentVisibleTaskId", () => {
     expect(adjacentVisibleTaskId(taskColumns, 1, "left")).toBeNull();
     expect(adjacentVisibleTaskId(taskColumns, 6, "right")).toBeNull();
     expect(adjacentVisibleTaskId(taskColumns, null, "right")).toBeNull();
+  });
+});
+
+describe("adjacentVerticalTaskId", () => {
+  const taskColumns = [[1, 2], [3], [], [4, 5, 6]];
+
+  it("moves to the adjacent visible task in the same pane", () => {
+    expect(adjacentVerticalTaskId(taskColumns, 1, "down")).toBe(2);
+    expect(adjacentVerticalTaskId(taskColumns, 2, "up")).toBe(1);
+  });
+
+  it("stops at the first and last tasks instead of wrapping or crossing panes", () => {
+    expect(adjacentVerticalTaskId(taskColumns, 2, "down")).toBeNull();
+    expect(adjacentVerticalTaskId(taskColumns, 1, "up")).toBeNull();
+    expect(adjacentVerticalTaskId(taskColumns, 3, "down")).toBeNull();
+    expect(adjacentVerticalTaskId(taskColumns, 3, "up")).toBeNull();
+  });
+
+  it("uses only the filtered visible tasks in each pane", () => {
+    const filteredColumns = [[12], [30, 18]];
+
+    expect(adjacentVerticalTaskId(filteredColumns, 30, "down")).toBe(18);
+    expect(adjacentVerticalTaskId(filteredColumns, 18, "up")).toBe(30);
+    expect(adjacentVerticalTaskId(filteredColumns, 12, "down")).toBeNull();
+  });
+
+  it("returns null for an empty board, missing focus, or an unfocused task", () => {
+    expect(adjacentVerticalTaskId([], 1, "down")).toBeNull();
+    expect(adjacentVerticalTaskId(taskColumns, null, "down")).toBeNull();
+    expect(adjacentVerticalTaskId(taskColumns, 99, "up")).toBeNull();
   });
 });
 

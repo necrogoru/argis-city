@@ -118,16 +118,20 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   project (or every task under All projects); results retain board order and
   the three status groups remain in Pending, In progress, Other statuses order.
 - With the search field focused, ArrowDown focuses the first matching task and
-  ArrowUp focuses the last. From a focused task card, ArrowDown and ArrowUp
-  move to the next or previous visible result in board order and wrap at either
-  end. If search or project filtering removes the focused task, clear that
-  focus.
+  ArrowUp focuses the last. From a focused task card, ArrowDown/ArrowUp or
+  `j`/`k` move to the next or previous visible task in the same status column.
+  They stop at the first and last task in that column without wrapping or
+  crossing into another pane. If search or project filtering removes the
+  focused task, clear that focus.
 - From a focused task card, ArrowLeft/ArrowRight or `h`/`l` move to the nearest
   populated status column, preserving the row when possible and clamping to the
   last task in a shorter column; horizontal navigation stops at the outer
-  columns. `j`/`k` mirror ArrowDown/ArrowUp, including the existing board-order
-  wrap. Vim keys are unmodified, do not take input from text fields, and are
+  columns. Vim navigation keys do not take input from text fields and are
   exposed through the task card's keyboard-shortcut semantics.
+- In the task board, `gg` (two consecutive unmodified `g` presses within 500 ms)
+  focuses the first visible task, and `Shift+G` focuses the last visible task in
+  the current filtered board order. A pending `g` is cleared by unrelated or
+  ineligible key events.
 - Unmodified `c` opens the existing New task flow. Unmodified `b` and `t` on a
   focused, visible task invoke its existing branch/worktree and terminal
   actions, respectively. Keep their existing eligibility: `c` requires at
@@ -136,9 +140,10 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   an available embedded terminal. `b` explicitly invokes the branch/worktree
   action; `t` does not create a branch or worktree as a side effect, and search
   does not create Git resources.
-- Suppress the single-letter actions while a dialog is open or focus is in an
-  input, textarea, select, contenteditable element, or xterm input; also ignore
-  modified, repeated, or composing key events. Search arrows are the explicit
+- Suppress the single-letter actions and Vim task navigation while a dialog is
+  open or focus is in an input, textarea, select, contenteditable element, or
+  xterm input; also ignore modified, repeated, or composing key events, except
+  for the intentional `Shift+G` motion. Search arrows are the explicit
   editable-field exception: ArrowDown/ArrowUp navigate matching results there,
   while other typed characters (including `c`, `b`, and `t`) remain search
   text.
