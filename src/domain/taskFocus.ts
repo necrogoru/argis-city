@@ -1,5 +1,15 @@
 export type TaskFocusDirection = "down" | "up";
 
+export function taskFocusDirectionForEvent(
+  event: Pick<KeyboardEvent, "key" | "isComposing">,
+  isWithinCard: boolean,
+): TaskFocusDirection | null {
+  if (!isWithinCard || event.isComposing) return null;
+  if (event.key === "ArrowDown") return "down";
+  if (event.key === "ArrowUp") return "up";
+  return null;
+}
+
 /** Returns the next task ID in the current visible board order, wrapping at either end. */
 export function nextVisibleTaskId(
   visibleTaskIds: readonly number[],

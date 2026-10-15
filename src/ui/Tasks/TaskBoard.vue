@@ -10,6 +10,7 @@ import {
   canOpenTaskTerminal,
   focusedVisibleTask,
   taskBoardActionForShortcut,
+  taskBoardNavigationDirection,
 } from "../../domain/taskBoardShortcuts";
 import { useTaskStore } from "../../stores/tasks";
 import ProjectManagerDialog from "./ProjectManagerDialog.vue";
@@ -89,6 +90,13 @@ function handleTaskBoardShortcut(event: KeyboardEvent): void {
   const target = event.target instanceof HTMLElement ? event.target : null;
   const hasOpenDialog =
     projectsOpen.value || taskEditorOpen.value || document.querySelector("dialog[open]") !== null;
+  const direction = taskBoardNavigationDirection(event, target, hasOpenDialog);
+  if (direction !== null && visibleTaskIds.value.length > 0) {
+    event.preventDefault();
+    focusNextVisibleTask(null, direction);
+    return;
+  }
+
   const action = taskBoardActionForShortcut(event, target, hasOpenDialog);
   if (action === null) return;
 

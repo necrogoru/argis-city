@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { ChevronDown, ChevronUp, GitBranch, SquareTerminal } from "@lucide/vue";
 import type { Task, TaskGitStatus, TaskStatus } from "../../domain/types";
 import { nextTaskStatus, previousTaskStatus, TASK_STATUS_LABELS } from "../../domain/tasks";
+import { taskFocusDirectionForEvent } from "../../domain/taskFocus";
 import { canCreateTaskBranch, canOpenTaskTerminal } from "../../domain/taskBoardShortcuts";
 
 const props = defineProps<{
@@ -39,11 +40,13 @@ const terminalDisabled = computed(() => !canOpenTaskTerminal(props.task, props.c
 const projectName = computed(() => props.projectPath.split(/[\\/]/).filter(Boolean).at(-1) ?? props.projectPath);
 
 function handleKeydown(event: KeyboardEvent): void {
-  if (event.target !== event.currentTarget) return;
-  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  const card = event.currentTarget as HTMLElement;
+  const isWithinCard = event.target === card || (event.target instanceof Node && card.contains(event.target));
+  const direction = taskFocusDirectionForEvent(event, isWithinCard);
+  if (direction === null) return;
 
   event.preventDefault();
-  emit("navigate", event.key === "ArrowDown" ? "down" : "up");
+  emit("navigate", direction);
 }
 
 function focus(): void {

@@ -5,12 +5,16 @@ import {
   canOpenTaskTerminal,
   focusedVisibleTask,
   taskBoardActionForShortcut,
+  taskBoardNavigationDirection,
 } from "./taskBoardShortcuts";
 
 const key = (
   value: string,
   modifiers: Partial<
-    Record<"metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "repeat" | "isComposing", boolean>
+    Record<
+      "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "repeat" | "isComposing" | "defaultPrevented",
+      boolean
+    >
   > = {},
 ) => ({
   key: value,
@@ -20,6 +24,7 @@ const key = (
   shiftKey: false,
   repeat: false,
   isComposing: false,
+  defaultPrevented: false,
   ...modifiers,
 });
 
@@ -65,6 +70,24 @@ describe("taskBoardActionForShortcut", () => {
 
   it("ignores shortcuts while any dialog is open", () => {
     expect(taskBoardActionForShortcut(key("c"), target("button"), true)).toBeNull();
+  });
+});
+
+describe("taskBoardNavigationDirection", () => {
+  it("starts at the first or last visible task from outside a card", () => {
+    expect(taskBoardNavigationDirection(key("ArrowDown"), target("button"))).toBe("down");
+    expect(taskBoardNavigationDirection(key("ArrowUp"), target("button"))).toBe("up");
+  });
+
+  it("leaves arrows to text fields, dialogs, and handlers that already consumed them", () => {
+    expect(taskBoardNavigationDirection(key("ArrowDown"), target("input"))).toBeNull();
+    expect(taskBoardNavigationDirection(key("ArrowDown"), target("button"), true)).toBeNull();
+    expect(taskBoardNavigationDirection(key("ArrowDown", { defaultPrevented: true }), target("button"))).toBeNull();
+    expect(taskBoardNavigationDirection(key("ArrowDown", { isComposing: true }), target("button"))).toBeNull();
+  });
+
+  it("ignores keys other than up and down", () => {
+    expect(taskBoardNavigationDirection(key("Enter"), target("button"))).toBeNull();
   });
 });
 
