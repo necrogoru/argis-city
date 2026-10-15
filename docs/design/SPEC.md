@@ -168,6 +168,13 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   terminal target is later reopened after detachment, retained recent PTY output
   is restored before live output. Terminal text uses a system monospace font
   with zero letter spacing; Outfit remains the surrounding UI font.
+- Terminal keyboard behavior: The modal opens on Agent and focuses the active
+  xterm input after its pane is visible, fitted, and any session reattachment
+  completes, including when the terminal has not started. While the modal is
+  open, Ctrl+Tab toggles Agent ↔ `term`, prevents host/browser tab switching,
+  then fits and focuses the active terminal input. Keep the accessible tab-button
+  ArrowLeft/ArrowRight/Home/End navigation. Escape closes the modal even from
+  xterm, returns focus to the opener, and leaves both PTYs alive for reattachment.
 
 ## Progress readouts
 Progress is a real estimate only when it comes from a plan (`execution`) or
