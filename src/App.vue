@@ -8,6 +8,7 @@ import Hero from "./ui/Hero/Hero.vue";
 import Overlay from "./ui/Overlay.vue";
 import RightColumn from "./ui/RightColumn.vue";
 import SubagentStrip from "./ui/Subagents/SubagentStrip.vue";
+import TerminalRail from "./ui/TerminalRail.vue";
 import TaskWorkspace from "./ui/Tasks/TaskWorkspace.vue";
 import TerminalModal from "./ui/Tasks/TerminalModal.vue";
 import TopBar from "./ui/TopBar/TopBar.vue";
@@ -49,6 +50,7 @@ useModKey(
       <Hero />
       <CameraControls />
       <EmptyState />
+      <TerminalRail :dashboard-visible="appView.activeView === 'city'" />
       <RightColumn />
       <SubagentStrip />
     </Overlay>

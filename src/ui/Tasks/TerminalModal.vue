@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { X } from "@lucide/vue";
 import type { Task, TerminalTab } from "../../domain/types";
+import { useTerminalRailStore } from "../../stores/terminalRail";
 import TerminalSessionPane from "./TerminalSessionPane.vue";
 import type { TerminalStatus } from "./useTerminalSession";
 
@@ -25,6 +26,7 @@ const terminalReady = ref(false);
 const restoring = ref(false);
 const agentStatus = ref<TerminalStatus>("notStarted");
 const termStatus = ref<TerminalStatus>("notStarted");
+const terminalRail = useTerminalRailStore();
 let returnFocus: HTMLElement | null = null;
 
 function statusLabel(status: TerminalStatus): string {
@@ -109,8 +111,12 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  terminalRail.clearTaskStatus(props.task.id);
   hide();
 });
+
+watch(agentStatus, (status) => terminalRail.publishTaskStatus(props.task.id, "agent", status), { immediate: true });
+watch(termStatus, (status) => terminalRail.publishTaskStatus(props.task.id, "term", status), { immediate: true });
 </script>
 
 <template>

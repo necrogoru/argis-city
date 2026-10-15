@@ -3,6 +3,7 @@ import { ref, shallowRef } from "vue";
 import type { Project, Task, TaskDeletionOutcome, TaskGitStatus, TaskStatus, TaskWorktree } from "../domain/types";
 import { taskBranchName, taskWorktreePath } from "../domain/tasks";
 import { useAgentSource } from "../composables/useAgentSource";
+import { useTerminalRailStore } from "./terminalRail";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -10,6 +11,7 @@ function errorMessage(error: unknown): string {
 
 export const useTaskStore = defineStore("tasks", () => {
   const source = useAgentSource();
+  const terminalRail = useTerminalRailStore();
   const projects = shallowRef<Project[]>([]);
   const tasks = shallowRef<Task[]>([]);
   const gitStatuses = shallowRef<Record<number, TaskGitStatus>>({});
@@ -123,6 +125,7 @@ export const useTaskStore = defineStore("tasks", () => {
     if (!outcome?.taskDeleted) return null;
     tasks.value = tasks.value.filter((task) => task.id !== id);
     invalidateSearchData();
+    terminalRail.clearTaskStatus(id);
     const nextStatuses = { ...gitStatuses.value };
     delete nextStatuses[id];
     gitStatuses.value = nextStatuses;
