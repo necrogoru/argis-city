@@ -14,7 +14,7 @@
 - [x] 2.4 Build the project list/path form and task board with project filtering, task create/edit panels, and the four agreed task actions; verify the layout and interactions manually at the documented desktop size and update `docs/design/SPEC.md` without changing existing tokens.
 - [x] 2.5 Add a pure task-search helper matching ID, title, description, project name, and path; verify matching, project-filter intersection, grouped order, and no matches with Vitest.
 - [x] 2.6 Add task search and arrow-key focus navigation through visible matches; verify focus transitions, filtered-result boundaries, and focus handling when results change.
-- [ ] 2.7 Add `c`/`b`/`t` handlers using existing create/branch/terminal actions; verify editable/dialog guards, disabled-action behavior, and no implicit Git side effects.
+- [x] 2.7 Add `c`/`b`/`t` handlers using existing create/branch/terminal actions; verify editable/dialog guards, disabled-action behavior, and no implicit Git side effects.
 - [ ] 2.8 Update `docs/design/SPEC.md` for task search, arrow navigation, and single-key actions; verify the documented key behavior and guards match the implementation.
 ## 3. Git task worktrees
 
