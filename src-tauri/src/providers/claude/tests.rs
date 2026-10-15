@@ -1,10 +1,11 @@
 use super::status::{session_status, subagent_status, StatusEnv};
 use super::transcript::{TranscriptState, TranscriptSummary};
 use super::ClaudeProvider;
-use crate::domain::{AgentStatus, PlanCounts, ProgressSource};
+use crate::domain::{AgentStatus, PlanCounts, ProgressSource, Snapshot, TerminalAgent};
 use crate::providers::{AgentProvider, CollectContext};
 use crate::shared::jsonl::LineFold;
 use crate::system::ProcessInfo;
+use crate::terminal_manager::ManagedAgentProcess;
 use serde_json::{json, Value};
 use std::fs;
 
@@ -139,9 +140,9 @@ fn provider_collects_live_sessions_with_subagents() {
     let root = home.path().join(".claude");
     let project = root.join("projects/-tmp-proj");
     fs::create_dir_all(root.join("sessions")).unwrap();
-    fs::create_dir_all(project.join("s1/subagents")).unwrap();
-    let entry =
-        json!({"pid": 100, "sessionId": "s1", "cwd": "/tmp/proj", "startedAt": 1000, "name": "proj", "status": "idle"});
+    let session_id = "12345678-1234-4abc-8def-123456789001";
+    fs::create_dir_all(project.join(format!("{session_id}/subagents"))).unwrap();
+    let entry = json!({"pid": 100, "sessionId": session_id, "cwd": "/tmp/proj", "startedAt": 1000, "name": "proj", "status": "idle"});
     fs::write(root.join("sessions/100.json"), entry.to_string()).unwrap();
     let dead = json!({"pid": 999, "sessionId": "s2", "cwd": "/x", "startedAt": 1000, "status": "busy"});
     fs::write(root.join("sessions/999.json"), dead.to_string()).unwrap();
@@ -152,10 +153,15 @@ fn provider_collects_live_sessions_with_subagents() {
         assistant("m2", json!([{"type": "text", "text": "Done."}]), usage(5, 5, 100, 0), json!("end_turn")),
     ];
     let jsonl: String = lines.iter().map(|l| format!("{l}\n")).collect();
-    fs::write(project.join("s1.jsonl"), &jsonl).unwrap();
-    fs::write(project.join("s1/subagents/agent-a1.jsonl"), &jsonl).unwrap();
-    fs::write(project.join("s1/subagents/agent-a1.meta.json"), r#"{"agentType":"Explore","description":"Scan repo"}"#)
-        .unwrap();
+    fs::write(project.join(format!("{session_id}.jsonl")), &jsonl).unwrap();
+    fs::write(project.join(format!("{session_id}/subagents/agent-a1.jsonl")), &jsonl).unwrap();
+    fs::write(
+        project.join(format!("{session_id}/subagents/agent-a1.meta.json")),
+        r#"{"agentType":"Explore","description":"Scan repo"}"#,
+    )
+    .unwrap();
+    assert!(super::has_resume_reference(&root, session_id));
+    assert!(!super::has_resume_reference(&root, "12345678-1234-4abc-8def-123456789099"));
 
     let proc =
         ProcessInfo { pid: 100, parent_pid: None, name: "claude".into(), cmd: vec![], cwd: None, started_at_ms: 500 };
@@ -165,7 +171,8 @@ fn provider_collects_live_sessions_with_subagents() {
     let sessions = provider.collect(&ctx).unwrap();
     assert_eq!(sessions.len(), 1);
     let s = &sessions[0];
-    assert_eq!((s.id.as_str(), s.title.as_str(), s.status), ("claude:s1", "proj", AgentStatus::Idle));
+    assert_eq!(s.id, format!("claude:{session_id}"));
+    assert_eq!((s.title.as_str(), s.status), ("proj", AgentStatus::Idle));
     assert_eq!(s.tokens.total, 220);
     assert_eq!((s.progress.source, s.progress.percent), (ProgressSource::Plan, Some(50.0)));
     assert_eq!(s.current_step.as_deref(), Some("Done."));
@@ -174,6 +181,20 @@ fn provider_collects_live_sessions_with_subagents() {
     assert_eq!((sub.id.as_str(), sub.title.as_str(), sub.kind.as_deref()), ("a1", "Scan repo", Some("Explore")));
     assert_eq!(sub.status, AgentStatus::Done);
     assert_eq!(sub.started_at, T0_MS);
+
+    let reference = crate::task_resume::reference_for_process(
+        &Snapshot { generated_at: T0_MS, sessions, providers: Vec::new() },
+        &ManagedAgentProcess {
+            terminal_session_id: 1,
+            task_id: 7,
+            agent_cli: TerminalAgent::Claude,
+            process_id: 100,
+            started_at_ms: 500,
+            cwd: "/tmp/proj".into(),
+        },
+    )
+    .expect("the provider fixture session belongs to the managed process");
+    assert_eq!(reference.native_reference, session_id);
 }
 
 #[test]

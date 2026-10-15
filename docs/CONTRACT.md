@@ -13,6 +13,9 @@ one tower per tool (provider), one house per live session, subagents as cards.
 | command | `list_projects`           | → `Project[]`                                     |
 | command | `register_project`        | `{ path, createIfMissing }` → `Project`           |
 | command | `list_tasks`              | `{ projectId: number \| null }` → `Task[]`        |
+| command | `list_task_agent_resumes` | → `TaskAgentResume[]`                             |
+| command | `get_task_agent_resume`   | `{ taskId }` → `TaskAgentResume \| null`         |
+| command | `save_task_agent_resume`  | `{ reference: TaskAgentResume }` → `TaskAgentResume` |
 | command | `create_task`             | `{ projectId, title, description }` → `Task`      |
 | command | `update_task_details`     | `{ id, title, description }` → `Task`             |
 | command | `update_task_status`      | `{ id, status }` → `Task`                         |
@@ -20,6 +23,7 @@ one tower per tool (provider), one house per live session, subagents as cards.
 | command | `inspect_task_git_status` | `{ taskId }` → `TaskGitStatus`                    |
 | command | `create_task_worktree`    | `{ taskId }` → `TaskWorktree`                     |
 | command | `start_terminal_session`  | `{ taskId, tab, agentCli, size, onEvent }` → `TerminalAttachment` |
+| command | `resume_task_agent`       | `{ taskId, size, onEvent }` → `TerminalAttachment` |
 | command | `reattach_terminal_session` | `{ taskId, tab, onEvent }` → `TerminalAttachment \| null` |
 | command | `terminal_input`          | `{ sessionId, data }` → `()`                     |
 | command | `resize_terminal_session` | `{ sessionId, size }` → `()`                     |
@@ -40,6 +44,16 @@ paths are absolute canonical paths. Task statuses are `pending`, `inProgress`,
 until created. `register_project` creates a missing directory only when
 `createIfMissing` is true. Task status changes are explicit user operations;
 agent plan data is not imported into the task list.
+
+`TaskAgentResume` is Argis-owned metadata keyed by `taskId`, with `provider`, an
+opaque `nativeReference`, the canonical `worktreePath`, and
+`lastObservedAtMs` (Unix epoch milliseconds). The SQLite table retains only one
+latest reference per task and is deleted by the task foreign-key cascade. A
+provider reference is not a terminal process ID and does not restore a PTY or
+terminal buffer. `save_task_agent_resume` replaces the task's prior reference;
+the get/list commands return only references whose task worktree and provider
+record still validate. A stale reference is omitted so the UI can offer Start
+new without suggesting that resume will work.
 
 Before `delete_task` attempts Git cleanup or removes the task record, it stops
 and reaps every active terminal process for that task. If process cleanup fails,
@@ -111,11 +125,43 @@ creates and records both resources only for an eligible task.
   zero when omitted. Closing only the modal keeps its Channels and xterm buffers
   attached. Switching away from the task board detaches Channels while leaving
   PTYs alive. Argis stops and reaps all remaining PTYs on app exit and stops a
-  task's PTYs before task deletion. xterm uses a system monospace font with zero
+  task's PTYs before task deletion. Stop sends an interrupt through the PTY and
+  to the managed child, waits at most 500 ms for graceful exit, then force-kills
+  and reaps any child that remains. xterm uses a system monospace font with zero
   letter spacing; the surrounding UI continues to use Outfit.
 - Browser mock mode does not launch local processes: reattach returns `null`,
   start/input/resize report that embedded processes require the desktop app, and
   detach returns `false`.
+
+## Task-agent conversation resumption
+
+The terminal flow reattaches directly to a live Argis-managed Agent PTY. With no
+live Agent PTY, it offers `Resume <provider>` when a valid reference exists and
+`Start new` in every usable task worktree. The CLI receives arguments as a
+program plus separate argument values, never through a shell string. Reference
+discovery must bind a provider-native ID to the Argis-launched process and task;
+matching by title or working directory alone is insufficient. A missing,
+stale, unsupported, or ambiguous reference is unavailable, not a reason to
+guess. Before launch, Argis validates the task and canonical worktree binding,
+the provider-native ID shape, and the referenced provider record. Resume starts a
+new CLI process; it does not restore the previous PTY or xterm buffer.
+
+Provider support matrix (verified 2026-10-15 against vendor documentation and
+the installed Claude Code 2.1.300, Codex CLI 0.148.0, OpenCode 2.0.29, and Pi
+1.2.0 CLI help on this development machine):
+
+| CLI | New-session reference | Native resume invocation | Discovery / fallback |
+| --- | --- | --- | --- |
+| Claude Code | CLI-generated UUID in the session registry/transcript. | `claude --resume <session-id>` | Match the provider's owning PID, canonical worktree, and a session created after the managed PTY started; zero or multiple matches means unavailable. |
+| Codex | CLI-generated thread UUID in the rollout/index. | `codex resume <session-id>` | Match the provider's assigned PID, canonical worktree, and a thread created after the managed PTY started; zero or multiple matches means unavailable. |
+| OpenCode | CLI-generated `ses_…` ID in `opencode.db`. | `opencode --session <id>` | Match the provider's assigned PID, canonical worktree, and a session created after the managed PTY started; zero or multiple matches means unavailable. |
+| Pi | CLI-generated session ID in the session JSONL. | `pi --session <id>` | Match the provider's owning PID, canonical worktree, and a session created after the managed PTY started; zero or multiple matches means unavailable. |
+
+These flags are part of each CLI's provider-native behavior, not a shared
+synthetic format. See [Claude Code CLI reference](https://docs.anthropic.com/en/docs/claude-code/cli-reference),
+[Codex CLI reference](https://developers.openai.com/codex/cli/reference),
+[OpenCode CLI](https://opencode.ai/docs/cli/), and
+[Pi coding-agent usage](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/usage.md).
 
 ## Semantics
 

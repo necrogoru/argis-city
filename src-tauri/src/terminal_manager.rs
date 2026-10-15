@@ -9,9 +9,12 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::PathBuf;
+#[cfg(unix)]
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant, SystemTime};
 
 const OUTPUT_CHUNK_SIZE: usize = 8 * 1024;
 const MAX_INPUT_SIZE: usize = 64 * 1024;
@@ -19,6 +22,8 @@ const MAX_COMMAND_ARGUMENTS: usize = 256;
 const MAX_COMMAND_ARGUMENT_BYTES: usize = 8 * 1024;
 const MAX_TERMINAL_DIMENSION: u16 = 1_000;
 const OUTPUT_HISTORY_MAX_BYTES: usize = 1024 * 1024;
+const TERMINAL_STOP_GRACE_PERIOD: Duration = Duration::from_millis(500);
+const TERMINAL_STOP_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 impl TerminalSize {
     fn validate(self) -> anyhow::Result<Self> {
@@ -46,6 +51,17 @@ pub struct TerminalProcessSpec {
     pub args: Vec<String>,
     pub cwd: PathBuf,
     pub size: TerminalSize,
+}
+
+/// Identity and task binding for an Agent PTY launched and owned by Argis.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ManagedAgentProcess {
+    pub terminal_session_id: u64,
+    pub task_id: i64,
+    pub agent_cli: TerminalAgent,
+    pub process_id: u32,
+    pub started_at_ms: i64,
+    pub cwd: PathBuf,
 }
 
 /// A callback used by Tauri Channels or by tests to receive ordered PTY events.
@@ -80,6 +96,8 @@ impl Default for TerminalManager {
 
 struct ManagedSession {
     info: TerminalSessionInfo,
+    started_at_ms: i64,
+    cwd: PathBuf,
     master: Mutex<Option<Box<dyn MasterPty + Send>>>,
     writer: Mutex<Box<dyn Write + Send>>,
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
@@ -212,6 +230,7 @@ impl TerminalManager {
                 return Err(error).context("opening PTY input writer");
             }
         };
+        let started_at_ms = crate::system::clock::system_time_ms(SystemTime::now());
         let mut command = CommandBuilder::new(&spec.program);
         command.args(&spec.args);
         command.cwd(&cwd);
@@ -227,6 +246,8 @@ impl TerminalManager {
 
         let session = Arc::new(ManagedSession {
             info: TerminalSessionInfo { id, key: spec.key, agent_cli: spec.agent_cli, process_id, running: true },
+            started_at_ms,
+            cwd,
             master: Mutex::new(Some(pair.master)),
             writer: Mutex::new(writer),
             killer: Mutex::new(killer),
@@ -451,6 +472,29 @@ impl TerminalManager {
         entries
     }
 
+    /// Returns only live Agent PTYs that Argis launched, bound to their task and canonical cwd.
+    pub(crate) fn running_agent_processes(&self) -> Vec<ManagedAgentProcess> {
+        self.state
+            .lock()
+            .by_id
+            .values()
+            .filter_map(|session| {
+                let info = session.info();
+                if !info.running || info.key.tab != crate::domain::TerminalTab::Agent {
+                    return None;
+                }
+                Some(ManagedAgentProcess {
+                    terminal_session_id: info.id,
+                    task_id: info.key.task_id,
+                    agent_cli: info.agent_cli?,
+                    process_id: info.process_id?,
+                    started_at_ms: session.started_at_ms,
+                    cwd: session.cwd.clone(),
+                })
+            })
+            .collect()
+    }
+
     fn session(&self, id: u64) -> anyhow::Result<Arc<ManagedSession>> {
         let manager = self.state.lock();
         let session = manager.by_id.get(&id).cloned().ok_or_else(|| anyhow!("terminal session {id} does not exist"))?;
@@ -552,12 +596,19 @@ impl ManagedSession {
 
     fn stop(&self) -> anyhow::Result<()> {
         if self.running.load(Ordering::Acquire) {
-            // Ctrl-C reaches the PTY's foreground process group before the direct child is killed.
+            // Deliver Ctrl-C through the PTY and a direct interrupt so noninteractive CLIs can exit cleanly too.
             let mut writer = self.writer.lock();
             let _ = writer.write_all(&[0x03]);
             let _ = writer.flush();
             drop(writer);
-            let kill_error = self.killer.lock().kill().err();
+            interrupt_child(self.info.process_id);
+
+            let deadline = Instant::now() + TERMINAL_STOP_GRACE_PERIOD;
+            while self.running.load(Ordering::Acquire) && Instant::now() < deadline {
+                thread::sleep(TERMINAL_STOP_POLL_INTERVAL);
+            }
+
+            let kill_error = if self.running.load(Ordering::Acquire) { self.killer.lock().kill().err() } else { None };
             let worker = self.worker.lock().take();
             if let Some(worker) = worker {
                 worker.join().map_err(|_| anyhow!("terminal output worker panicked"))?;
@@ -576,6 +627,19 @@ impl ManagedSession {
         Ok(())
     }
 }
+
+#[cfg(unix)]
+fn interrupt_child(process_id: Option<u32>) {
+    let Some(process_id) = process_id else { return };
+    let _ = Command::new("/bin/kill")
+        .args(["-INT", &process_id.to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+#[cfg(not(unix))]
+fn interrupt_child(_process_id: Option<u32>) {}
 
 fn state_rank(state: TerminalInventoryState) -> u8 {
     match state {

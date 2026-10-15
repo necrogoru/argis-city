@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp, nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
-import type { Project, Task, TerminalInventoryEntry } from "../domain/types";
+import type { Project, Task, TaskAgentResume, TerminalInventoryEntry } from "../domain/types";
 import type { AgentSource } from "../services/agentSource";
 import { agentSourceKey } from "../composables/useAgentSource";
 import { useTaskStore } from "./tasks";
@@ -24,6 +24,9 @@ function setup(overrides: Partial<AgentSource> = {}) {
     listProjects: vi.fn(async () => [project]),
     addProject: vi.fn(async (path) => ({ id: 2, path })),
     listTasks: vi.fn(async () => tasks),
+    listTaskAgentResumes: vi.fn(async () => []),
+    getTaskAgentResume: vi.fn(async () => null),
+    saveTaskAgentResume: vi.fn(async (reference) => reference),
     createTask: vi.fn(async (projectId, title, description) => ({ ...tasks[0], id: 9, projectId, title, description })),
     updateTaskDetails: vi.fn(async (id, title, description) => ({ ...tasks[0], id, title, description })),
     updateTaskStatus: vi.fn(async (id, status) => ({ ...tasks[0], id, status })),
@@ -38,6 +41,7 @@ function setup(overrides: Partial<AgentSource> = {}) {
     })),
     createTaskWorktree: vi.fn(async (id) => ({ branchName: `argis/${id}`, worktreePath: `/w/${id}` })),
     startTerminalSession: async () => { throw new Error("unused"); },
+    resumeTaskAgent: async () => { throw new Error("unused"); },
     reattachTerminalSession: async () => null,
     sendTerminalInput: async () => {},
     resizeTerminalSession: async () => {},
@@ -67,6 +71,42 @@ describe("useTerminalRailStore", () => {
       expect.objectContaining({ taskId: 7, state: "idle" }),
       expect.objectContaining({ taskId: 8, state: "completed" }),
     ]);
+  });
+
+  it("shows a persisted conversation as resumable after tasks reload", async () => {
+    const reference: TaskAgentResume = {
+      taskId: 7,
+      provider: "codex",
+      nativeReference: "opaque-native-id",
+      worktreePath: "/w/7",
+      lastObservedAtMs: 100,
+    };
+    const { taskStore, railStore } = setup({ listTaskAgentResumes: async () => [reference] });
+
+    await railStore.refreshAll();
+
+    expect(taskStore.taskAgentResumes).toEqual([reference]);
+    expect(railStore.entries[0]).toMatchObject({ taskId: 7, state: "resumable", resumeProvider: "codex" });
+  });
+
+  it("refreshes saved conversations while the Dashboard rail is polling", async () => {
+    const reference: TaskAgentResume = {
+      taskId: 7,
+      provider: "claude",
+      nativeReference: "12345678-1234-4abc-8def-123456789010",
+      worktreePath: "/w/7",
+      lastObservedAtMs: 100,
+    };
+    const listResumes = vi.fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([reference]);
+    const { railStore, taskStore } = setup({ listTaskAgentResumes: listResumes });
+    await taskStore.ensureSearchDataLoaded();
+
+    await railStore.refreshAll();
+
+    expect(taskStore.taskAgentResumes).toEqual([reference]);
+    expect(railStore.entries[0]).toMatchObject({ taskId: 7, state: "resumable", resumeProvider: "claude" });
   });
 
   it("updates aggregate state when the modal publishes live tab statuses", async () => {

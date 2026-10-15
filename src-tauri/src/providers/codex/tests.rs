@@ -1,10 +1,11 @@
 use super::rollout::RolloutState;
 use super::CodexProvider;
-use crate::domain::{AgentStatus, PlanCounts, ProgressSource};
+use crate::domain::{AgentStatus, PlanCounts, ProgressSource, Snapshot, TerminalAgent};
 use crate::providers::{AgentProvider, CollectContext};
 use crate::shared::jsonl::LineFold;
 use crate::system::clock::system_time_ms;
 use crate::system::ProcessInfo;
+use crate::terminal_manager::ManagedAgentProcess;
 use rusqlite::Connection;
 use serde_json::{json, Value};
 use std::fs;
@@ -110,6 +111,7 @@ fn provider_reads_index_rollouts_and_children() {
     fs::create_dir_all(&root).unwrap();
     fs::create_dir_all(&work).unwrap();
     let now = system_time_ms(SystemTime::now());
+    let thread_id = "12345678-1234-4abc-8def-123456789002";
     let (parent_path, child_path, old_path) = (root.join("p.jsonl"), root.join("c.jsonl"), root.join("o.jsonl"));
     write_rollout(&parent_path, &[event(json!({"type": "task_started"})), token_count(), plan_call()]);
     write_rollout(&child_path, &[event(json!({"type": "task_started"})), event(json!({"type": "task_complete"}))]);
@@ -122,7 +124,7 @@ fn provider_reads_index_rollouts_and_children() {
     conn.execute(
         insert,
         rusqlite::params![
-            "parent",
+            thread_id,
             p(&parent_path),
             cwd,
             "Fix the bug",
@@ -152,7 +154,7 @@ fn provider_reads_index_rollouts_and_children() {
         ],
     )
     .unwrap();
-    conn.execute("INSERT INTO thread_spawn_edges VALUES ('parent', 'child', 'closed')", []).unwrap();
+    conn.execute("INSERT INTO thread_spawn_edges VALUES (?1, 'child', 'closed')", [thread_id]).unwrap();
     drop(conn);
 
     let proc = ProcessInfo {
@@ -163,13 +165,15 @@ fn provider_reads_index_rollouts_and_children() {
         cwd: Some(work.clone()),
         started_at_ms: now - 10_000,
     };
+    assert!(super::has_resume_reference(&root, thread_id, &work).unwrap());
+    assert!(!super::has_resume_reference(&root, "12345678-1234-4abc-8def-123456789099", &work).unwrap());
     let provider = CodexProvider::new(root);
-    let sessions = provider.collect(&CollectContext { processes: vec![proc], now_ms: now }).unwrap();
+    let sessions = provider.collect(&CollectContext { processes: vec![proc.clone()], now_ms: now }).unwrap();
     assert_eq!(sessions.len(), 1);
     let s = &sessions[0];
     assert_eq!(
         (s.id.as_str(), s.title.as_str(), s.pid, s.status),
-        ("codex:parent", "Fix the bug", Some(77), AgentStatus::Running)
+        (format!("codex:{thread_id}").as_str(), "Fix the bug", Some(77), AgentStatus::Running)
     );
     assert_eq!((s.model.as_deref(), s.tokens.total), (Some("gpt-x"), 1050));
     assert_eq!((s.progress.source, s.progress.percent), (ProgressSource::Plan, Some(50.0)));
@@ -180,6 +184,20 @@ fn provider_reads_index_rollouts_and_children() {
         ("Einstein", Some("explorer"), AgentStatus::Done)
     );
     assert_eq!(sub.tokens.total, 7);
+
+    let reference = crate::task_resume::reference_for_process(
+        &Snapshot { generated_at: now, sessions, providers: Vec::new() },
+        &ManagedAgentProcess {
+            terminal_session_id: 1,
+            task_id: 7,
+            agent_cli: TerminalAgent::Codex,
+            process_id: 77,
+            started_at_ms: now - 10_000,
+            cwd: work,
+        },
+    )
+    .expect("the Codex rollout fixture session belongs to the managed process");
+    assert_eq!(reference.native_reference, thread_id);
 }
 
 #[test]

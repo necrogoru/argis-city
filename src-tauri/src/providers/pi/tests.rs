@@ -1,11 +1,12 @@
 use super::discover::encode_cwd;
 use super::transcript::PiState;
 use super::PiProvider;
-use crate::domain::{AgentStatus, ProgressSource};
+use crate::domain::{AgentStatus, ProgressSource, Snapshot, TerminalAgent};
 use crate::providers::{AgentProvider, CollectContext};
 use crate::shared::jsonl::LineFold;
 use crate::system::clock::system_time_ms;
 use crate::system::ProcessInfo;
+use crate::terminal_manager::ManagedAgentProcess;
 use serde_json::{json, Value};
 use std::fs;
 use std::path::Path;
@@ -71,8 +72,14 @@ fn provider_matches_process_by_cwd_dir() {
     let cwd = crate::shared::liveness::canonical(work.path());
     let dir = root.path().join("sessions").join(encode_cwd(&cwd));
     fs::create_dir_all(&dir).unwrap();
-    let lines = [header(), user("Refactor"), assistant("stop", 1, 1, 1, 1)];
+    let lines = [
+        json!({"type": "session", "version": 3, "id": "s-1", "timestamp": "2026-09-29T16:45:45.725Z", "cwd": work.path().to_string_lossy()}),
+        user("Refactor"),
+        assistant("stop", 1, 1, 1, 1),
+    ];
     fs::write(dir.join("2026_s-1.jsonl"), lines.iter().map(|l| format!("{l}\n")).collect::<String>()).unwrap();
+    assert!(super::has_resume_reference(root.path(), "s-1", work.path()));
+    assert!(!super::has_resume_reference(root.path(), "s-missing", work.path()));
     let now = system_time_ms(SystemTime::now());
     let proc = ProcessInfo {
         pid: 31,
@@ -80,17 +87,30 @@ fn provider_matches_process_by_cwd_dir() {
         name: "node".into(),
         cmd: vec!["node".into(), "/opt/bin/pi".into()],
         cwd: Some(cwd.clone()),
-        started_at_ms: now - 60_000,
+        started_at_ms: 1_790_700_345_000,
     };
     let provider = PiProvider::new(root.path().to_path_buf());
     // Not recent enough for the fallback, but owned by the process.
     let later = now + 10 * 60_000;
-    let sessions = provider.collect(&CollectContext { processes: vec![proc], now_ms: later }).unwrap();
+    let sessions = provider.collect(&CollectContext { processes: vec![proc.clone()], now_ms: later }).unwrap();
     assert_eq!(sessions.len(), 1);
     let s = &sessions[0];
     assert_eq!((s.id.as_str(), s.title.as_str(), s.pid, s.status), ("pi:s-1", "Refactor", Some(31), AgentStatus::Idle));
     assert_eq!((s.tokens.total, s.progress.source), (4, ProgressSource::None));
     assert!(s.subagents.is_empty());
+    let reference = crate::task_resume::reference_for_process(
+        &Snapshot { generated_at: later, sessions, providers: Vec::new() },
+        &ManagedAgentProcess {
+            terminal_session_id: 1,
+            task_id: 7,
+            agent_cli: TerminalAgent::Pi,
+            process_id: 31,
+            started_at_ms: proc.started_at_ms,
+            cwd: cwd.clone(),
+        },
+    )
+    .expect("the Pi JSONL fixture session belongs to the managed process");
+    assert_eq!(reference.native_reference, "s-1");
     // Without the process and long after the last write: not live.
     assert!(provider.collect(&CollectContext { processes: vec![], now_ms: later }).unwrap().is_empty());
 }

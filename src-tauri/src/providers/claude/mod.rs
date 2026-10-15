@@ -56,6 +56,10 @@ fn find_transcript(projects: &Path, session_id: &str) -> Option<PathBuf> {
         .map(|(_, p)| p)
 }
 
+pub(crate) fn has_resume_reference(root: &Path, session_id: &str) -> bool {
+    find_transcript(&root.join("projects"), session_id).is_some_and(|path| path.is_file())
+}
+
 impl AgentProvider for ClaudeProvider {
     fn id(&self) -> ProviderId {
         ProviderId::Claude

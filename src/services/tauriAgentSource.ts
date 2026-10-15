@@ -5,6 +5,7 @@ import {
   type Project,
   type Snapshot,
   type Task,
+  type TaskAgentResume,
   type TaskDeletionOutcome,
   type TaskGitStatus,
   type TerminalAttachment,
@@ -85,6 +86,9 @@ export function createTauriAgentSource(): AgentSource {
     listProjects: () => invoke<Project[]>("list_projects"),
     addProject: (path, createIfMissing) => invoke<Project>("register_project", { path, createIfMissing }),
     listTasks: (projectId) => invoke<Task[]>("list_tasks", { projectId: projectId ?? null }),
+    listTaskAgentResumes: () => invoke<TaskAgentResume[]>("list_task_agent_resumes"),
+    getTaskAgentResume: (taskId) => invoke<TaskAgentResume | null>("get_task_agent_resume", { taskId }),
+    saveTaskAgentResume: (reference) => invoke<TaskAgentResume>("save_task_agent_resume", { reference }),
     createTask: (projectId, title, description) =>
       invoke<Task>("create_task", { projectId, title, description }),
     updateTaskDetails: (id, title, description) =>
@@ -105,6 +109,21 @@ export function createTauriAgentSource(): AgentSource {
         invoke<TerminalAttachment>("start_terminal_session", { taskId, tab, agentCli, size, onEvent: entry.channel }),
       ).then((attachment) => {
         if (!attachment) throw new Error("terminal session could not be started");
+        return attachment;
+      });
+    },
+    resumeTaskAgent(taskId, size, onEvent) {
+      const tab: TerminalTab = "agent";
+      const key = terminalChannelKey(taskId, tab);
+      const entry = makeTerminalChannel(key, onEvent);
+      return keepTerminalAttachment(
+        taskId,
+        tab,
+        key,
+        entry,
+        invoke<TerminalAttachment>("resume_task_agent", { taskId, size, onEvent: entry.channel }),
+      ).then((attachment) => {
+        if (!attachment) throw new Error("task agent conversation could not be resumed");
         return attachment;
       });
     },

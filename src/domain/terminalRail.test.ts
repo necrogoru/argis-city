@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { Task, TerminalInventoryEntry } from "./types";
+import type { Task, TaskAgentResume, TerminalInventoryEntry } from "./types";
 import {
   aggregateTerminalRailEntries,
   filterInProgressTerminalRailEntries,
   terminalRailNavigationDirection,
+  terminalRailEntryLabel,
   terminalRailStateLabel,
   terminalRailTitlePreview,
   type TerminalRailLiveStatusMap,
@@ -125,6 +126,36 @@ describe("aggregateTerminalRailEntries", () => {
     expect(entries.find((entry) => entry.taskId === 1)?.state).toBe("idle");
     expect(entries.find((entry) => entry.taskId === 2)?.state).toBe("running");
   });
+
+  it("keeps a saved conversation discoverable when no managed terminal is running", () => {
+    const resumes: TaskAgentResume[] = [{
+      taskId: 4,
+      provider: "codex",
+      nativeReference: "opaque-native-id",
+      worktreePath: "/worktrees/completed",
+      lastObservedAtMs: 100,
+    }];
+
+    expect(aggregateTerminalRailEntries(tasks, [], {}, resumes)).toContainEqual(
+      expect.objectContaining({ taskId: 4, state: "resumable", resumeProvider: "codex" }),
+    );
+    expect(terminalRailStateLabel("resumable")).toBe("Resumable");
+    expect(terminalRailEntryLabel({ taskId: 4, index: 4, title: tasks[3].title, state: "resumable", resumeProvider: "codex" }))
+      .toBe("Resume Codex");
+  });
+
+  it("keeps running terminal status ahead of a saved conversation reference", () => {
+    const resumes: TaskAgentResume[] = [{
+      taskId: 2,
+      provider: "claude",
+      nativeReference: "opaque-native-id",
+      worktreePath: "/worktrees/running",
+      lastObservedAtMs: 100,
+    }];
+
+    expect(aggregateTerminalRailEntries(tasks, [{ taskId: 2, tab: "agent", state: "running" }], {}, resumes))
+      .toContainEqual(expect.objectContaining({ taskId: 2, state: "running", resumeProvider: "claude" }));
+  });
 });
 
 describe("terminalRailStateLabel", () => {
@@ -133,6 +164,7 @@ describe("terminalRailStateLabel", () => {
     expect(terminalRailStateLabel("pending")).toBe("Pending");
     expect(terminalRailStateLabel("running")).toBe("Running");
     expect(terminalRailStateLabel("completed")).toBe("Completed");
+    expect(terminalRailStateLabel("resumable")).toBe("Resumable");
     expect(terminalRailStateLabel("unavailable")).toBe("Unavailable");
   });
 });

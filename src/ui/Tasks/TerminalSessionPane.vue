@@ -51,10 +51,18 @@ async function reattach(): Promise<void> {
   await session.reattach();
   const agentCli = session.attachment.value?.session.agentCli;
   if (props.tab === "agent" && agentCli) selectedAgent.value = agentCli;
+  if (props.tab === "agent" && session.resumeReference.value) {
+    selectedAgent.value = session.resumeReference.value.provider;
+  }
 }
 
 async function start(): Promise<void> {
   await session.start(props.tab === "agent" ? selectedAgent.value : null);
+  if (session.connected.value) surface.value?.focus();
+}
+
+async function resume(): Promise<void> {
+  await session.resume();
   if (session.connected.value) surface.value?.focus();
 }
 
@@ -86,14 +94,28 @@ defineExpose({ reattach, detach: session.detach, fit, focus, start });
   >
     <div class="terminal-session-toolbar">
       <div v-if="props.tab === 'agent' && session.status.value !== 'running' && session.status.value !== 'starting'" class="terminal-agent-controls">
-        <label :for="`agent-choice-${props.taskId}`">Coding agent</label>
+        <p v-if="session.resumeLookupComplete.value && session.resumeUnavailable.value" class="terminal-resume-unavailable" role="status">
+          Resume unavailable — no valid saved conversation for this task.
+        </p>
+        <span v-if="session.resumeReference.value" class="terminal-resume-label">
+          Saved conversation · {{ PROVIDERS[session.resumeReference.value.provider].label }}
+        </span>
+        <button
+          v-if="session.resumeReference.value && !session.resumeUnavailable.value"
+          type="button"
+          :disabled="props.restoring"
+          @click="resume"
+        >
+          Resume {{ PROVIDERS[session.resumeReference.value.provider].label }}
+        </button>
+        <label :for="`agent-choice-${props.taskId}`">New conversation</label>
         <select :id="`agent-choice-${props.taskId}`" v-model="selectedAgent" :disabled="props.restoring">
           <option value="claude">Claude Code</option>
           <option value="codex">Codex</option>
           <option value="opencode">OpenCode</option>
           <option value="pi">Pi</option>
         </select>
-        <button type="button" aria-keyshortcuts="s" :disabled="props.restoring" @click="start">Start Agent</button>
+        <button type="button" aria-keyshortcuts="s" :disabled="props.restoring" @click="start">Start new</button>
       </div>
       <button
         v-else-if="props.tab === 'term' && session.status.value !== 'running' && session.status.value !== 'starting'"

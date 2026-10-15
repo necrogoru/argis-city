@@ -41,6 +41,16 @@
   color: var(--text-3);
 }
 
+.terminal-resume-unavailable {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--text-3);
+}
+
+.terminal-resume-label {
+  color: var(--text-2);
+}
+
 .terminal-agent-controls select,
 .terminal-agent-controls button,
 .terminal-session-toolbar > button {

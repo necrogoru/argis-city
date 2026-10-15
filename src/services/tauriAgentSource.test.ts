@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Project, Task, TerminalAttachment, TerminalEvent, TerminalInventoryEntry } from "../domain/types";
+import type {
+  Project,
+  Task,
+  TaskAgentResume,
+  TerminalAttachment,
+  TerminalEvent,
+  TerminalInventoryEntry,
+} from "../domain/types";
 import { createTauriAgentSource } from "./tauriAgentSource";
 
 const { invoke, channelHandlers } = vi.hoisted(() => ({
@@ -35,6 +42,13 @@ const task: Task = {
   status: "pending",
   branchName: null,
   worktreePath: null,
+};
+const resume: TaskAgentResume = {
+  taskId: task.id,
+  provider: "claude",
+  nativeReference: "opaque-session-id",
+  worktreePath: "/projects/argis/.argis/worktrees/12-add-task-board",
+  lastObservedAtMs: 1_780_000_000_123,
 };
 
 describe("TauriAgentSource project and task operations", () => {
@@ -114,6 +128,19 @@ describe("TauriAgentSource project and task operations", () => {
     expect(invoke).toHaveBeenNthCalledWith(2, "create_task_worktree", { taskId: task.id });
   });
 
+  it("lists, reads and saves typed task-agent resume references through the backend commands", async () => {
+    invoke.mockResolvedValueOnce([resume]).mockResolvedValueOnce(resume).mockResolvedValueOnce(resume);
+    const source = createTauriAgentSource();
+
+    await expect(source.listTaskAgentResumes()).resolves.toEqual([resume]);
+    await expect(source.getTaskAgentResume(task.id)).resolves.toEqual(resume);
+    await expect(source.saveTaskAgentResume(resume)).resolves.toEqual(resume);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "list_task_agent_resumes");
+    expect(invoke).toHaveBeenNthCalledWith(2, "get_task_agent_resume", { taskId: task.id });
+    expect(invoke).toHaveBeenNthCalledWith(3, "save_task_agent_resume", { reference: resume });
+  });
+
   it("streams terminal channel events and forwards terminal input and size", async () => {
     const attachment: TerminalAttachment = {
       session: {
@@ -151,6 +178,29 @@ describe("TauriAgentSource project and task operations", () => {
     expect(invoke).toHaveBeenNthCalledWith(3, "resize_terminal_session", {
       sessionId: attachment.session.id,
       size: { cols: 110, rows: 36 },
+    });
+  });
+
+  it("resumes a task's saved Agent conversation through the dedicated Tauri command", async () => {
+    const attachment: TerminalAttachment = {
+      session: {
+        id: 31,
+        key: { taskId: task.id, tab: "agent" },
+        agentCli: "codex",
+        processId: 41,
+        running: true,
+      },
+      attachmentId: 71,
+    };
+    invoke.mockResolvedValueOnce(attachment);
+    const source = createTauriAgentSource();
+    const onEvent = vi.fn<(event: TerminalEvent) => void>();
+
+    await expect(source.resumeTaskAgent(task.id, { cols: 80, rows: 24 }, onEvent)).resolves.toEqual(attachment);
+    expect(invoke).toHaveBeenCalledWith("resume_task_agent", {
+      taskId: task.id,
+      size: { cols: 80, rows: 24 },
+      onEvent: expect.any(Object),
     });
   });
 

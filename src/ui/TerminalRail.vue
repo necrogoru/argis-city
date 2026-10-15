@@ -5,7 +5,7 @@ import { nextVisibleTaskId } from "../domain/taskFocus";
 import {
   filterInProgressTerminalRailEntries,
   terminalRailNavigationDirection,
-  terminalRailStateLabel,
+  terminalRailEntryLabel,
   terminalRailTitlePreview,
 } from "../domain/terminalRail";
 import { useTaskStore } from "../stores/tasks";
@@ -28,6 +28,7 @@ function railTint(state: (typeof entries.value)[number]["state"]): string {
     case "running": return "var(--teal)";
     case "pending": return "var(--amber)";
     case "completed": return "var(--blue)";
+    case "resumable": return "var(--teal)";
     case "unavailable": return "var(--red)";
     case "idle": return "var(--grey)";
   }
@@ -113,7 +114,7 @@ onUnmounted(() => {
           :data-task-id="entry.taskId"
           :data-expanded="expandedTaskId === entry.taskId"
           :style="{ '--rail-tint': railTint(entry.state) }"
-          :aria-label="`Task ${entry.index}: ${entry.title}. In progress. ${terminalRailStateLabel(entry.state)} terminal. Press Enter to open; use arrow keys or j/k to move.`"
+          :aria-label="`Task ${entry.index}: ${entry.title}. In progress. Terminal: ${terminalRailEntryLabel(entry)}. Press Enter to open; use arrow keys or j/k to move.`"
           @click="openAgentTab(entry.taskId)"
           @pointerenter="setExpanded(entry.taskId)"
           @pointerleave="clearExpanded(entry.taskId)"
@@ -125,7 +126,7 @@ onUnmounted(() => {
           <span class="rail-preview" aria-hidden="true">{{ terminalRailTitlePreview(entry.title) }}</span>
           <span class="rail-details">
             <span class="rail-title">{{ entry.title }}</span>
-            <span class="rail-state">{{ terminalRailStateLabel(entry.state) }}</span>
+            <span class="rail-state">{{ terminalRailEntryLabel(entry) }}</span>
           </span>
         </button>
       </li>

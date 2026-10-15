@@ -2,6 +2,7 @@ import type {
   Project,
   Snapshot,
   Task,
+  TaskAgentResume,
   TaskDeletionOutcome,
   TaskGitStatus,
   TaskStatus,
@@ -31,6 +32,9 @@ export interface AgentSource {
   listProjects(): Promise<Project[]>;
   addProject(path: string, createIfMissing: boolean): Promise<Project>;
   listTasks(projectId?: number): Promise<Task[]>;
+  listTaskAgentResumes(): Promise<TaskAgentResume[]>;
+  getTaskAgentResume(taskId: number): Promise<TaskAgentResume | null>;
+  saveTaskAgentResume(reference: TaskAgentResume): Promise<TaskAgentResume>;
   createTask(projectId: number, title: string, description: string): Promise<Task>;
   updateTaskDetails(id: number, title: string, description: string): Promise<Task>;
   updateTaskStatus(id: number, status: TaskStatus): Promise<Task>;
@@ -41,6 +45,12 @@ export interface AgentSource {
     taskId: number,
     tab: TerminalTab,
     agentCli: TerminalAgent | null,
+    size: TerminalSize,
+    onEvent: (event: TerminalEvent) => void,
+  ): Promise<TerminalAttachment>;
+  /** Resume the task's saved native conversation in a new Agent PTY. */
+  resumeTaskAgent(
+    taskId: number,
     size: TerminalSize,
     onEvent: (event: TerminalEvent) => void,
   ): Promise<TerminalAttachment>;

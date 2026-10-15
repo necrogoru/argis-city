@@ -97,6 +97,16 @@ export interface Task {
   worktreePath: string | null;
 }
 
+export interface TaskAgentResume {
+  taskId: number;
+  provider: ProviderId;
+  /** Opaque native identifier; never parse or interpolate it into a shell command. */
+  nativeReference: string;
+  worktreePath: string;
+  /** Unix epoch milliseconds. */
+  lastObservedAtMs: number;
+}
+
 export interface TaskGitCleanup {
   requested: boolean;
   worktreeRemoved: boolean;

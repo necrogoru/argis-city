@@ -1,4 +1,17 @@
+use super::ProviderId;
 use serde::{Deserialize, Serialize};
+
+/// Latest provider-native conversation reference saved for a task.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskAgentResume {
+    pub task_id: i64,
+    pub provider: ProviderId,
+    pub native_reference: String,
+    pub worktree_path: String,
+    /// Unix epoch milliseconds.
+    pub last_observed_at_ms: i64,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

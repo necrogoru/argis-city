@@ -10,7 +10,7 @@ mod tests;
 use super::{candidate_since, AgentProvider, CollectContext};
 use crate::domain::{AgentSession, ProviderId};
 use crate::shared::jsonl::JsonlTailCache;
-use crate::shared::liveness::{written_recently, ToolProcesses};
+use crate::shared::liveness::{canonical, written_recently, ToolProcesses};
 use crate::system::clock::system_time_ms;
 use index::{newest_state_db, CodexIndex};
 use parking_lot::Mutex;
@@ -32,6 +32,16 @@ impl CodexProvider {
 
 pub(crate) fn modified_ms(path: &Path) -> Option<i64> {
     fs::metadata(path).and_then(|m| m.modified()).ok().map(system_time_ms)
+}
+
+pub(crate) fn has_resume_reference(root: &Path, thread_id: &str, worktree: &Path) -> anyhow::Result<bool> {
+    let Some(db) = newest_state_db(root) else { return Ok(false) };
+    let index = CodexIndex::open(&db)?;
+    let worktree = canonical(worktree);
+    Ok(index
+        .recent_threads(0)?
+        .into_iter()
+        .any(|thread| thread.id == thread_id && canonical(&thread.cwd) == worktree && thread.rollout_path.is_file()))
 }
 
 impl AgentProvider for CodexProvider {
