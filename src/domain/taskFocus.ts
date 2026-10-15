@@ -46,6 +46,22 @@ export function nextVisibleTaskId(
   return visibleTaskIds[nextIndex];
 }
 
+/** Moves to the adjacent visible task in the same column without wrapping. */
+export function adjacentVerticalTaskId(
+  visibleTaskColumns: readonly (readonly number[])[],
+  focusedTaskId: number | null,
+  direction: "down" | "up",
+): number | null {
+  if (focusedTaskId == null) return null;
+
+  const column = visibleTaskColumns.find((taskIds) => taskIds.includes(focusedTaskId));
+  if (!column) return null;
+
+  const rowIndex = column.indexOf(focusedTaskId);
+  const nextRowIndex = rowIndex + (direction === "down" ? 1 : -1);
+  return column[nextRowIndex] ?? null;
+}
+
 /** Moves to the nearest populated column, preserving the focused row when possible. */
 export function adjacentVisibleTaskId(
   visibleTaskColumns: readonly (readonly number[])[],

@@ -2,13 +2,19 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import type { Task, TaskDeletionOutcome, TaskStatus } from "../../domain/types";
 import { groupTasks } from "../../domain/tasks";
-import { adjacentVisibleTaskId, nextVisibleTaskId, type TaskFocusDirection } from "../../domain/taskFocus";
+import {
+  adjacentVerticalTaskId,
+  adjacentVisibleTaskId,
+  nextVisibleTaskId,
+  type TaskFocusDirection,
+} from "../../domain/taskFocus";
 import { searchBoardTasks } from "../../domain/taskSearch";
 import {
   canCreateTaskBranch,
   canCreateTaskFromBoard,
   canOpenTaskTerminal,
   focusedVisibleTask,
+  resolveTaskBoardJumpShortcut,
   taskBoardActionForShortcut,
   taskBoardNavigationDirection,
 } from "../../domain/taskBoardShortcuts";
@@ -25,6 +31,7 @@ const terminalNavigation = useTerminalNavigationStore();
 const projectFilter = ref<number | null>(null);
 const taskSearchQuery = ref("");
 const focusedTaskId = ref<number | null>(null);
+let pendingTaskBoardGAtMs: number | null = null;
 type TaskCardHandle = { focus: () => void };
 const taskCardRefs = new Map<number, TaskCardHandle>();
 const projectFilterValue = computed({
@@ -63,14 +70,20 @@ function setTaskCardRef(taskId: number, card: TaskCardHandle | null): void {
   else taskCardRefs.delete(taskId);
 }
 
+function focusTaskCard(taskId: number): void {
+  focusedTaskId.value = taskId;
+  taskCardRefs.get(taskId)?.focus();
+}
+
 function focusNextVisibleTask(currentTaskId: number | null, direction: TaskFocusDirection): boolean {
   const nextTaskId = direction === "left" || direction === "right"
     ? adjacentVisibleTaskId(visibleTaskColumns.value, currentTaskId, direction)
-    : nextVisibleTaskId(visibleTaskIds.value, currentTaskId, direction);
+    : currentTaskId === null
+      ? nextVisibleTaskId(visibleTaskIds.value, null, direction)
+      : adjacentVerticalTaskId(visibleTaskColumns.value, currentTaskId, direction);
   if (nextTaskId == null) return false;
 
-  focusedTaskId.value = nextTaskId;
-  taskCardRefs.get(nextTaskId)?.focus();
+  focusTaskCard(nextTaskId);
   return true;
 }
 
@@ -98,6 +111,21 @@ function handleTaskBoardShortcut(event: KeyboardEvent): void {
   const target = event.target instanceof HTMLElement ? event.target : null;
   const hasOpenDialog =
     projectsOpen.value || taskEditorOpen.value || document.querySelector("dialog[open]") !== null;
+  const jump = resolveTaskBoardJumpShortcut(
+    event,
+    target,
+    visibleTaskIds.value,
+    pendingTaskBoardGAtMs,
+    Date.now(),
+    hasOpenDialog,
+  );
+  pendingTaskBoardGAtMs = jump.pendingGAtMs;
+  if (jump.taskId !== null) {
+    focusTaskCard(jump.taskId);
+    event.preventDefault();
+    return;
+  }
+
   const direction = taskBoardNavigationDirection(event, target, hasOpenDialog);
   const currentTaskId = direction === "left" || direction === "right" ? focusedTaskId.value : null;
   if (direction !== null && focusNextVisibleTask(currentTaskId, direction)) {
@@ -204,7 +232,7 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
           v-model="taskSearchQuery"
           type="search"
           placeholder="Search by title, ID, description, or project"
-          aria-describedby="task-search-hint"
+          aria-describedby="task-board-navigation-hint"
           autocomplete="off"
           @keydown="handleSearchKeydown"
         />
@@ -259,8 +287,10 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
         <p v-else class="column-empty">No tasks in this group.</p>
       </section>
     </div>
-    <span id="task-search-hint" class="visually-hidden">
-      Use the up and down arrow keys to focus matching tasks, then use arrow keys or h, j, k, l to navigate the board.
+    <span id="task-board-navigation-hint" class="visually-hidden">
+      With Search tasks focused, use ArrowDown or ArrowUp to focus matching tasks. On a task card, use ArrowDown or j and
+      ArrowUp or k to move within its status pane, ArrowLeft or h and ArrowRight or l to move between panes, press g
+      twice to focus the first visible task, or press Shift+G to focus the last.
     </span>
 
     <ProjectManagerDialog v-model:open="projectsOpen" :projects="store.projects" />

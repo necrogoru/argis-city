@@ -8,10 +8,58 @@ export type TaskBoardNavigationEvent = Pick<
   "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "isComposing" | "defaultPrevented"
 >;
 
+export type TaskBoardJumpShortcutEvent = Pick<
+  KeyboardEvent,
+  "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "repeat" | "isComposing" | "defaultPrevented"
+>;
+
+export interface TaskBoardJumpResolution {
+  taskId: number | null;
+  pendingGAtMs: number | null;
+}
+
 export type TaskBoardShortcutEvent = Pick<
   KeyboardEvent,
   "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "repeat" | "isComposing"
 >;
+
+const DOUBLE_G_WINDOW_MS = 500;
+
+/** Resolves Vim first/last motions while keeping their key sequence out of editors and dialogs. */
+export function resolveTaskBoardJumpShortcut(
+  event: TaskBoardJumpShortcutEvent,
+  target: ShortcutTargetLike | null,
+  visibleTaskIds: readonly number[],
+  pendingGAtMs: number | null,
+  nowMs: number,
+  hasOpenDialog = false,
+): TaskBoardJumpResolution {
+  const clearSequence = { taskId: null, pendingGAtMs: null };
+  if (
+    event.defaultPrevented ||
+    event.isComposing ||
+    event.repeat ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.altKey ||
+    (event.shiftKey && event.key !== "G") ||
+    isViewShortcutBlocked(target, hasOpenDialog)
+  ) {
+    return clearSequence;
+  }
+
+  if (event.key === "G") {
+    return { taskId: visibleTaskIds.at(-1) ?? null, pendingGAtMs: null };
+  }
+
+  if (event.key !== "g" || event.shiftKey) return clearSequence;
+
+  const isSecondG =
+    pendingGAtMs !== null && nowMs >= pendingGAtMs && nowMs - pendingGAtMs <= DOUBLE_G_WINDOW_MS;
+  if (isSecondG) return { taskId: visibleTaskIds[0] ?? null, pendingGAtMs: null };
+
+  return { taskId: null, pendingGAtMs: nowMs };
+}
 
 /** Resolves an unmodified task-board shortcut after applying the shared text-entry and dialog guards. */
 export function taskBoardActionForShortcut(
