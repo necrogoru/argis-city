@@ -63,6 +63,18 @@ pub enum TerminalEvent {
     Exited { session_id: u64, exit_code: u32, signal: Option<String> },
 }
 
+/// App-wide notification that an Argis-managed terminal process has exited.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalLifecycleEvent {
+    pub task_id: i64,
+    pub tab: TerminalTab,
+    pub agent_cli: Option<TerminalAgent>,
+    pub session_id: u64,
+    pub exit_code: u32,
+    pub signal: Option<String>,
+}
+
 /// Public process information; no PTY handles or child-process controls cross IPC.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

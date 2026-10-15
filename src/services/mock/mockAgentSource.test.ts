@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AgentStatus, TaskAgentResume } from "../../domain/types";
 import { createSeedSnapshot, MockAgentSource } from "./mockAgentSource";
 import { FLIP_EVERY, flipStatus, tickSnapshot } from "./mockTick";
@@ -105,6 +105,7 @@ describe("mock project and task operations", () => {
     const source = new MockAgentSource("empty");
 
     await expect(source.listTerminalInventory()).resolves.toEqual([]);
+    await expect(source.playAlertSound()).resolves.toBeUndefined();
     await expect(source.reattachTerminalSession(1, "agent", () => {})).resolves.toBeNull();
     await expect(source.startTerminalSession(1, "agent", "claude", { cols: 80, rows: 24 }, () => {}))
       .rejects.toThrow("only available in the Argis desktop app");
@@ -113,6 +114,14 @@ describe("mock project and task operations", () => {
       "only available in the Argis desktop app",
     );
     await expect(source.detachTerminalSession(1, "agent", 1)).resolves.toBe(false);
+  });
+
+  it("provides a no-op app-wide terminal-exit subscription in browser mock mode", () => {
+    const source = new MockAgentSource("empty");
+    const callback = vi.fn();
+
+    expect(source.subscribeTerminalExit(callback)).toEqual(expect.any(Function));
+    expect(callback).not.toHaveBeenCalled();
   });
 });
 

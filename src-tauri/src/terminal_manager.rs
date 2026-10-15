@@ -1,6 +1,6 @@
 use crate::domain::{
     TerminalAgent, TerminalAttachment, TerminalEvent, TerminalInventoryEntry, TerminalInventoryState,
-    TerminalSessionInfo, TerminalSessionKey, TerminalSize,
+    TerminalLifecycleEvent, TerminalSessionInfo, TerminalSessionKey, TerminalSize,
 };
 use anyhow::{anyhow, bail, Context};
 use parking_lot::Mutex;
@@ -66,6 +66,7 @@ pub(crate) struct ManagedAgentProcess {
 
 /// A callback used by Tauri Channels or by tests to receive ordered PTY events.
 pub type TerminalEventSink = Arc<dyn Fn(TerminalEvent) -> Result<(), String> + Send + Sync + 'static>;
+pub type TerminalLifecycleSink = Arc<dyn Fn(TerminalLifecycleEvent) + Send + Sync + 'static>;
 
 #[derive(Default)]
 struct ManagerState {
@@ -86,11 +87,12 @@ struct FailedTerminalStart {
 pub struct TerminalManager {
     next_id: AtomicU64,
     state: Mutex<ManagerState>,
+    lifecycle_sink: Option<TerminalLifecycleSink>,
 }
 
 impl Default for TerminalManager {
     fn default() -> Self {
-        Self { next_id: AtomicU64::new(1), state: Mutex::new(ManagerState::default()) }
+        Self { next_id: AtomicU64::new(1), state: Mutex::new(ManagerState::default()), lifecycle_sink: None }
     }
 }
 
@@ -98,6 +100,7 @@ struct ManagedSession {
     info: TerminalSessionInfo,
     started_at_ms: i64,
     cwd: PathBuf,
+    lifecycle_sink: Option<TerminalLifecycleSink>,
     master: Mutex<Option<Box<dyn MasterPty + Send>>>,
     writer: Mutex<Box<dyn Write + Send>>,
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
@@ -148,6 +151,15 @@ impl TerminalOutputHistory {
 }
 
 impl TerminalManager {
+    /// Creates a manager that publishes process exits independently of output-channel attachments.
+    pub fn with_lifecycle_sink(lifecycle_sink: TerminalLifecycleSink) -> Self {
+        Self {
+            next_id: AtomicU64::new(1),
+            state: Mutex::new(ManagerState::default()),
+            lifecycle_sink: Some(lifecycle_sink),
+        }
+    }
+
     /// Starts a process in a PTY and subscribes `sink` before the PTY reader starts.
     pub fn start(&self, spec: TerminalProcessSpec, sink: TerminalEventSink) -> anyhow::Result<TerminalSessionInfo> {
         self.start_with_attachment(spec, sink).map(|attachment| attachment.session)
@@ -248,6 +260,7 @@ impl TerminalManager {
             info: TerminalSessionInfo { id, key: spec.key, agent_cli: spec.agent_cli, process_id, running: true },
             started_at_ms,
             cwd,
+            lifecycle_sink: self.lifecycle_sink.clone(),
             master: Mutex::new(Some(pair.master)),
             writer: Mutex::new(writer),
             killer: Mutex::new(killer),
@@ -573,13 +586,27 @@ impl ManagedSession {
     }
 
     fn finish(&self, exit_code: u32, signal: Option<String>) {
-        self.running.store(false, Ordering::Release);
-        let mut lifecycle = self.lifecycle.lock();
-        lifecycle.failed = false;
-        let event = TerminalEvent::Exited { session_id: self.info.id, exit_code, signal };
-        lifecycle.completed = Some(event.clone());
-        if lifecycle.sink.as_ref().is_some_and(|sink| sink(event).is_err()) {
-            lifecycle.sink = None;
+        if !self.running.swap(false, Ordering::AcqRel) {
+            return;
+        }
+        let event = TerminalEvent::Exited { session_id: self.info.id, exit_code, signal: signal.clone() };
+        {
+            let mut lifecycle = self.lifecycle.lock();
+            lifecycle.failed = false;
+            lifecycle.completed = Some(event.clone());
+            if lifecycle.sink.as_ref().is_some_and(|sink| sink(event).is_err()) {
+                lifecycle.sink = None;
+            }
+        }
+        if let Some(sink) = &self.lifecycle_sink {
+            sink(TerminalLifecycleEvent {
+                task_id: self.info.key.task_id,
+                tab: self.info.key.tab,
+                agent_cli: self.info.agent_cli,
+                session_id: self.info.id,
+                exit_code,
+                signal,
+            });
         }
     }
 

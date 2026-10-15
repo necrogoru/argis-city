@@ -169,6 +169,15 @@ export interface TerminalInventoryEntry {
   state: TerminalInventoryState;
 }
 
+export interface TerminalLifecycleEvent {
+  taskId: number;
+  tab: TerminalTab;
+  agentCli: TerminalAgent | null;
+  sessionId: number;
+  exitCode: number;
+  signal: string | null;
+}
+
 export type TerminalEvent =
   | { type: "output"; sessionId: number; bytes: number[] }
   | { type: "error"; sessionId: number; message: string }
@@ -176,3 +185,6 @@ export type TerminalEvent =
 
 /** Tauri event name the backend emits a `Snapshot` on, every poll tick. */
 export const SNAPSHOT_EVENT = "agents://snapshot";
+
+/** Tauri event emitted once when an Argis-managed terminal process exits. */
+export const TERMINAL_EXIT_EVENT = "terminal://exited";

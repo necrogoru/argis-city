@@ -20,6 +20,6 @@ pub use status::AgentStatus;
 pub use task::{Task, TaskAgentResume, TaskStatus};
 pub use terminal::{
     TerminalAgent, TerminalAttachment, TerminalEvent, TerminalInventoryEntry, TerminalInventoryState,
-    TerminalSessionInfo, TerminalSessionKey, TerminalSize, TerminalTab,
+    TerminalLifecycleEvent, TerminalSessionInfo, TerminalSessionKey, TerminalSize, TerminalTab,
 };
 pub use tokens::TokenUsage;

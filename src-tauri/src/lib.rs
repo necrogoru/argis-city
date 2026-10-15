@@ -44,6 +44,7 @@ use terminal_manager::TerminalManager;
 
 /// Event the UI listens on (`SNAPSHOT_EVENT` in `src/domain/types.ts`).
 pub const SNAPSHOT_EVENT: &str = "agents://snapshot";
+pub const TERMINAL_EXIT_EVENT: &str = "terminal://exited";
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 /// The real registry: every provider over the given tool dirs, live
@@ -67,12 +68,10 @@ pub fn run() {
     let paths = HomePaths::detect().unwrap_or_else(|_| HomePaths::from_home(Path::new("/nonexistent")));
     let monitor = Arc::new(Monitor::new(build_registry(&paths)));
     let poller_monitor = Arc::clone(&monitor);
-    let terminal_manager = Arc::new(TerminalManager::default());
-    let poller_terminal_manager = Arc::clone(&terminal_manager);
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(monitor)
-        .manage(terminal_manager)
         .setup(move |app| {
             let task_store_path = app
                 .path()
@@ -82,8 +81,16 @@ pub fn run() {
             app.manage(TaskStoreState::from_path(task_store_path));
 
             let task_store_state = app.state::<TaskStoreState>().inner().clone();
-            let handle = app.handle().clone();
             let observed_references = Mutex::new(HashSet::new());
+            let lifecycle_handle = app.handle().clone();
+            let terminal_manager = Arc::new(TerminalManager::with_lifecycle_sink(Arc::new(move |event| {
+                if let Err(error) = lifecycle_handle.emit(TERMINAL_EXIT_EVENT, &event) {
+                    eprintln!("failed to publish terminal exit event: {error}");
+                }
+            })));
+            app.manage(Arc::clone(&terminal_manager));
+            let poller_terminal_manager = Arc::clone(&terminal_manager);
+            let handle = app.handle().clone();
             let poller = Poller::spawn(poller_monitor, POLL_INTERVAL, move |snapshot| {
                 if let Ok(store) = task_store_state.store() {
                     let processes = poller_terminal_manager.running_agent_processes();
@@ -116,7 +123,8 @@ pub fn run() {
             commands::terminal_input,
             commands::resize_terminal_session,
             commands::detach_terminal_session,
-            commands::list_terminal_inventory
+            commands::list_terminal_inventory,
+            commands::play_alert_sound
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

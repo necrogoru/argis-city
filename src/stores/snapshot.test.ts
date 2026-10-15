@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { createApp } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import type { Snapshot } from "../domain/types";
-import { snapshot } from "../domain/testFixtures";
+import { session as agentSession, snapshot } from "../domain/testFixtures";
 import type { AgentSource } from "../services/agentSource";
 import { agentSourceKey } from "../composables/useAgentSource";
 import { useSnapshotStore } from "./snapshot";
+import { useSessionAlertCoordinator } from "./sessionAlerts";
 
 const at = (generatedAt: number): Snapshot => ({ ...snapshot([]), generatedAt });
 
@@ -19,6 +20,8 @@ function fakeSource(refresh: () => Promise<Snapshot> = async () => at(99)) {
     getSnapshot: () => new Promise<Snapshot>((res, rej) => ((resolveInitial = res), (rejectInitial = rej))),
     refresh: vi.fn(refresh),
     subscribe: (callback) => ((push = callback), () => {}),
+    subscribeTerminalExit: () => () => {},
+    playAlertSound: async () => {},
     openPath: async () => {},
     listProjects: async () => [],
     addProject: async (path) => ({ id: 1, path }),
@@ -77,6 +80,26 @@ describe("useSnapshotStore", () => {
     const store = storeWith(fake.source);
     fake.push(at(10));
     expect(store.snapshot?.generatedAt).toBe(10);
+  });
+
+  it("routes accepted snapshot transitions through the app-lifetime alert coordinator once", () => {
+    const fake = fakeSource();
+    const app = createApp({});
+    const pinia = createPinia();
+    app.use(pinia).provide(agentSourceKey, fake.source);
+    setActivePinia(pinia);
+    app.runWithContext(() => useSnapshotStore());
+    const coordinator = app.runWithContext(() => useSessionAlertCoordinator());
+    const alerts: unknown[] = [];
+    coordinator.subscribe((alert) => alerts.push(alert));
+
+    fake.push({ ...snapshot([agentSession()]), generatedAt: 10 });
+    fake.push({ ...snapshot([agentSession({ status: "awaitingApproval" })]), generatedAt: 20 });
+    const sameCoordinator = app.runWithContext(() => useSessionAlertCoordinator());
+    fake.push({ ...snapshot([agentSession({ status: "awaitingApproval" })]), generatedAt: 30 });
+
+    expect(sameCoordinator).toBe(coordinator);
+    expect(alerts).toMatchObject([{ kind: "approval", sessionId: "claude:abc" }]);
   });
 
   it("never lets a late initial fetch overwrite a newer pushed snapshot", async () => {

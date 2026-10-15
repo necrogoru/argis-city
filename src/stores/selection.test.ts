@@ -14,6 +14,8 @@ function setup() {
     getSnapshot: () => new Promise<Snapshot>(() => {}),
     refresh: async () => snapshot([]),
     subscribe: (callback) => ((push = callback), () => {}),
+    subscribeTerminalExit: () => () => {},
+    playAlertSound: async () => {},
     openPath: async () => {},
     listProjects: async () => [],
     addProject: async (path) => ({ id: 1, path }),

@@ -2,6 +2,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   SNAPSHOT_EVENT,
+  TERMINAL_EXIT_EVENT,
   type Project,
   type Snapshot,
   type Task,
@@ -10,6 +11,7 @@ import {
   type TaskGitStatus,
   type TerminalAttachment,
   type TerminalEvent,
+  type TerminalLifecycleEvent,
   type TerminalTab,
   type TaskWorktree,
 } from "../domain/types";
@@ -147,6 +149,7 @@ export function createTauriAgentSource(): AgentSource {
       return invoke<boolean>("detach_terminal_session", { taskId, tab, attachmentId });
     },
     listTerminalInventory: () => invoke("list_terminal_inventory"),
+    playAlertSound: () => invoke<void>("play_alert_sound"),
     subscribe(callback) {
       let unlisten: UnlistenFn | null = null;
       let disposed = false;
@@ -156,6 +159,20 @@ export function createTauriAgentSource(): AgentSource {
           else unlisten = fn;
         })
         .catch((error: unknown) => console.error("[argis] snapshot listener failed", error));
+      return () => {
+        disposed = true;
+        unlisten?.();
+      };
+    },
+    subscribeTerminalExit(callback) {
+      let unlisten: UnlistenFn | null = null;
+      let disposed = false;
+      listen<TerminalLifecycleEvent>(TERMINAL_EXIT_EVENT, (event) => callback(event.payload))
+        .then((fn) => {
+          if (disposed) fn();
+          else unlisten = fn;
+        })
+        .catch((error: unknown) => console.error("[argis] terminal exit listener failed", error));
       return () => {
         disposed = true;
         unlisten?.();

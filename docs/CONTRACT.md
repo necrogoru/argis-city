@@ -29,7 +29,9 @@ one tower per tool (provider), one house per live session, subagents as cards.
 | command | `resize_terminal_session` | `{ sessionId, size }` → `()`                     |
 | command | `detach_terminal_session` | `{ taskId, tab, attachmentId }` → `boolean`      |
 | command | `list_terminal_inventory` | → `TerminalInventoryEntry[]`                     |
+| command | `play_alert_sound`        | → `()` (macOS system-sound fallback)              |
 | event   | `agents://snapshot`       | `Snapshot`, emitted every poll (2 s)              |
+| event   | `terminal://exited`       | `TerminalLifecycleEvent`, emitted once per managed process exit |
 
 Snapshot, project, task, and terminal wire types live in `src/domain/types.ts`
 (TS) and `src-tauri/src/domain/` (Rust). Git operation result types live in
@@ -116,6 +118,15 @@ creates and records both resources only for an eligible task.
   `output` has `sessionId` and `bytes` (a JSON byte array), `error` has
   `sessionId` and `message`, and `exited` has `sessionId`, `exitCode`, and a
   nullable `signal`. The UI converts output bytes to `Uint8Array` for xterm.
+- `terminal://exited` is broadcast app-wide independently of any attached xterm
+  Channel. Its `TerminalLifecycleEvent` payload is `{ taskId, tab, agentCli,
+  sessionId, exitCode, signal }`; `agentCli` and `signal` are nullable
+  (`agentCli` is `null` for the shell tab). It is emitted once when the managed process exits
+  and is not replayed when a terminal is reattached.
+- Native alert delivery checks notification permission and asks the user only
+  until the first denial. Notifications request macOS's built-in `Ping` sound;
+  when permission or notification delivery is unavailable, `play_alert_sound`
+  plays that system sound independently of notification permission.
 - `TerminalManager` retains a bounded 1 MiB tail of PTY output per session.
   Reattachment replays that ordered output before forwarding new chunks, so a
   newly mounted xterm can restore recent terminal contents. An xterm instance

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onUnmounted, ref } from "vue";
 import CityCanvas from "./scene/CityCanvas.vue";
 import CameraControls from "./ui/CameraControls.vue";
 import CommandPalette from "./ui/CommandPalette/CommandPalette.vue";
@@ -15,13 +15,25 @@ import TopBar from "./ui/TopBar/TopBar.vue";
 import { useAppViewStore } from "./stores/appView";
 import { useTaskStore } from "./stores/tasks";
 import { useTerminalNavigationStore } from "./stores/terminalNavigation";
+import { useSnapshotStore } from "./stores/snapshot";
+import { useSessionAlertCoordinator } from "./stores/sessionAlerts";
 import { useAppViewShortcuts } from "./composables/useAppViewShortcuts";
+import { useAgentSource } from "./composables/useAgentSource";
+import { createNoopAlertDelivery } from "./services/alertDelivery";
+import { createTauriAlertDelivery } from "./services/tauriAlertDelivery";
 import { isViewShortcutBlocked } from "./domain/appViewShortcuts";
 import { useModKey } from "./composables/useModKey";
 
 const appView = useAppViewStore();
 const taskStore = useTaskStore();
 const terminalNavigation = useTerminalNavigationStore();
+const source = useAgentSource();
+const alertCoordinator = useSessionAlertCoordinator();
+const stopAlertCoordinator = alertCoordinator.start(
+  source.kind === "live" ? createTauriAlertDelivery(source) : createNoopAlertDelivery(),
+);
+onUnmounted(stopAlertCoordinator);
+useSnapshotStore();
 const paletteOpen = ref(false);
 const terminalTask = computed(
   () => taskStore.tasks.find((task) => task.id === terminalNavigation.taskId) ?? null,

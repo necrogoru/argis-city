@@ -11,6 +11,7 @@ import type {
   TerminalAttachment,
   TerminalEvent,
   TerminalInventoryEntry,
+  TerminalLifecycleEvent,
   TerminalSize,
   TerminalTab,
 } from "../domain/types";
@@ -27,6 +28,10 @@ export interface AgentSource {
   refresh(): Promise<Snapshot>;
   /** Called on every poll tick; returns an unsubscribe function. */
   subscribe(callback: (snapshot: Snapshot) => void): () => void;
+  /** Called once for each Argis-managed terminal process exit; independent of terminal attachments. */
+  subscribeTerminalExit(callback: (event: TerminalLifecycleEvent) => void): () => void;
+  /** Play Argis's short system sound as a fallback when a desktop notification cannot be delivered. */
+  playAlertSound(): Promise<void>;
   /** Reveal a directory in the OS file manager. */
   openPath(path: string): Promise<void>;
   listProjects(): Promise<Project[]>;
