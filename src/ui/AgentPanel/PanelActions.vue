@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useTimeoutFn } from "@vueuse/core";
-import { Check, Copy, FolderOpen } from "@lucide/vue";
+import { Check, Copy, FolderOpen, Terminal } from "@lucide/vue";
 import { useAgentSource } from "../../composables/useAgentSource";
+import { useTerminalNavigationStore } from "../../stores/terminalNavigation";
 
-const props = defineProps<{ cwd: string }>();
+const props = defineProps<{ cwd: string; terminalTaskId: number | null }>();
 const source = useAgentSource();
+const terminalNavigation = useTerminalNavigationStore();
 const copied = ref(false);
 const { start: resetCopiedLater } = useTimeoutFn(() => (copied.value = false), 1_500, { immediate: false });
 
@@ -21,12 +23,20 @@ function copyPath(): void {
     () => (copied.value = false),
   );
 }
+
+function openTerminal(): void {
+  if (props.terminalTaskId == null) return;
+  terminalNavigation.openTaskTerminal(props.terminalTaskId);
+}
 </script>
 
-<!-- Primary "Open folder" (reveals cwd via the backend) + copy-path ghost button. -->
+<!-- Selected-house actions: reveal/copy its cwd and, when eligible, open its task terminal. -->
 <template>
   <div class="actions">
     <button type="button" class="primary" @click="openFolder"><FolderOpen :size="16" aria-hidden="true" />Open folder</button>
+    <button v-if="terminalTaskId != null" type="button" class="terminal" @click="openTerminal">
+      <Terminal :size="16" aria-hidden="true" />Terminal
+    </button>
     <button
       type="button"
       class="ghost"
@@ -80,6 +90,28 @@ function copyPath(): void {
   border: 1px solid var(--border);
   background: var(--fill-subtle);
   color: var(--text-2);
+}
+
+.terminal {
+  min-height: 46px;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  background: var(--fill-subtle);
+  color: var(--text-2);
+  font-weight: 500;
+  transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
+}
+
+.terminal:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--fill-hover);
 }
 
 .ghost:hover {

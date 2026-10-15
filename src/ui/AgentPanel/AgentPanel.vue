@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
+import { storeToRefs } from "pinia";
 import { cssVar } from "../../domain/palette";
 import type { SelectedSession } from "../../domain/session";
 import { statusMeta } from "../../domain/status";
+import { findTaskTerminalMatch } from "../../domain/taskTerminalMatch";
+import { useTaskStore } from "../../stores/tasks";
+import { useTerminalRailStore } from "../../stores/terminalRail";
 import ContextBar from "./ContextBar.vue";
 import MetaRows from "./MetaRows.vue";
 import PanelActions from "./PanelActions.vue";
@@ -12,6 +16,18 @@ import ProgressSection from "./ProgressSection.vue";
 
 const props = defineProps<{ selected: SelectedSession }>();
 const emit = defineEmits<{ back: []; close: [] }>();
+const taskStore = useTaskStore();
+const terminalRail = useTerminalRailStore();
+const { tasks } = storeToRefs(taskStore);
+const { entries } = storeToRefs(terminalRail);
+const terminalTask = computed(() => findTaskTerminalMatch(props.selected.session.cwd, tasks.value, entries.value));
+
+onMounted(() => {
+  void taskStore.ensureSearchDataLoaded().catch((error: unknown) => {
+    console.error("[argis] task search data failed", error);
+  });
+});
+
 // Provider colour drives the ring and bars; the panel's glow and stroke switch
 // to the status colour while the session waits on the user or has failed.
 const style = computed(() => {
@@ -47,7 +63,7 @@ const style = computed(() => {
     <PanelStats :session="selected.session" />
     <ContextBar :tokens="selected.session.tokens" />
     <MetaRows :session="selected.session" />
-    <PanelActions :cwd="selected.session.cwd" />
+    <PanelActions :cwd="selected.session.cwd" :terminal-task-id="terminalTask?.id ?? null" />
   </aside>
 </template>
 
