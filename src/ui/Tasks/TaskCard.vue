@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { ChevronDown, ChevronUp, GitBranch, SquareTerminal } from "@lucide/vue";
 import type { Task, TaskGitStatus, TaskStatus } from "../../domain/types";
 import { nextTaskStatus, previousTaskStatus, TASK_STATUS_LABELS } from "../../domain/tasks";
@@ -15,7 +15,11 @@ const emit = defineEmits<{
   moveStatus: [status: TaskStatus];
   createBranch: [];
   openTerminal: [];
+  focusTask: [];
+  blurTask: [];
+  navigate: [direction: "down" | "up"];
 }>();
+const cardElement = ref<HTMLElement | null>(null);
 
 const previousStatus = computed(() => previousTaskStatus(props.task.status));
 const nextStatus = computed(() => nextTaskStatus(props.task.status));
@@ -33,10 +37,34 @@ const terminalLabel = computed(() => {
 const terminalDisabled = computed(() => !props.canOpenTerminal || props.task.worktreePath === null);
 const projectName = computed(() => props.projectPath.split(/[\\/]/).filter(Boolean).at(-1) ?? props.projectPath);
 
+function handleKeydown(event: KeyboardEvent): void {
+  if (event.target !== event.currentTarget) return;
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+
+  event.preventDefault();
+  emit("navigate", event.key === "ArrowDown" ? "down" : "up");
+}
+
+function focus(): void {
+  cardElement.value?.focus();
+}
+
+defineExpose({ focus });
+
 </script>
 
 <template>
-  <article class="task-card" :data-status="props.task.status">
+  <article
+    ref="cardElement"
+    class="task-card"
+    :data-status="props.task.status"
+    :aria-label="`Task #${props.task.id}: ${props.task.title}`"
+    aria-keyshortcuts="ArrowDown ArrowUp"
+    tabindex="0"
+    @focus="emit('focusTask')"
+    @blur="emit('blurTask')"
+    @keydown="handleKeydown"
+  >
     <div class="task-card-heading">
       <button class="task-title" type="button" :aria-label="`Edit task ${props.task.title}`" @click="emit('edit')">
         {{ props.task.title }}
@@ -103,6 +131,11 @@ const projectName = computed(() => props.projectPath.split(/[\\/]/).filter(Boole
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   background: var(--surface);
+}
+
+.task-card:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 3px;
 }
 
 .task-card-heading,

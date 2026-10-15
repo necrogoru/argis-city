@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 import type { Task, TaskDeletionOutcome, TaskStatus } from "../../domain/types";
 import { groupTasks } from "../../domain/tasks";
+import { nextVisibleTaskId, type TaskFocusDirection } from "../../domain/taskFocus";
+import { searchBoardTasks } from "../../domain/taskSearch";
 import { useTaskStore } from "../../stores/tasks";
 import ProjectManagerDialog from "./ProjectManagerDialog.vue";
 import TaskCard from "./TaskCard.vue";
@@ -11,6 +13,10 @@ import { useTerminalNavigationStore } from "../../stores/terminalNavigation";
 const store = useTaskStore();
 const terminalNavigation = useTerminalNavigationStore();
 const projectFilter = ref<number | null>(null);
+const taskSearchQuery = ref("");
+const focusedTaskId = ref<number | null>(null);
+type TaskCardHandle = { focus: () => void };
+const taskCardRefs = new Map<number, TaskCardHandle>();
 const projectFilterValue = computed({
   get: () => (projectFilter.value == null ? "" : String(projectFilter.value)),
   set: (value: string) => {
@@ -18,18 +24,59 @@ const projectFilterValue = computed({
   },
 });
 const groups = computed(() => {
-  const grouped = groupTasks(store.tasks, projectFilter.value);
+  const matchingTasks = searchBoardTasks(store.tasks, store.projects, taskSearchQuery.value, projectFilter.value);
+  const grouped = groupTasks(matchingTasks);
   return [
     { id: "pending", title: "Pending", tasks: grouped.pending },
     { id: "inProgress", title: "In progress", tasks: grouped.inProgress },
     { id: "other", title: "Other statuses", tasks: grouped.other },
   ];
 });
+const visibleTaskIds = computed(() =>
+  store.loading ? [] : groups.value.flatMap((group) => group.tasks.map((task) => task.id)),
+);
 const projectPaths = computed(() => new Map(store.projects.map((project) => [project.id, project.path])));
 const projectsOpen = ref(false);
 const taskEditorOpen = ref(false);
 const editingTask = shallowRef<Task | null>(null);
 const deletionNotice = ref<string | null>(null);
+
+watch(visibleTaskIds, (taskIds) => {
+  if (focusedTaskId.value != null && !taskIds.includes(focusedTaskId.value)) focusedTaskId.value = null;
+});
+
+function setTaskCardRef(taskId: number, card: TaskCardHandle | null): void {
+  if (card) taskCardRefs.set(taskId, card);
+  else taskCardRefs.delete(taskId);
+}
+
+function focusNextVisibleTask(currentTaskId: number | null, direction: TaskFocusDirection): void {
+  const nextTaskId = nextVisibleTaskId(visibleTaskIds.value, currentTaskId, direction);
+  if (nextTaskId == null) return;
+
+  focusedTaskId.value = nextTaskId;
+  taskCardRefs.get(nextTaskId)?.focus();
+}
+
+function handleSearchKeydown(event: KeyboardEvent): void {
+  if (event.isComposing) return;
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+
+  event.preventDefault();
+  focusNextVisibleTask(null, event.key === "ArrowDown" ? "down" : "up");
+}
+
+function setFocusedTask(taskId: number): void {
+  focusedTaskId.value = taskId;
+}
+
+function clearFocusedTask(taskId: number): void {
+  if (focusedTaskId.value === taskId) focusedTaskId.value = null;
+}
+
+function handleTaskNavigation(taskId: number, direction: TaskFocusDirection): void {
+  focusNextVisibleTask(taskId, direction);
+}
 
 function createTask(): void {
   editingTask.value = null;
@@ -80,6 +127,18 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
           </option>
         </select>
       </label>
+      <label class="task-search" for="task-search">
+        <span>Search tasks</span>
+        <input
+          id="task-search"
+          v-model="taskSearchQuery"
+          type="search"
+          placeholder="Search by title, ID, description, or project"
+          aria-describedby="task-search-hint"
+          autocomplete="off"
+          @keydown="handleSearchKeydown"
+        />
+      </label>
       <div class="toolbar-actions">
         <button class="manage-button" type="button" @click="projectsOpen = true">Manage projects</button>
         <button class="new-task-button" type="button" :disabled="store.projects.length === 0" @click="createTask">
@@ -107,6 +166,7 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
         <ul v-if="group.tasks.length" class="task-list">
           <li v-for="task in group.tasks" :key="task.id">
             <TaskCard
+              :ref="(card) => setTaskCardRef(task.id, card as TaskCardHandle | null)"
               :task="task"
               :project-path="projectPaths.get(task.projectId) ?? 'Unknown project'"
               :git-status="store.gitStatuses[task.id] ?? null"
@@ -115,12 +175,18 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
               @move-status="updateStatus(task, $event)"
               @create-branch="createBranch(task)"
               @open-terminal="openTerminal(task)"
+              @focus-task="setFocusedTask(task.id)"
+              @blur-task="clearFocusedTask(task.id)"
+              @navigate="handleTaskNavigation(task.id, $event)"
             />
           </li>
         </ul>
         <p v-else class="column-empty">No tasks in this group.</p>
       </section>
     </div>
+    <span id="task-search-hint" class="visually-hidden">
+      Use the up and down arrow keys to move focus through matching tasks.
+    </span>
 
     <ProjectManagerDialog v-model:open="projectsOpen" :projects="store.projects" />
     <TaskEditorDialog
@@ -148,18 +214,32 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
 
 .board-toolbar {
   justify-content: space-between;
+  gap: 12px;
 }
 
-.project-filter {
+.project-filter,
+.task-search {
   display: grid;
   gap: 6px;
-  width: min(300px, 100%);
   color: var(--text-3);
   font-size: 11px;
   letter-spacing: 0.5px;
 }
 
-.project-filter select {
+.project-filter {
+  width: min(300px, 100%);
+}
+
+.task-search {
+  flex: 1;
+  min-width: 180px;
+  max-width: 440px;
+}
+
+.project-filter select,
+.task-search input {
+  box-sizing: border-box;
+  width: 100%;
   min-height: 42px;
   padding: 0 12px;
   border: 1px solid var(--border);
@@ -170,7 +250,13 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
   font-size: 13px;
 }
 
+.task-search input::placeholder {
+  color: var(--text-3);
+  opacity: 1;
+}
+
 .project-filter select:focus-visible,
+.task-search input:focus-visible,
 .manage-button:focus-visible,
 .new-task-button:focus-visible {
   outline: 2px solid var(--teal);
@@ -309,6 +395,17 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
   list-style: none;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .column-empty {
   margin: 0;
   padding: 12px 4px;
@@ -317,6 +414,10 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
 }
 
 @media (max-width: 900px) {
+  .board-toolbar {
+    flex-wrap: wrap;
+  }
+
   .task-columns {
     grid-template-columns: 1fr;
   }
@@ -330,6 +431,10 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
 
   .toolbar-actions {
     justify-content: flex-end;
+  }
+
+  .task-search {
+    max-width: none;
   }
 }
 </style>
