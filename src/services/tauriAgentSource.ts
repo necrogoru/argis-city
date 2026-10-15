@@ -127,6 +127,7 @@ export function createTauriAgentSource(): AgentSource {
       if (entry?.attachmentId === attachmentId) discardTerminalChannel(key, entry);
       return invoke<boolean>("detach_terminal_session", { taskId, tab, attachmentId });
     },
+    listTerminalInventory: () => invoke("list_terminal_inventory"),
     subscribe(callback) {
       let unlisten: UnlistenFn | null = null;
       let disposed = false;

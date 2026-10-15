@@ -1,5 +1,6 @@
 use crate::domain::{
-    TerminalAgent, TerminalAttachment, TerminalEvent, TerminalSessionInfo, TerminalSessionKey, TerminalSize,
+    TerminalAgent, TerminalAttachment, TerminalEvent, TerminalInventoryEntry, TerminalInventoryState,
+    TerminalSessionInfo, TerminalSessionKey, TerminalSize,
 };
 use anyhow::{anyhow, bail, Context};
 use parking_lot::Mutex;
@@ -57,6 +58,12 @@ struct ManagerState {
     closed_tasks: HashSet<i64>,
     by_id: HashMap<u64, Arc<ManagedSession>>,
     by_key: HashMap<TerminalSessionKey, u64>,
+    failed_starts: HashMap<TerminalSessionKey, FailedTerminalStart>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FailedTerminalStart {
+    key: TerminalSessionKey,
 }
 
 /// Owns interactive PTY processes for the lifetime of the Argis app.
@@ -88,6 +95,7 @@ struct SessionLifecycle {
     sink: Option<TerminalEventSink>,
     completed: Option<TerminalEvent>,
     output_history: TerminalOutputHistory,
+    failed: bool,
 }
 
 #[derive(Default)]
@@ -175,6 +183,7 @@ impl TerminalManager {
             manager.by_id.remove(&existing_id);
             manager.by_key.remove(&spec.key);
         }
+        manager.failed_starts.remove(&spec.key);
 
         let id = self
             .next_id
@@ -182,14 +191,37 @@ impl TerminalManager {
             .map_err(|_| anyhow!("terminal session identifier space is exhausted"))?;
 
         let pty_system = native_pty_system();
-        let pair = pty_system.openpty(spec.size.validate()?.into_pty_size()).context("opening PTY")?;
-        let reader = pair.master.try_clone_reader().context("opening PTY output reader")?;
-        let writer = pair.master.take_writer().context("opening PTY input writer")?;
+        let pair = match pty_system.openpty(spec.size.validate()?.into_pty_size()) {
+            Ok(pair) => pair,
+            Err(error) => {
+                manager.failed_starts.insert(spec.key, FailedTerminalStart { key: spec.key });
+                return Err(error).context("opening PTY");
+            }
+        };
+        let reader = match pair.master.try_clone_reader() {
+            Ok(reader) => reader,
+            Err(error) => {
+                manager.failed_starts.insert(spec.key, FailedTerminalStart { key: spec.key });
+                return Err(error).context("opening PTY output reader");
+            }
+        };
+        let writer = match pair.master.take_writer() {
+            Ok(writer) => writer,
+            Err(error) => {
+                manager.failed_starts.insert(spec.key, FailedTerminalStart { key: spec.key });
+                return Err(error).context("opening PTY input writer");
+            }
+        };
         let mut command = CommandBuilder::new(&spec.program);
         command.args(&spec.args);
         command.cwd(&cwd);
-        let child =
-            pair.slave.spawn_command(command).with_context(|| format!("starting {}", spec.program.display()))?;
+        let child = match pair.slave.spawn_command(command) {
+            Ok(child) => child,
+            Err(error) => {
+                manager.failed_starts.insert(spec.key, FailedTerminalStart { key: spec.key });
+                return Err(error).with_context(|| format!("starting {}", spec.program.display()));
+            }
+        };
         let process_id = child.process_id();
         let killer = child.clone_killer();
 
@@ -206,6 +238,7 @@ impl TerminalManager {
                 sink: Some(sink),
                 completed: None,
                 output_history: TerminalOutputHistory::default(),
+                failed: false,
             }),
         });
 
@@ -217,6 +250,7 @@ impl TerminalManager {
             Ok(worker) => worker,
             Err(error) => {
                 terminate_unstarted_session(&session);
+                manager.failed_starts.insert(spec.key, FailedTerminalStart { key: spec.key });
                 return Err(error).context("starting terminal output worker");
             }
         };
@@ -311,6 +345,7 @@ impl TerminalManager {
                 return Ok(());
             };
             manager.by_key.remove(&session.info.key);
+            manager.failed_starts.remove(&session.info.key);
             session
         };
         session.stop()
@@ -330,6 +365,9 @@ impl TerminalManager {
             if !manager.closed_tasks.insert(task_id) {
                 bail!("task terminal sessions are already being deleted");
             }
+            manager
+                .failed_starts
+                .retain(|key, _| key.task_id != task_id);
             manager
                 .by_key
                 .iter()
@@ -375,6 +413,7 @@ impl TerminalManager {
             let mut manager = self.state.lock();
             manager.shutting_down = true;
             manager.by_key.clear();
+            manager.failed_starts.clear();
             manager.by_id.drain().map(|(_, session)| session).collect::<Vec<_>>()
         };
 
@@ -394,6 +433,22 @@ impl TerminalManager {
     /// Number of child processes that have not yet exited.
     pub fn active_session_count(&self) -> usize {
         self.state.lock().by_id.values().filter(|session| session.running.load(Ordering::Acquire)).count()
+    }
+
+    /// Returns task/tab lifecycle for PTYs currently or previously owned by Argis in this app session.
+    pub fn inventory(&self) -> Vec<TerminalInventoryEntry> {
+        let mut entries = {
+            let manager = self.state.lock();
+            let mut entries = manager.by_id.values().map(|session| session.inventory_entry()).collect::<Vec<_>>();
+            entries.extend(manager.failed_starts.values().map(|failed| TerminalInventoryEntry {
+                task_id: failed.key.task_id,
+                tab: failed.key.tab,
+                state: TerminalInventoryState::Failed,
+            }));
+            entries
+        };
+        entries.sort_by_key(|entry| (entry.task_id, matches!(entry.tab, crate::domain::TerminalTab::Term), state_rank(entry.state)));
+        entries
     }
 
     fn session(&self, id: u64) -> anyhow::Result<Arc<ManagedSession>> {
@@ -423,6 +478,18 @@ impl ManagedSession {
         } else {
             bail!("terminal session has exited");
         }
+    }
+
+    fn inventory_entry(&self) -> TerminalInventoryEntry {
+        let lifecycle = self.lifecycle.lock();
+        let state = if self.running.load(Ordering::Acquire) {
+            TerminalInventoryState::Running
+        } else if lifecycle.failed {
+            TerminalInventoryState::Failed
+        } else {
+            TerminalInventoryState::Completed
+        };
+        TerminalInventoryEntry { task_id: self.info.key.task_id, tab: self.info.key.tab, state }
     }
 
     fn attach(&self, sink: TerminalEventSink) -> u64 {
@@ -464,6 +531,7 @@ impl ManagedSession {
     fn finish(&self, exit_code: u32, signal: Option<String>) {
         self.running.store(false, Ordering::Release);
         let mut lifecycle = self.lifecycle.lock();
+        lifecycle.failed = false;
         let event = TerminalEvent::Exited { session_id: self.info.id, exit_code, signal };
         lifecycle.completed = Some(event.clone());
         if lifecycle.sink.as_ref().is_some_and(|sink| sink(event).is_err()) {
@@ -474,6 +542,7 @@ impl ManagedSession {
     fn finish_with_error(&self, message: String) {
         self.running.store(false, Ordering::Release);
         let mut lifecycle = self.lifecycle.lock();
+        lifecycle.failed = true;
         let event = TerminalEvent::Error { session_id: self.info.id, message };
         lifecycle.completed = Some(event.clone());
         if lifecycle.sink.as_ref().is_some_and(|sink| sink(event).is_err()) {
@@ -505,6 +574,14 @@ impl ManagedSession {
         self.lifecycle.lock().sink = None;
         self.master.lock().take();
         Ok(())
+    }
+}
+
+fn state_rank(state: TerminalInventoryState) -> u8 {
+    match state {
+        TerminalInventoryState::Running => 0,
+        TerminalInventoryState::Completed => 1,
+        TerminalInventoryState::Failed => 2,
     }
 }
 

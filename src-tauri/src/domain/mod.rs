@@ -19,7 +19,7 @@ pub use snapshot::{ProviderSummary, Snapshot};
 pub use status::AgentStatus;
 pub use task::{Task, TaskStatus};
 pub use terminal::{
-    TerminalAgent, TerminalAttachment, TerminalEvent, TerminalSessionInfo, TerminalSessionKey, TerminalSize,
-    TerminalTab,
+    TerminalAgent, TerminalAttachment, TerminalEvent, TerminalInventoryEntry, TerminalInventoryState,
+    TerminalSessionInfo, TerminalSessionKey, TerminalSize, TerminalTab,
 };
 pub use tokens::TokenUsage;

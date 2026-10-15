@@ -84,6 +84,7 @@ describe("mock project and task operations", () => {
   it("does not pretend browser mock mode can start or reattach local PTYs", async () => {
     const source = new MockAgentSource("empty");
 
+    await expect(source.listTerminalInventory()).resolves.toEqual([]);
     await expect(source.reattachTerminalSession(1, "agent", () => {})).resolves.toBeNull();
     await expect(source.startTerminalSession(1, "agent", "claude", { cols: 80, rows: 24 }, () => {}))
       .rejects.toThrow("only available in the Argis desktop app");

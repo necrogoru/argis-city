@@ -1,8 +1,8 @@
 //! Tauri commands (see docs/CONTRACT.md → Transport).
 
 use crate::domain::{
-    Project, Snapshot, Task, TaskStatus, TerminalAgent, TerminalAttachment, TerminalEvent, TerminalSessionKey,
-    TerminalSize, TerminalTab,
+    Project, Snapshot, Task, TaskStatus, TerminalAgent, TerminalAttachment, TerminalEvent, TerminalInventoryEntry,
+    TerminalSessionKey, TerminalSize, TerminalTab,
 };
 use crate::git_worktrees::{
     create_task_worktree as create_git_worktree, delete_task_with_git_cleanup, inspect_task_git,
@@ -185,6 +185,11 @@ pub fn detach_terminal_session(
     terminal_state: State<'_, Arc<TerminalManager>>,
 ) -> bool {
     terminal_state.detach_attachment(TerminalSessionKey { task_id, tab }, attachment_id)
+}
+
+#[tauri::command]
+pub fn list_terminal_inventory(terminal_state: State<'_, Arc<TerminalManager>>) -> Vec<TerminalInventoryEntry> {
+    terminal_state.inventory()
 }
 
 fn terminal_event_sink(channel: Channel<TerminalEvent>) -> TerminalEventSink {

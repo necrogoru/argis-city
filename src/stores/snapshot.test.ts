@@ -54,6 +54,7 @@ function fakeSource(refresh: () => Promise<Snapshot> = async () => at(99)) {
     sendTerminalInput: async () => {},
     resizeTerminalSession: async () => {},
     detachTerminalSession: async () => false,
+    listTerminalInventory: async () => [],
   };
   return { source, resolveInitial: (s: Snapshot) => resolveInitial(s), rejectInitial: (e: unknown) => rejectInitial(e), push: (s: Snapshot) => push(s) };
 }

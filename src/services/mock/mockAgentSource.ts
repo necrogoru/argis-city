@@ -9,6 +9,7 @@ import type {
   TerminalAgent,
   TerminalAttachment,
   TerminalEvent,
+  TerminalInventoryEntry,
   TerminalSize,
   TerminalTab,
 } from "../../domain/types";
@@ -186,6 +187,10 @@ export class MockAgentSource implements AgentSource {
 
   async detachTerminalSession(_taskId: number, _tab: TerminalTab, _attachmentId: number): Promise<boolean> {
     return false;
+  }
+
+  async listTerminalInventory(): Promise<TerminalInventoryEntry[]> {
+    return [];
   }
 
   private findTask(id: number): Task {

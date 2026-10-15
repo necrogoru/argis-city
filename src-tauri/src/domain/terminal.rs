@@ -74,6 +74,24 @@ pub struct TerminalSessionInfo {
     pub running: bool,
 }
 
+/// Narrow inventory entry for Argis-managed task terminals.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalInventoryEntry {
+    pub task_id: i64,
+    pub tab: TerminalTab,
+    pub state: TerminalInventoryState,
+}
+
+/// Lifecycle state for a task/tab owned by `TerminalManager`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TerminalInventoryState {
+    Running,
+    Completed,
+    Failed,
+}
+
 /// Session data plus the generation of its current output-channel attachment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

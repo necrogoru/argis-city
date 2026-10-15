@@ -9,6 +9,7 @@ import type {
   TerminalAgent,
   TerminalAttachment,
   TerminalEvent,
+  TerminalInventoryEntry,
   TerminalSize,
   TerminalTab,
 } from "../domain/types";
@@ -51,6 +52,7 @@ export interface AgentSource {
   sendTerminalInput(sessionId: number, data: string): Promise<void>;
   resizeTerminalSession(sessionId: number, size: TerminalSize): Promise<void>;
   detachTerminalSession(taskId: number, tab: TerminalTab, attachmentId: number): Promise<boolean>;
+  listTerminalInventory(): Promise<TerminalInventoryEntry[]>;
 }
 
 /** Poll interval the backend (and the mock) emit snapshots at. */

@@ -99,7 +99,8 @@ pub fn run() {
             commands::reattach_terminal_session,
             commands::terminal_input,
             commands::resize_terminal_session,
-            commands::detach_terminal_session
+            commands::detach_terminal_session,
+            commands::list_terminal_inventory
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -49,6 +49,7 @@ function setup() {
     sendTerminalInput: async () => {},
     resizeTerminalSession: async () => {},
     detachTerminalSession: async () => false,
+    listTerminalInventory: async () => [],
   };
   const app = createApp({});
   const pinia = createPinia();

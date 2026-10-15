@@ -151,6 +151,14 @@ export interface TerminalAttachment {
   attachmentId: number;
 }
 
+export type TerminalInventoryState = "running" | "completed" | "failed";
+
+export interface TerminalInventoryEntry {
+  taskId: number;
+  tab: TerminalTab;
+  state: TerminalInventoryState;
+}
+
 export type TerminalEvent =
   | { type: "output"; sessionId: number; bytes: number[] }
   | { type: "error"; sessionId: number; message: string }

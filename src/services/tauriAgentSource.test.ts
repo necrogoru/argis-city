@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Project, Task, TerminalAttachment, TerminalEvent } from "../domain/types";
+import type { Project, Task, TerminalAttachment, TerminalEvent, TerminalInventoryEntry } from "../domain/types";
 import { createTauriAgentSource } from "./tauriAgentSource";
 
 const { invoke, channelHandlers } = vi.hoisted(() => ({
@@ -185,5 +185,17 @@ describe("TauriAgentSource project and task operations", () => {
       tab: "term",
       attachmentId: attachment.attachmentId,
     });
+  });
+
+  it("loads the Argis-managed terminal inventory through its dedicated command", async () => {
+    const inventory: TerminalInventoryEntry[] = [
+      { taskId: task.id, tab: "agent", state: "running" },
+      { taskId: task.id, tab: "term", state: "completed" },
+    ];
+    invoke.mockResolvedValueOnce(inventory);
+
+    await expect(createTauriAgentSource().listTerminalInventory()).resolves.toEqual(inventory);
+
+    expect(invoke).toHaveBeenCalledWith("list_terminal_inventory");
   });
 });

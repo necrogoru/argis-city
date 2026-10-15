@@ -24,6 +24,7 @@ one tower per tool (provider), one house per live session, subagents as cards.
 | command | `terminal_input`          | `{ sessionId, data }` → `()`                     |
 | command | `resize_terminal_session` | `{ sessionId, size }` → `()`                     |
 | command | `detach_terminal_session` | `{ taskId, tab, attachmentId }` → `boolean`      |
+| command | `list_terminal_inventory` | → `TerminalInventoryEntry[]`                     |
 | event   | `agents://snapshot`       | `Snapshot`, emitted every poll (2 s)              |
 
 Snapshot, project, task, and terminal wire types live in `src/domain/types.ts`
@@ -93,6 +94,10 @@ creates and records both resources only for an eligible task.
 - `TerminalAttachment` contains `session` and an opaque `attachmentId`. Detach
   only removes the matching output-channel attachment; it does not stop the
   process. A stale attachment ID cannot detach a newer reattachment.
+- `list_terminal_inventory` returns only Argis-managed task tabs from the
+  current app session, outside `Snapshot`: `{ taskId, tab, state }` where
+  `state` is `running`, `completed`, or `failed`. It never discovers external
+  terminals or provider-observed processes. Browser mock mode returns `[]`.
 - `onEvent` is a Tauri Channel carrying ordered `TerminalEvent` values:
   `output` has `sessionId` and `bytes` (a JSON byte array), `error` has
   `sessionId` and `message`, and `exited` has `sessionId`, `exitCode`, and a

@@ -58,6 +58,7 @@ function setup(overrides: Partial<AgentSource> = {}) {
     sendTerminalInput: async () => {},
     resizeTerminalSession: async () => {},
     detachTerminalSession: async () => false,
+    listTerminalInventory: async () => [],
     ...overrides,
   };
   const app = createApp({});

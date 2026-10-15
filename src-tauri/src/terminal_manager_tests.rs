@@ -117,6 +117,34 @@ fn reattach_if_present_returns_none_without_creating_a_process() {
     assert_eq!(manager.active_session_count(), 0);
 }
 
+#[test]
+fn terminal_inventory_reports_managed_task_tabs_and_lifecycle_state() {
+    let manager = TerminalManager::default();
+    let (running_sender, _running_events) = mpsc::channel();
+    let running = manager.start(spec(61, TerminalTab::Agent, "/bin/sleep", &["30"]), sink(running_sender)).unwrap();
+
+    let (completed_sender, completed_events) = mpsc::channel();
+    let completed = manager
+        .start(spec(61, TerminalTab::Term, "/bin/sh", &["-c", "printf 'done\\n'; exit 0"]), sink(completed_sender))
+        .unwrap();
+    assert!(output_until(&completed_events, "done").contains("done"));
+    assert_eq!(wait_for_exit(&completed_events, completed.id), (0, None));
+
+    let (failed_sender, _failed_events) = mpsc::channel();
+    assert!(manager.start(spec(62, TerminalTab::Agent, "/definitely/not/an/executable", &[]), sink(failed_sender)).is_err());
+
+    assert_eq!(
+        serde_json::to_value(manager.inventory()).unwrap(),
+        serde_json::json!([
+            { "taskId": 61, "tab": "agent", "state": "running" },
+            { "taskId": 61, "tab": "term", "state": "completed" },
+            { "taskId": 62, "tab": "agent", "state": "failed" }
+        ])
+    );
+
+    manager.stop(running.id).unwrap();
+}
+
 fn sink(sender: Sender<TerminalEvent>) -> TerminalEventSink {
     Arc::new(move |event| sender.send(event).map_err(|error| error.to_string()))
 }
