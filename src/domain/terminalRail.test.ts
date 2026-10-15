@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { Task, TerminalInventoryEntry } from "./types";
 import {
   aggregateTerminalRailEntries,
+  filterInProgressTerminalRailEntries,
+  terminalRailNavigationDirection,
   terminalRailStateLabel,
+  terminalRailTitlePreview,
   type TerminalRailLiveStatusMap,
 } from "./terminalRail";
 
@@ -97,6 +100,31 @@ describe("aggregateTerminalRailEntries", () => {
       expect.objectContaining({ taskId: 2, state: "running" }),
     ]);
   });
+
+  it("filters rendered rail entries by task workflow status, not terminal activity", () => {
+    const workflowStatus: Record<number, Task["status"]> = {
+      1: "inProgress",
+      2: "pending",
+      3: "inProgress",
+      4: "completed",
+      5: "stopped",
+      6: "canceled",
+    };
+    const workflowTasks: Task[] = tasks.map((task) => ({
+      ...task,
+      status: workflowStatus[task.id],
+    }));
+    const entries = aggregateTerminalRailEntries(
+      workflowTasks,
+      [{ taskId: 2, tab: "agent", state: "running" }],
+      {},
+    );
+
+    expect(filterInProgressTerminalRailEntries(entries, workflowTasks).map((entry) => entry.taskId)).toEqual([1, 3]);
+    expect(entries.map((entry) => entry.taskId)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(entries.find((entry) => entry.taskId === 1)?.state).toBe("idle");
+    expect(entries.find((entry) => entry.taskId === 2)?.state).toBe("running");
+  });
 });
 
 describe("terminalRailStateLabel", () => {
@@ -106,5 +134,57 @@ describe("terminalRailStateLabel", () => {
     expect(terminalRailStateLabel("running")).toBe("Running");
     expect(terminalRailStateLabel("completed")).toBe("Completed");
     expect(terminalRailStateLabel("unavailable")).toBe("Unavailable");
+  });
+});
+
+describe("terminalRailTitlePreview", () => {
+  it("shows at most the first 10 characters", () => {
+    expect(terminalRailTitlePreview("0123456789abc")).toBe("0123456789");
+  });
+
+  it("keeps titles shorter than 10 characters intact", () => {
+    expect(terminalRailTitlePreview("Argis UI")).toBe("Argis UI");
+  });
+});
+
+describe("terminalRailNavigationDirection", () => {
+  const keyEvent = (key: string, overrides: Partial<{
+    metaKey: boolean;
+    ctrlKey: boolean;
+    altKey: boolean;
+    shiftKey: boolean;
+    repeat: boolean;
+    isComposing: boolean;
+    defaultPrevented: boolean;
+  }> = {}) => ({
+    key,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    repeat: false,
+    isComposing: false,
+    defaultPrevented: false,
+    ...overrides,
+  });
+
+  it.each([
+    ["ArrowDown", "down"], ["j", "down"],
+    ["ArrowUp", "up"], ["k", "up"],
+  ] as const)("maps %s to %s", (key, direction) => {
+    expect(terminalRailNavigationDirection(keyEvent(key), true)).toBe(direction);
+  });
+
+  it("does not navigate outside a focused launcher or for unrelated keys", () => {
+    expect(terminalRailNavigationDirection(keyEvent("j"), false)).toBeNull();
+    expect(terminalRailNavigationDirection(keyEvent("Enter"), true)).toBeNull();
+  });
+
+  it("ignores modified, composing, prevented, or repeated Vim-key events", () => {
+    expect(terminalRailNavigationDirection(keyEvent("j", { metaKey: true }), true)).toBeNull();
+    expect(terminalRailNavigationDirection(keyEvent("k", { shiftKey: true }), true)).toBeNull();
+    expect(terminalRailNavigationDirection(keyEvent("j", { isComposing: true }), true)).toBeNull();
+    expect(terminalRailNavigationDirection(keyEvent("k", { defaultPrevented: true }), true)).toBeNull();
+    expect(terminalRailNavigationDirection(keyEvent("j", { repeat: true }), true)).toBeNull();
   });
 });

@@ -34,7 +34,7 @@ describe("normalizeAbsolutePath", () => {
 });
 
 describe("findTaskTerminalMatch", () => {
-  it("returns a task only when its normalized worktree matches and its id is in the terminal rail", () => {
+  it("retains house matching for a task omitted from the In progress-only rail", () => {
     const tasks = [task(7, "/worktrees/7-task/"), task(8, "/worktrees/8-task")];
 
     expect(findTaskTerminalMatch("/worktrees/7-task", tasks, [{ taskId: 7 }])).toEqual(tasks[0]);

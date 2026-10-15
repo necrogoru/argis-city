@@ -34,6 +34,12 @@ Aggregate a task’s two tabs for the rail: running if either tab is running; pe
 
 Keep the existing agent list/selected-house panel behavior. Add a compact vertical indexed rail alongside that content so it remains available in either right-column state. Hover expands a launcher to its full task title; focus and accessible labels expose the same title and state without requiring hover. Activating a launcher opens the app-level modal for that task with the Agent tab selected.
 
+### Filter and keyboard-focus Dashboard tasks
+
+Filter the rail’s rendered entries to tasks whose workflow status is `inProgress`, regardless of whether either terminal tab is running. Apply the filter in the rail presentation rather than to the shared `TerminalRailStore.entries`; selected-house matching must continue to find Argis-managed terminal targets for tasks omitted from the visible rail. An In progress task with no running session remains available through the rail and uses the existing modal, start controls, and terminal-availability behavior; opening it must not start a process or create Git resources automatically.
+
+Show the first 10 characters of the title in the compact launcher, while hover/focus exposes the full title and aggregate terminal state and the accessible name retains the full title and state. When a launcher button has focus, ArrowDown/`j` and ArrowUp/`k` move focus through visible entries in display order and wrap at the ends. Enter uses the existing activation path, opens the Agent tab, and leaves Dashboard active. Do not install a global shortcut: keys outside the focused rail, including editable fields and terminal input, retain their existing behavior. Ignore modified, repeated, or composing `j`/`k` key events.
+
 ### Match a selected house to its task worktree
 
 Load cached task/project data through the existing no-Git-check search path when the Dashboard needs it. Compare the selected house’s normalized `cwd` with each task’s normalized `worktreePath`; show Terminal only for a match that has an Argis-managed terminal target/session. Opening the action uses the shared terminal-navigation state and leaves the Dashboard view unchanged. A missing or stale task match hides the action rather than creating or repairing Git resources.
@@ -43,6 +49,8 @@ Load cached task/project data through the existing no-Git-check search path when
 - **Inventory can become stale while a terminal modal is closed** → Refresh the small Argis-owned session list independently of agent snapshots while Dashboard is visible.
 - **House and worktree paths can differ in representation** → Normalize path separators and absolute-path syntax before matching; do not infer a match from title or process name.
 - **Rail consumes right-column space** → Keep it compact by default and expand only the hovered/focused entry.
+- **A 10-character preview can be ambiguous** → Keep the full title and terminal state available on hover/focus and in the accessible name.
+- **The running-only rail hides other task statuses** → Keep the Tasks workspace and selected-house Terminal action available; the rail filter must not prune shared terminal inventory.
 - **Task search cache may be cold on Dashboard launch** → Load projects/tasks through the cached list path only; do not invoke per-task Git status checks.
 
 ## Migration Plan

@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
-import { terminalRailStateLabel } from "../domain/terminalRail";
+import { nextVisibleTaskId } from "../domain/taskFocus";
+import {
+  filterInProgressTerminalRailEntries,
+  terminalRailNavigationDirection,
+  terminalRailStateLabel,
+  terminalRailTitlePreview,
+} from "../domain/terminalRail";
 import { useTaskStore } from "../stores/tasks";
 import { useTerminalNavigationStore } from "../stores/terminalNavigation";
 import { useTerminalRailStore } from "../stores/terminalRail";
@@ -15,7 +21,7 @@ const { entries } = storeToRefs(terminalRail);
 const expandedTaskId = ref<number | null>(null);
 let intervalId: number | null = null;
 
-const visibleEntries = computed(() => entries.value.filter((entry) => taskStore.tasks.some((task) => task.id === entry.taskId)));
+const visibleEntries = computed(() => filterInProgressTerminalRailEntries(entries.value, taskStore.tasks));
 
 function railTint(state: (typeof entries.value)[number]["state"]): string {
   switch (state) {
@@ -37,6 +43,33 @@ function setExpanded(taskId: number | null): void {
 
 function clearExpanded(taskId: number): void {
   if (expandedTaskId.value === taskId) expandedTaskId.value = null;
+}
+
+function handleRailKeydown(event: KeyboardEvent): void {
+  const rail = event.currentTarget;
+  if (!(rail instanceof HTMLElement)) return;
+
+  const target = event.target instanceof Element ? event.target : null;
+  const launcher = target?.closest<HTMLButtonElement>(".rail-button") ?? null;
+  if (!launcher || !rail.contains(launcher)) return;
+
+  const direction = terminalRailNavigationDirection(event, true);
+  if (!direction) return;
+
+  const currentTaskId = Number(launcher.dataset.taskId);
+  const nextTaskId = nextVisibleTaskId(
+    visibleEntries.value.map((entry) => entry.taskId),
+    currentTaskId,
+    direction,
+  );
+  if (nextTaskId == null) return;
+
+  const nextLauncher = Array.from(rail.querySelectorAll<HTMLButtonElement>(".rail-button"))
+    .find((button) => Number(button.dataset.taskId) === nextTaskId);
+  if (!nextLauncher) return;
+
+  event.preventDefault();
+  nextLauncher.focus();
 }
 
 function startRefreshLoop(): void {
@@ -71,15 +104,16 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <nav v-if="visibleEntries.length > 0" class="rail" aria-label="Task terminals">
+  <nav v-if="visibleEntries.length > 0" class="rail" aria-label="In progress task terminals" @keydown="handleRailKeydown">
     <ol class="rail-list">
       <li v-for="entry in visibleEntries" :key="entry.taskId">
         <button
           type="button"
           class="rail-button"
+          :data-task-id="entry.taskId"
           :data-expanded="expandedTaskId === entry.taskId"
           :style="{ '--rail-tint': railTint(entry.state) }"
-          :aria-label="`Open Agent terminal for task ${entry.index}: ${entry.title}. ${terminalRailStateLabel(entry.state)}.`"
+          :aria-label="`Task ${entry.index}: ${entry.title}. In progress. ${terminalRailStateLabel(entry.state)} terminal. Press Enter to open; use arrow keys or j/k to move.`"
           @click="openAgentTab(entry.taskId)"
           @pointerenter="setExpanded(entry.taskId)"
           @pointerleave="clearExpanded(entry.taskId)"
@@ -88,6 +122,7 @@ onUnmounted(() => {
         >
           <span class="rail-index" aria-hidden="true">{{ entry.index }}</span>
           <span class="rail-dot" aria-hidden="true" />
+          <span class="rail-preview" aria-hidden="true">{{ terminalRailTitlePreview(entry.title) }}</span>
           <span class="rail-details">
             <span class="rail-title">{{ entry.title }}</span>
             <span class="rail-state">{{ terminalRailStateLabel(entry.state) }}</span>
@@ -121,7 +156,7 @@ onUnmounted(() => {
 }
 
 .rail-button {
-  width: 44px;
+  width: 144px;
   min-height: 44px;
   display: flex;
   align-items: center;
@@ -147,6 +182,12 @@ onUnmounted(() => {
   border-color: color-mix(in srgb, var(--rail-tint) 24%, var(--border-strong));
 }
 
+.rail-button:hover .rail-preview,
+.rail-button:focus-visible .rail-preview,
+.rail-button[data-expanded="true"] .rail-preview {
+  display: none;
+}
+
 .rail-index {
   width: 10px;
   flex: none;
@@ -163,6 +204,16 @@ onUnmounted(() => {
   border-radius: 999px;
   background: var(--rail-tint);
   box-shadow: 0 0 8px color-mix(in srgb, var(--rail-tint) 60%, transparent);
+}
+
+.rail-preview {
+  max-width: 76px;
+  flex: none;
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rail-details {

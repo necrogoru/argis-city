@@ -67,16 +67,26 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   approval) sort first and get an amber-tinted fill.
 - **Dashboard terminal rail**: a compact, indexed vertical rail just left of
   the right column, visible beside both the Agents list and selected-house
-  panel. It has one launcher per task terminal known to Argis. Hover or keyboard
-  focus reveals the full task title and aggregate state; activating a launcher
-  opens that task's terminal modal with Agent selected. Aggregate the Agent and
-  `term` tabs in this order: Running when either tab runs; Pending when a tab is
-  starting and neither runs; Unavailable when startup failed and neither tab is
-  running or starting; Completed when a started session exited and neither tab
-  is running, starting, or failed; otherwise Idle. Existing terminal inventory
-  supplies Running, Unavailable, or Completed when no live tab state takes
-  precedence. Use the existing status treatment and tokens: teal for running,
-  amber for pending, red for unavailable, blue for completed, and grey for idle.
+  panel. It shows one launcher per task whose workflow status is In progress,
+  including tasks with no active terminal session, and omits other task statuses
+  regardless of terminal activity. Apply this filter only to the rail
+  presentation; shared terminal inventory remains available to selected-house
+  matching. The compact launcher shows the first 10 characters of the task
+  title; hover or keyboard focus reveals the full title and aggregate terminal
+  state, and the accessible name includes the full title and state. When a
+  launcher is focused, ArrowDown/`j` and ArrowUp/`k` move through visible tasks
+  in display order and wrap at either end. Enter opens that task's terminal
+  modal with Agent selected without changing the active view or starting a
+  process by itself. Handle these keys only within the focused rail so text
+  entry and terminal input keep their existing behavior. Aggregate the Agent
+  and `term` tabs in this order: Running when either tab runs; Pending when a tab
+  is starting and neither runs; Unavailable when startup failed and neither tab
+  is running or starting; Completed when a started session exited and neither
+  tab is running, starting, or failed; otherwise Idle. Existing terminal
+  inventory supplies Running, Unavailable, or Completed when no live tab state
+  takes precedence. Use the existing status treatment and tokens: teal for
+  running, amber for pending, red for unavailable, blue for completed, and grey
+  for idle.
 - **Agent detail panel** (right: x 1060, y 124, w 340, padding 24, radius 24,
   glass + radial glow top-right in the provider colour; amber or red glow plus
   a 1px tinted stroke while the session awaits approval or its last turn
@@ -92,9 +102,10 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   Subagents "4 · 2 running · 1 needs you"); actions: primary teal button
   "Open folder", a conditional Terminal button, and a ghost icon button. Show
   Terminal only when the selected session's normalized absolute cwd matches a
-  task worktree and that task has an Argis-managed terminal target represented
-  in the rail. It opens the same terminal modal over the Dashboard without
-  switching views.
+  task worktree and that task has an Argis-managed terminal target in shared
+  terminal inventory, regardless of whether the task is visible in the
+  In-progress-only rail. It opens the same terminal modal over the Dashboard
+  without switching views.
 - **Subagents strip** (bottom: x 40, y 770, full width − 80, only when the
   selected session has subagents): header column (git-fork icon "Subagents",
   "Spawned by <title> / N total · M running") then equal-width cards (radius

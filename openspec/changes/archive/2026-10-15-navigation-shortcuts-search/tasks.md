@@ -26,7 +26,11 @@
 - [x] 4.3 Add the app-level terminal index rail and state aggregation; verify idle, pending, running, completed, and unavailable states, hover/focus expansion, and click-to-open on the Agent tab.
 - [x] 4.4 Match selected-house cwd to normalized task worktree paths and expose Terminal only for a matching Argis terminal; verify match/no-match cases and that the Dashboard lookup does not run Git status checks or change views.
 - [x] 4.5 Update `docs/design/SPEC.md` with the removed numeric shortcuts, rail, status behavior, and selected-house Terminal action; verify labels and state descriptions match the implementation.
+- [x] 4.6 Filter the rendered Dashboard rail to tasks with In progress workflow status, retaining In progress tasks with idle/no terminal sessions and hiding other task statuses; verify this does not filter shared terminal entries or break selected-house terminal matching.
+- [x] 4.7 Show the first 10 title characters in the compact launcher while preserving the full title and aggregate terminal state on focus/hover and in accessible names; verify short and long titles.
+- [x] 4.8 Add rail-scoped ArrowUp/ArrowDown and `k`/`j` focus movement with wrapping, and Enter activation of the focused task’s Agent terminal; verify keys do not hijack text entry, opening preserves Dashboard, and Enter does not auto-start a process.
+- [x] 4.9 Update `docs/design/SPEC.md` with the In progress-only rail, title preview, keyboard navigation, and the unchanged selected-house behavior; verify the design description matches implementation.
 
 ## 5. Integration verification
 
-- [ ] 5.1 Run `pnpm build`, `pnpm exec vitest run`, `cargo test --manifest-path src-tauri/Cargo.toml`, `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`, and `cargo fmt --manifest-path src-tauri/Cargo.toml --check`; manually verify palette task search, Dashboard startup, numeric shortcut removal, rail behavior, selected-house matching, and uninterrupted city monitoring.
+- [x] 5.1 Run `pnpm build`, `pnpm exec vitest run`, `cargo test --manifest-path src-tauri/Cargo.toml`, `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`, and `cargo fmt --manifest-path src-tauri/Cargo.toml --check`; manually verify palette task search, Dashboard startup, numeric shortcut removal, the In progress-only rail and title preview, ArrowUp/ArrowDown/`j`/`k`/Enter behavior, selected-house matching for tasks filtered out of the rail, and uninterrupted city monitoring.

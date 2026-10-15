@@ -1,5 +1,6 @@
 import type { Task, TerminalInventoryEntry, TerminalInventoryState, TerminalTab } from "./types";
 import type { TerminalStatus } from "../ui/Tasks/useTerminalSession";
+import { taskFocusDirectionForKey } from "./taskFocus";
 
 export type TerminalRailState = "idle" | "pending" | "running" | "completed" | "unavailable";
 
@@ -78,6 +79,35 @@ export function aggregateTerminalRailEntries(
       state: aggregateTaskState(inventoryStates, statuses),
     }];
   });
+}
+
+export function filterInProgressTerminalRailEntries(
+  entries: readonly TerminalRailEntry[],
+  tasks: readonly Task[],
+): TerminalRailEntry[] {
+  const inProgressTaskIds = new Set(tasks.filter((task) => task.status === "inProgress").map((task) => task.id));
+  return entries.filter((entry) => inProgressTaskIds.has(entry.taskId));
+}
+
+export function terminalRailTitlePreview(title: string): string {
+  return Array.from(title).slice(0, 10).join("");
+}
+
+export type TerminalRailNavigationDirection = "down" | "up";
+export type TerminalRailKeyEvent = Pick<
+  KeyboardEvent,
+  "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "repeat" | "isComposing" | "defaultPrevented"
+>;
+
+export function terminalRailNavigationDirection(
+  event: TerminalRailKeyEvent,
+  isLauncherFocused: boolean,
+): TerminalRailNavigationDirection | null {
+  if (!isLauncherFocused || event.isComposing || event.defaultPrevented) return null;
+  if (event.repeat && ["j", "k"].includes(event.key.toLowerCase())) return null;
+
+  const direction = taskFocusDirectionForKey(event);
+  return direction === "down" || direction === "up" ? direction : null;
 }
 
 export function terminalRailStateLabel(state: TerminalRailState): string {
