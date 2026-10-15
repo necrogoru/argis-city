@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { ChevronDown, ChevronUp, GitBranch, SquareTerminal } from "@lucide/vue";
 import type { Task, TaskGitStatus, TaskStatus } from "../../domain/types";
 import { nextTaskStatus, previousTaskStatus, TASK_STATUS_LABELS } from "../../domain/tasks";
+import { canCreateTaskBranch, canOpenTaskTerminal } from "../../domain/taskBoardShortcuts";
 
 const props = defineProps<{
   task: Task;
@@ -29,12 +30,12 @@ const branchLabel = computed(() => {
   if (props.gitStatus.reason) return props.gitStatus.reason;
   return props.gitStatus.canCreateBranch ? "Create branch and worktree" : "Git worktree unavailable";
 });
-const branchDisabled = computed(() => !props.gitStatus?.canCreateBranch || props.task.branchName !== null);
+const branchDisabled = computed(() => !canCreateTaskBranch(props.task, props.gitStatus));
 const terminalLabel = computed(() => {
   if (!props.task.worktreePath) return "Open terminal (create a task worktree first)";
   return props.canOpenTerminal ? "Open terminal" : "Embedded terminal is not available yet";
 });
-const terminalDisabled = computed(() => !props.canOpenTerminal || props.task.worktreePath === null);
+const terminalDisabled = computed(() => !canOpenTaskTerminal(props.task, props.canOpenTerminal));
 const projectName = computed(() => props.projectPath.split(/[\\/]/).filter(Boolean).at(-1) ?? props.projectPath);
 
 function handleKeydown(event: KeyboardEvent): void {

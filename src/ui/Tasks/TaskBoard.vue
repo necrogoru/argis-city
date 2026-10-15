@@ -1,9 +1,16 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import type { Task, TaskDeletionOutcome, TaskStatus } from "../../domain/types";
 import { groupTasks } from "../../domain/tasks";
 import { nextVisibleTaskId, type TaskFocusDirection } from "../../domain/taskFocus";
 import { searchBoardTasks } from "../../domain/taskSearch";
+import {
+  canCreateTaskBranch,
+  canCreateTaskFromBoard,
+  canOpenTaskTerminal,
+  focusedVisibleTask,
+  taskBoardActionForShortcut,
+} from "../../domain/taskBoardShortcuts";
 import { useTaskStore } from "../../stores/tasks";
 import ProjectManagerDialog from "./ProjectManagerDialog.vue";
 import TaskCard from "./TaskCard.vue";
@@ -78,6 +85,38 @@ function handleTaskNavigation(taskId: number, direction: TaskFocusDirection): vo
   focusNextVisibleTask(taskId, direction);
 }
 
+function handleTaskBoardShortcut(event: KeyboardEvent): void {
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  const hasOpenDialog =
+    projectsOpen.value || taskEditorOpen.value || document.querySelector("dialog[open]") !== null;
+  const action = taskBoardActionForShortcut(event, target, hasOpenDialog);
+  if (action === null) return;
+
+  if (action === "createTask") {
+    if (!canCreateTaskFromBoard(store.projects.length)) return;
+    event.preventDefault();
+    createTask();
+    return;
+  }
+
+  const task = focusedVisibleTask(focusedTaskId.value, visibleTaskIds.value, store.tasks);
+  if (!task) return;
+
+  if (action === "createBranch") {
+    if (!canCreateTaskBranch(task, store.gitStatuses[task.id] ?? null)) return;
+    event.preventDefault();
+    createBranch(task);
+    return;
+  }
+
+  if (!canOpenTaskTerminal(task, task.worktreePath !== null)) return;
+  event.preventDefault();
+  openTerminal(task);
+}
+
+onMounted(() => window.addEventListener("keydown", handleTaskBoardShortcut));
+onBeforeUnmount(() => window.removeEventListener("keydown", handleTaskBoardShortcut));
+
 function createTask(): void {
   editingTask.value = null;
   taskEditorOpen.value = true;
@@ -141,7 +180,12 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
       </label>
       <div class="toolbar-actions">
         <button class="manage-button" type="button" @click="projectsOpen = true">Manage projects</button>
-        <button class="new-task-button" type="button" :disabled="store.projects.length === 0" @click="createTask">
+        <button
+          class="new-task-button"
+          type="button"
+          :disabled="!canCreateTaskFromBoard(store.projects.length)"
+          @click="createTask"
+        >
           New task
         </button>
       </div>
