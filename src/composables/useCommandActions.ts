@@ -4,7 +4,6 @@ import { Copy, FolderOpen, List, Map as MapIcon, MapPin, RefreshCw, X, type Luci
 import type { PaletteColor } from "../domain/palette";
 import { PROVIDER_ORDER, PROVIDERS } from "../domain/providers";
 import type { Searchable } from "../domain/search";
-import { formatModKeyLabel } from "./useModKey";
 import { useAppViewStore } from "../stores/appView";
 import { useCameraRigStore } from "../stores/cameraRig";
 import { useSelectionStore } from "../stores/selection";
@@ -25,22 +24,19 @@ export interface CommandAction extends Searchable {
 export function appViewNavigationActions(
   showCity: () => void,
   showTasks: () => void,
-  shortcutLabel: (key: string) => string = formatModKeyLabel,
 ): CommandAction[] {
   return [
     {
       id: "view:city",
       label: "Show Dashboard",
-      hint: shortcutLabel("1"),
-      keywords: ["city", "monitoring", "home", "overview", shortcutLabel("1")],
+      keywords: ["city", "monitoring", "home", "overview", "dashboard"],
       Icon: MapIcon,
       run: showCity,
     },
     {
       id: "view:tasks",
       label: "Open Tasks",
-      hint: shortcutLabel("2"),
-      keywords: ["task", "workspace", "board", shortcutLabel("2")],
+      keywords: ["task", "workspace", "board", "tasks"],
       Icon: List,
       run: showTasks,
     },

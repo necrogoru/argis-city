@@ -11,13 +11,9 @@ export interface ShortcutTargetLike {
   closest: (selector: string) => unknown;
 }
 
-/** Dashboard and Tasks view shortcuts for the active platform. */
 export function appViewForShortcut(event: AppViewShortcutEvent, mac: boolean): AppViewShortcutTarget | null {
   if (event.repeat || event.isComposing || event.altKey || event.shiftKey) return null;
   if (mac ? !event.metaKey || event.ctrlKey : !event.ctrlKey || event.metaKey) return null;
-
-  if (event.key === "1") return "city";
-  if (event.key === "2") return "tasks";
   return null;
 }
 

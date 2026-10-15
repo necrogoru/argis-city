@@ -6,12 +6,11 @@ describe("appViewNavigationActions", () => {
   it("makes Dashboard and Tasks searchable and invokes their navigation actions", () => {
     const showCity = vi.fn();
     const showTasks = vi.fn();
-    const actions = appViewNavigationActions(showCity, showTasks, (key) => `⌘${key}`);
+    const actions = appViewNavigationActions(showCity, showTasks);
 
     expect(searchActions(actions, "dashboard").map((action) => action.id)).toEqual(["view:city"]);
-    expect(searchActions(actions, "⌘1").map((action) => action.id)).toEqual(["view:city"]);
     expect(searchActions(actions, "workspace").map((action) => action.id)).toEqual(["view:tasks"]);
-    expect(actions.map((action) => action.hint)).toEqual(["⌘1", "⌘2"]);
+    expect(actions.map((action) => action.hint)).toEqual([undefined, undefined]);
 
     actions.find((action) => action.id === "view:city")?.run();
     actions.find((action) => action.id === "view:tasks")?.run();
@@ -21,9 +20,9 @@ describe("appViewNavigationActions", () => {
   });
 
   it("uses the caller's platform modifier label", () => {
-    const actions = appViewNavigationActions(() => {}, () => {}, (key) => `Ctrl+${key}`);
+    const actions = appViewNavigationActions(() => {}, () => {});
 
-    expect(actions.map((action) => action.hint)).toEqual(["Ctrl+1", "Ctrl+2"]);
-    expect(searchActions(actions, "Ctrl+2").map((action) => action.id)).toEqual(["view:tasks"]);
+    expect(actions.map((action) => action.hint)).toEqual([undefined, undefined]);
+    expect(searchActions(actions, "tasks").map((action) => action.id)).toEqual(["view:tasks"]);
   });
 });

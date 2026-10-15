@@ -27,14 +27,11 @@ const target = (
 });
 
 describe("appViewForShortcut", () => {
-  it("maps Command+1/2 to Dashboard/Tasks on macOS", () => {
-    expect(appViewForShortcut(key("1", { metaKey: true }), true)).toBe("city");
-    expect(appViewForShortcut(key("2", { metaKey: true }), true)).toBe("tasks");
-  });
-
-  it("maps Control+1/2 to Dashboard/Tasks off macOS", () => {
-    expect(appViewForShortcut(key("1", { ctrlKey: true }), false)).toBe("city");
-    expect(appViewForShortcut(key("2", { ctrlKey: true }), false)).toBe("tasks");
+  it("does not map numeric modifiers to primary-view switching", () => {
+    expect(appViewForShortcut(key("1", { metaKey: true }), true)).toBeNull();
+    expect(appViewForShortcut(key("2", { metaKey: true }), true)).toBeNull();
+    expect(appViewForShortcut(key("1", { ctrlKey: true }), false)).toBeNull();
+    expect(appViewForShortcut(key("2", { ctrlKey: true }), false)).toBeNull();
   });
 
   it("rejects the wrong platform modifier and extra modifiers", () => {
