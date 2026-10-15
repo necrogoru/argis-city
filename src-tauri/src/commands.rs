@@ -1,8 +1,8 @@
 //! Tauri commands (see docs/CONTRACT.md → Transport).
 
 use crate::domain::{
-    Project, Snapshot, Task, TaskStatus, TerminalAgent, TerminalAttachment, TerminalEvent, TerminalInventoryEntry,
-    TerminalSessionKey, TerminalSize, TerminalTab,
+    Project, Snapshot, Task, TaskAgentResume, TaskStatus, TerminalAgent, TerminalAttachment, TerminalEvent,
+    TerminalInventoryEntry, TerminalSessionKey, TerminalSize, TerminalTab,
 };
 use crate::git_worktrees::{
     create_task_worktree as create_git_worktree, delete_task_with_git_cleanup, inspect_task_git,
@@ -57,6 +57,33 @@ pub async fn register_project(
 #[tauri::command]
 pub async fn list_tasks(project_id: Option<i64>, state: State<'_, TaskStoreState>) -> Result<Vec<Task>, String> {
     task_store_operation(state, move |store| store.list_tasks(project_id)).await
+}
+
+#[tauri::command]
+pub async fn list_task_agent_resumes(state: State<'_, TaskStoreState>) -> Result<Vec<TaskAgentResume>, String> {
+    task_store_operation(state, |store| store.list_task_agent_resumes()).await
+}
+
+#[tauri::command]
+pub async fn get_task_agent_resume(
+    task_id: i64,
+    state: State<'_, TaskStoreState>,
+) -> Result<Option<TaskAgentResume>, String> {
+    task_store_operation(state, move |store| store.get_task_agent_resume(task_id)).await
+}
+
+#[tauri::command]
+pub async fn save_task_agent_resume(
+    reference: TaskAgentResume,
+    state: State<'_, TaskStoreState>,
+) -> Result<TaskAgentResume, String> {
+    task_store_operation(state, move |store| {
+        store.save_task_agent_resume(&reference)?;
+        store
+            .get_task_agent_resume(reference.task_id)?
+            .ok_or_else(|| anyhow::anyhow!("task agent resume reference was not saved"))
+    })
+    .await
 }
 
 #[tauri::command]

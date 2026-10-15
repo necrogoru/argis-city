@@ -1,8 +1,9 @@
 use super::message::{child_status, current_step, latest_turn, model_ref, session_status, Outcome};
 use super::OpenCodeProvider;
-use crate::domain::{AgentStatus, ProgressSource};
+use crate::domain::{AgentStatus, ProgressSource, Snapshot, TerminalAgent};
 use crate::providers::{AgentProvider, CollectContext};
 use crate::system::ProcessInfo;
+use crate::terminal_manager::ManagedAgentProcess;
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use std::fs;
@@ -79,12 +80,22 @@ fn provider_reads_sqlite_with_real_columns() {
     let model = r#"{"id":"gpt-6-luna"}"#;
     conn.execute(
         insert,
-        params!["root", None::<String>, dir, "Build API", now - 50_000, now - 1_000, None::<i64>, "build", model],
+        params!["ses_root", None::<String>, dir, "Build API", now - 50_000, now - 1_000, None::<i64>, "build", model],
     )
     .unwrap();
     conn.execute(
         insert,
-        params!["kid", "root", dir, "Review (@reviewer)", now - 40_000, now - 35_000, None::<i64>, "reviewer", model],
+        params![
+            "ses_kid",
+            "ses_root",
+            dir,
+            "Review (@reviewer)",
+            now - 40_000,
+            now - 35_000,
+            None::<i64>,
+            "reviewer",
+            model
+        ],
     )
     .unwrap();
     conn.execute(insert, params!["gone", None::<String>, dir, "Archived", 0, now, now, "build", model]).unwrap();
@@ -94,12 +105,12 @@ fn provider_reads_sqlite_with_real_columns() {
     )
     .unwrap();
     let msg = "INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?1, ?2, ?3, ?3, ?4)";
-    conn.execute(msg, params!["m1", "root", now - 2_000, assistant(false, "").to_string()]).unwrap();
-    conn.execute(msg, params!["m2", "kid", now - 36_000, assistant(true, "stop").to_string()]).unwrap();
+    conn.execute(msg, params!["m1", "ses_root", now - 2_000, assistant(false, "").to_string()]).unwrap();
+    conn.execute(msg, params!["m2", "ses_kid", now - 36_000, assistant(true, "stop").to_string()]).unwrap();
     let part = json!({"type": "text", "text": "Writing handlers"}).to_string();
-    conn.execute("INSERT INTO part VALUES ('p1', 'm1', 'root', ?1, ?1, ?2)", params![now - 1_500, part]).unwrap();
+    conn.execute("INSERT INTO part VALUES ('p1', 'm1', 'ses_root', ?1, ?1, ?2)", params![now - 1_500, part]).unwrap();
     for (pos, status) in ["completed", "completed", "in_progress", "pending"].iter().enumerate() {
-        conn.execute("INSERT INTO todo VALUES ('root', 'x', ?1, 'high', ?2, 0, 0)", params![status, pos as i64])
+        conn.execute("INSERT INTO todo VALUES ('ses_root', 'x', ?1, 'high', ?2, 0, 0)", params![status, pos as i64])
             .unwrap();
     }
     drop(conn);
@@ -113,12 +124,12 @@ fn provider_reads_sqlite_with_real_columns() {
         cwd: Some(work.path().to_path_buf()),
         started_at_ms: now - 60_000,
     };
-    let sessions = provider.collect(&CollectContext { processes: vec![proc], now_ms: now }).unwrap();
+    let sessions = provider.collect(&CollectContext { processes: vec![proc.clone()], now_ms: now }).unwrap();
     assert_eq!(sessions.len(), 1);
     let s = &sessions[0];
     assert_eq!(
         (s.id.as_str(), s.title.as_str(), s.pid, s.status),
-        ("opencode:root", "Build API", Some(9), AgentStatus::Running)
+        ("opencode:ses_root", "Build API", Some(9), AgentStatus::Running)
     );
     assert_eq!((s.model.as_deref(), s.tokens.total, s.tokens.context_used), (Some("gpt-6-luna"), 100, Some(1000)));
     assert_eq!((s.progress.source, s.progress.percent), (ProgressSource::Plan, Some(50.0)));
@@ -126,6 +137,20 @@ fn provider_reads_sqlite_with_real_columns() {
     assert_eq!(s.subagents.len(), 1);
     let kid = &s.subagents[0];
     assert_eq!((kid.kind.as_deref(), kid.status), (Some("reviewer"), AgentStatus::Done));
+
+    let reference = crate::task_resume::reference_for_process(
+        &Snapshot { generated_at: now, sessions, providers: Vec::new() },
+        &ManagedAgentProcess {
+            terminal_session_id: 1,
+            task_id: 7,
+            agent_cli: TerminalAgent::OpenCode,
+            process_id: 9,
+            started_at_ms: now - 60_000,
+            cwd: work.path().to_path_buf(),
+        },
+    )
+    .expect("the OpenCode database fixture session belongs to the managed process");
+    assert_eq!(reference.native_reference, "ses_root");
 }
 
 #[test]

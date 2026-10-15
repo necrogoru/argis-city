@@ -9,6 +9,7 @@ pub mod project_paths;
 pub mod providers;
 pub mod shared;
 pub mod system;
+mod task_resume;
 pub mod task_store;
 pub mod terminal_manager;
 
@@ -25,15 +26,18 @@ mod task_store_tests;
 mod terminal_manager_tests;
 
 use monitor::{Monitor, Poller, ProviderRegistry};
+use parking_lot::Mutex;
 use providers::claude::ClaudeProvider;
 use providers::codex::CodexProvider;
 use providers::opencode::{ModelCatalog, OpenCodeProvider};
 use providers::pi::PiProvider;
 use providers::AgentProvider;
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use system::{HomePaths, SysinfoProcessSource, SystemClock};
+use task_resume::record_agent_session_references;
 use task_store::TaskStoreState;
 use tauri::{Emitter, Manager};
 use terminal_manager::TerminalManager;
@@ -63,10 +67,12 @@ pub fn run() {
     let paths = HomePaths::detect().unwrap_or_else(|_| HomePaths::from_home(Path::new("/nonexistent")));
     let monitor = Arc::new(Monitor::new(build_registry(&paths)));
     let poller_monitor = Arc::clone(&monitor);
+    let terminal_manager = Arc::new(TerminalManager::default());
+    let poller_terminal_manager = Arc::clone(&terminal_manager);
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(monitor)
-        .manage(Arc::new(TerminalManager::default()))
+        .manage(terminal_manager)
         .setup(move |app| {
             let task_store_path = app
                 .path()
@@ -75,8 +81,14 @@ pub fn run() {
                 .map_err(|error| error.to_string());
             app.manage(TaskStoreState::from_path(task_store_path));
 
+            let task_store_state = app.state::<TaskStoreState>().inner().clone();
             let handle = app.handle().clone();
+            let observed_references = Mutex::new(HashSet::new());
             let poller = Poller::spawn(poller_monitor, POLL_INTERVAL, move |snapshot| {
+                if let Ok(store) = task_store_state.store() {
+                    let processes = poller_terminal_manager.running_agent_processes();
+                    record_agent_session_references(snapshot, &processes, &store, &mut observed_references.lock());
+                }
                 let _ = handle.emit(SNAPSHOT_EVENT, snapshot);
             })?;
             app.manage(poller);
@@ -89,6 +101,9 @@ pub fn run() {
             commands::list_projects,
             commands::register_project,
             commands::list_tasks,
+            commands::list_task_agent_resumes,
+            commands::get_task_agent_resume,
+            commands::save_task_agent_resume,
             commands::create_task,
             commands::update_task_details,
             commands::update_task_status,

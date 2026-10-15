@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Project, Task, TerminalAttachment, TerminalEvent, TerminalInventoryEntry } from "../domain/types";
+import type {
+  Project,
+  Task,
+  TaskAgentResume,
+  TerminalAttachment,
+  TerminalEvent,
+  TerminalInventoryEntry,
+} from "../domain/types";
 import { createTauriAgentSource } from "./tauriAgentSource";
 
 const { invoke, channelHandlers } = vi.hoisted(() => ({
@@ -35,6 +42,13 @@ const task: Task = {
   status: "pending",
   branchName: null,
   worktreePath: null,
+};
+const resume: TaskAgentResume = {
+  taskId: task.id,
+  provider: "claude",
+  nativeReference: "opaque-session-id",
+  worktreePath: "/projects/argis/.argis/worktrees/12-add-task-board",
+  lastObservedAtMs: 1_780_000_000_123,
 };
 
 describe("TauriAgentSource project and task operations", () => {
@@ -112,6 +126,19 @@ describe("TauriAgentSource project and task operations", () => {
 
     expect(invoke).toHaveBeenNthCalledWith(1, "inspect_task_git_status", { taskId: task.id });
     expect(invoke).toHaveBeenNthCalledWith(2, "create_task_worktree", { taskId: task.id });
+  });
+
+  it("lists, reads and saves typed task-agent resume references through the backend commands", async () => {
+    invoke.mockResolvedValueOnce([resume]).mockResolvedValueOnce(resume).mockResolvedValueOnce(resume);
+    const source = createTauriAgentSource();
+
+    await expect(source.listTaskAgentResumes()).resolves.toEqual([resume]);
+    await expect(source.getTaskAgentResume(task.id)).resolves.toEqual(resume);
+    await expect(source.saveTaskAgentResume(resume)).resolves.toEqual(resume);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "list_task_agent_resumes");
+    expect(invoke).toHaveBeenNthCalledWith(2, "get_task_agent_resume", { taskId: task.id });
+    expect(invoke).toHaveBeenNthCalledWith(3, "save_task_agent_resume", { reference: resume });
   });
 
   it("streams terminal channel events and forwards terminal input and size", async () => {

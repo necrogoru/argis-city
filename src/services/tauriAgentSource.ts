@@ -5,6 +5,7 @@ import {
   type Project,
   type Snapshot,
   type Task,
+  type TaskAgentResume,
   type TaskDeletionOutcome,
   type TaskGitStatus,
   type TerminalAttachment,
@@ -85,6 +86,9 @@ export function createTauriAgentSource(): AgentSource {
     listProjects: () => invoke<Project[]>("list_projects"),
     addProject: (path, createIfMissing) => invoke<Project>("register_project", { path, createIfMissing }),
     listTasks: (projectId) => invoke<Task[]>("list_tasks", { projectId: projectId ?? null }),
+    listTaskAgentResumes: () => invoke<TaskAgentResume[]>("list_task_agent_resumes"),
+    getTaskAgentResume: (taskId) => invoke<TaskAgentResume | null>("get_task_agent_resume", { taskId }),
+    saveTaskAgentResume: (reference) => invoke<TaskAgentResume>("save_task_agent_resume", { reference }),
     createTask: (projectId, title, description) =>
       invoke<Task>("create_task", { projectId, title, description }),
     updateTaskDetails: (id, title, description) =>

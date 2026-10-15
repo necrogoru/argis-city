@@ -1,4 +1,4 @@
-use crate::domain::{Project, Task, TaskStatus};
+use crate::domain::{Project, ProviderId, Task, TaskAgentResume, TaskStatus};
 use anyhow::{anyhow, bail, Context};
 use parking_lot::Mutex;
 use rusqlite::{params, Connection, OptionalExtension, Row, TransactionBehavior};
@@ -7,7 +7,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 /// Argis-owned writable data. Provider databases must continue to use the
 /// read-only helpers in `shared::sqlite` instead.
@@ -94,6 +94,60 @@ impl TaskStore {
         task_by_id(&connection, id)
     }
 
+    pub fn save_task_agent_resume(&self, reference: &TaskAgentResume) -> anyhow::Result<()> {
+        if reference.native_reference.trim().is_empty() {
+            bail!("agent resume reference must not be empty");
+        }
+        if !Path::new(&reference.worktree_path).is_absolute() {
+            bail!("agent resume worktree path must be absolute");
+        }
+        if reference.last_observed_at_ms < 0 {
+            bail!("agent resume timestamp must be non-negative");
+        }
+
+        let connection = self.connection.lock();
+        connection.execute(
+            "INSERT INTO task_agent_resume (task_id, provider, native_reference, worktree_path, last_observed_at_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(task_id) DO UPDATE SET
+                provider = excluded.provider,
+                native_reference = excluded.native_reference,
+                worktree_path = excluded.worktree_path,
+                last_observed_at_ms = excluded.last_observed_at_ms",
+            params![
+                reference.task_id,
+                reference.provider.as_str(),
+                reference.native_reference,
+                reference.worktree_path,
+                reference.last_observed_at_ms
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_task_agent_resume(&self, task_id: i64) -> anyhow::Result<Option<TaskAgentResume>> {
+        let connection = self.connection.lock();
+        connection
+            .query_row(
+                "SELECT task_id, provider, native_reference, worktree_path, last_observed_at_ms
+                 FROM task_agent_resume WHERE task_id = ?1",
+                [task_id],
+                task_agent_resume_from_row,
+            )
+            .optional()
+            .context("reading task agent resume reference")
+    }
+
+    pub fn list_task_agent_resumes(&self) -> anyhow::Result<Vec<TaskAgentResume>> {
+        let connection = self.connection.lock();
+        let mut statement = connection.prepare(
+            "SELECT task_id, provider, native_reference, worktree_path, last_observed_at_ms
+             FROM task_agent_resume ORDER BY task_id",
+        )?;
+        let rows = statement.query_map([], task_agent_resume_from_row)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>().context("reading task agent resume references")
+    }
+
     pub fn set_task_worktree(&self, id: i64, branch_name: &str, worktree_path: &str) -> anyhow::Result<Task> {
         let connection = self.connection.lock();
         let changed = connection.execute(
@@ -147,21 +201,32 @@ fn migrate(connection: &mut Connection) -> anyhow::Result<()> {
     }
 
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    if version == 0 {
+        transaction.execute_batch(
+            "CREATE TABLE projects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                path TEXT NOT NULL UNIQUE
+            );
+            CREATE TABLE tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('pending', 'inProgress', 'stopped', 'canceled', 'completed')),
+                branch_name TEXT,
+                worktree_path TEXT
+            );
+            CREATE INDEX tasks_by_project ON tasks(project_id, id);",
+        )?;
+    }
     transaction.execute_batch(
-        "CREATE TABLE projects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            path TEXT NOT NULL UNIQUE
-        );
-        CREATE TABLE tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-            title TEXT NOT NULL,
-            description TEXT NOT NULL,
-            status TEXT NOT NULL CHECK (status IN ('pending', 'inProgress', 'stopped', 'canceled', 'completed')),
-            branch_name TEXT,
-            worktree_path TEXT
-        );
-        CREATE INDEX tasks_by_project ON tasks(project_id, id);",
+        "CREATE TABLE task_agent_resume (
+            task_id INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+            provider TEXT NOT NULL CHECK (provider IN ('claude', 'codex', 'opencode', 'pi')),
+            native_reference TEXT NOT NULL CHECK (length(native_reference) > 0),
+            worktree_path TEXT NOT NULL CHECK (length(worktree_path) > 0),
+            last_observed_at_ms INTEGER NOT NULL CHECK (last_observed_at_ms >= 0)
+        );",
     )?;
     transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     transaction.commit()?;
@@ -191,5 +256,18 @@ fn task_from_row(row: &Row<'_>) -> rusqlite::Result<Task> {
         status,
         branch_name: row.get(5)?,
         worktree_path: row.get(6)?,
+    })
+}
+
+fn task_agent_resume_from_row(row: &Row<'_>) -> rusqlite::Result<TaskAgentResume> {
+    let provider_value: String = row.get(1)?;
+    let provider = ProviderId::from_str(&provider_value)
+        .ok_or_else(|| rusqlite::Error::InvalidColumnType(1, "provider".to_owned(), rusqlite::types::Type::Text))?;
+    Ok(TaskAgentResume {
+        task_id: row.get(0)?,
+        provider,
+        native_reference: row.get(2)?,
+        worktree_path: row.get(3)?,
+        last_observed_at_ms: row.get(4)?,
     })
 }

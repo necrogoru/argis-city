@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
+use std::time::SystemTime;
 
 const OUTPUT_CHUNK_SIZE: usize = 8 * 1024;
 const MAX_INPUT_SIZE: usize = 64 * 1024;
@@ -48,6 +49,17 @@ pub struct TerminalProcessSpec {
     pub size: TerminalSize,
 }
 
+/// Identity and task binding for an Agent PTY launched and owned by Argis.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ManagedAgentProcess {
+    pub terminal_session_id: u64,
+    pub task_id: i64,
+    pub agent_cli: TerminalAgent,
+    pub process_id: u32,
+    pub started_at_ms: i64,
+    pub cwd: PathBuf,
+}
+
 /// A callback used by Tauri Channels or by tests to receive ordered PTY events.
 pub type TerminalEventSink = Arc<dyn Fn(TerminalEvent) -> Result<(), String> + Send + Sync + 'static>;
 
@@ -80,6 +92,8 @@ impl Default for TerminalManager {
 
 struct ManagedSession {
     info: TerminalSessionInfo,
+    started_at_ms: i64,
+    cwd: PathBuf,
     master: Mutex<Option<Box<dyn MasterPty + Send>>>,
     writer: Mutex<Box<dyn Write + Send>>,
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
@@ -212,6 +226,7 @@ impl TerminalManager {
                 return Err(error).context("opening PTY input writer");
             }
         };
+        let started_at_ms = crate::system::clock::system_time_ms(SystemTime::now());
         let mut command = CommandBuilder::new(&spec.program);
         command.args(&spec.args);
         command.cwd(&cwd);
@@ -227,6 +242,8 @@ impl TerminalManager {
 
         let session = Arc::new(ManagedSession {
             info: TerminalSessionInfo { id, key: spec.key, agent_cli: spec.agent_cli, process_id, running: true },
+            started_at_ms,
+            cwd,
             master: Mutex::new(Some(pair.master)),
             writer: Mutex::new(writer),
             killer: Mutex::new(killer),
@@ -449,6 +466,29 @@ impl TerminalManager {
             (entry.task_id, matches!(entry.tab, crate::domain::TerminalTab::Term), state_rank(entry.state))
         });
         entries
+    }
+
+    /// Returns only live Agent PTYs that Argis launched, bound to their task and canonical cwd.
+    pub(crate) fn running_agent_processes(&self) -> Vec<ManagedAgentProcess> {
+        self.state
+            .lock()
+            .by_id
+            .values()
+            .filter_map(|session| {
+                let info = session.info();
+                if !info.running || info.key.tab != crate::domain::TerminalTab::Agent {
+                    return None;
+                }
+                Some(ManagedAgentProcess {
+                    terminal_session_id: info.id,
+                    task_id: info.key.task_id,
+                    agent_cli: info.agent_cli?,
+                    process_id: info.process_id?,
+                    started_at_ms: session.started_at_ms,
+                    cwd: session.cwd.clone(),
+                })
+            })
+            .collect()
     }
 
     fn session(&self, id: u64) -> anyhow::Result<Arc<ManagedSession>> {

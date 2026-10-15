@@ -262,6 +262,36 @@ fn start_or_reattach_reuses_a_running_session_only_for_the_same_agent() {
 
 #[cfg(unix)]
 #[test]
+fn running_agent_inventory_is_bound_to_live_managed_agent_ptys() {
+    let manager = TerminalManager::default();
+    let cwd = tempfile::tempdir().unwrap();
+    let (agent_sender, _agent_events) = mpsc::channel();
+    let mut agent_spec = spec(54, TerminalTab::Agent, "/bin/sleep", &["30"]);
+    agent_spec.cwd = cwd.path().to_path_buf();
+    agent_spec.agent_cli = Some(TerminalAgent::OpenCode);
+    let agent = manager.start(agent_spec, sink(agent_sender)).unwrap();
+
+    let (shell_sender, _shell_events) = mpsc::channel();
+    let mut shell_spec = spec(54, TerminalTab::Term, "/bin/sleep", &["30"]);
+    shell_spec.cwd = cwd.path().to_path_buf();
+    manager.start(shell_spec, sink(shell_sender)).unwrap();
+
+    let managed_processes = manager.running_agent_processes();
+    let [managed] = managed_processes.as_slice() else {
+        panic!("only the live Agent PTY should be exposed for resume discovery");
+    };
+    assert_eq!(managed.terminal_session_id, agent.id);
+    assert_eq!(managed.task_id, 54);
+    assert_eq!(managed.agent_cli, TerminalAgent::OpenCode);
+    assert_eq!(managed.process_id, agent.process_id.unwrap());
+    assert_eq!(managed.cwd, cwd.path().canonicalize().unwrap());
+
+    manager.shutdown().unwrap();
+    assert!(manager.running_agent_processes().is_empty());
+}
+
+#[cfg(unix)]
+#[test]
 fn task_deletion_stops_sessions_and_blocks_new_processes_until_the_outcome_is_known() {
     let manager = TerminalManager::default();
     let (agent_sender, _agent_events) = mpsc::channel();

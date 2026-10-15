@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentStatus } from "../../domain/types";
+import type { AgentStatus, TaskAgentResume } from "../../domain/types";
 import { createSeedSnapshot, MockAgentSource } from "./mockAgentSource";
 import { FLIP_EVERY, flipStatus, tickSnapshot } from "./mockTick";
 
@@ -40,6 +40,26 @@ describe("mock seed", () => {
 });
 
 describe("mock project and task operations", () => {
+  it("persists task-agent resume references and removes them when the task is deleted", async () => {
+    const source = new MockAgentSource("empty");
+    const project = await source.addProject("/projects/argis", false);
+    const task = await source.createTask(project.id, "Resume", "");
+    const reference: TaskAgentResume = {
+      taskId: task.id,
+      provider: "codex",
+      nativeReference: "opaque-session-id",
+      worktreePath: "/projects/argis/.argis/worktrees/1-resume",
+      lastObservedAtMs: 1_780_000_000_123,
+    };
+
+    await expect(source.getTaskAgentResume(task.id)).resolves.toBeNull();
+    await expect(source.saveTaskAgentResume(reference)).resolves.toEqual(reference);
+    await expect(source.getTaskAgentResume(task.id)).resolves.toEqual(reference);
+    await expect(source.listTaskAgentResumes()).resolves.toEqual([reference]);
+    await source.deleteTask(task.id, false);
+    await expect(source.listTaskAgentResumes()).resolves.toEqual([]);
+  });
+
   it("creates projects and tasks, updates task details/status, and deletes tasks", async () => {
     const source = new MockAgentSource("empty");
     const project = await source.addProject("/projects/argis", false);

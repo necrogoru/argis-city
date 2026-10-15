@@ -2,6 +2,7 @@ import type {
   Project,
   Snapshot,
   Task,
+  TaskAgentResume,
   TaskDeletionOutcome,
   TaskGitStatus,
   TaskStatus,
@@ -38,6 +39,7 @@ export class MockAgentSource implements AgentSource {
   private ticks = 0;
   private projects: Project[] = [];
   private tasks: Task[] = [];
+  private readonly taskAgentResumes = new Map<number, TaskAgentResume>();
   private nextProjectId = 1;
   private nextTaskId = 1;
 
@@ -88,6 +90,30 @@ export class MockAgentSource implements AgentSource {
     return this.tasks.filter((task) => projectId === undefined || task.projectId === projectId).map((task) => ({ ...task }));
   }
 
+  async listTaskAgentResumes(): Promise<TaskAgentResume[]> {
+    return [...this.taskAgentResumes.values()]
+      .sort((a, b) => a.taskId - b.taskId)
+      .map((reference) => ({ ...reference }));
+  }
+
+  async getTaskAgentResume(taskId: number): Promise<TaskAgentResume | null> {
+    const reference = this.taskAgentResumes.get(taskId);
+    return reference ? { ...reference } : null;
+  }
+
+  async saveTaskAgentResume(reference: TaskAgentResume): Promise<TaskAgentResume> {
+    this.findTask(reference.taskId);
+    if (!reference.nativeReference.trim() || !reference.worktreePath.startsWith("/")) {
+      throw new Error("invalid task agent resume reference");
+    }
+    if (!Number.isSafeInteger(reference.lastObservedAtMs) || reference.lastObservedAtMs < 0) {
+      throw new Error("invalid task agent resume timestamp");
+    }
+    const saved = { ...reference };
+    this.taskAgentResumes.set(reference.taskId, saved);
+    return { ...saved };
+  }
+
   async createTask(projectId: number, title: string, description: string): Promise<Task> {
     if (!this.projects.some((project) => project.id === projectId)) {
       throw new Error(`project ${projectId} does not exist`);
@@ -122,6 +148,7 @@ export class MockAgentSource implements AgentSource {
     const index = this.tasks.findIndex((task) => task.id === id);
     if (index < 0) throw new Error(`task ${id} does not exist`);
     const [task] = this.tasks.splice(index, 1);
+    this.taskAgentResumes.delete(id);
     return {
       taskDeleted: true,
       git: {
