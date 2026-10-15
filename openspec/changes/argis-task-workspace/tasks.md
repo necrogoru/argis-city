@@ -15,7 +15,7 @@
 - [x] 2.5 Add a pure task-search helper matching ID, title, description, project name, and path; verify matching, project-filter intersection, grouped order, and no matches with Vitest.
 - [x] 2.6 Add task search and arrow-key focus navigation through visible matches; verify focus transitions, filtered-result boundaries, and focus handling when results change.
 - [x] 2.7 Add `c`/`b`/`t` handlers using existing create/branch/terminal actions; verify editable/dialog guards, disabled-action behavior, and no implicit Git side effects.
-- [ ] 2.8 Update `docs/design/SPEC.md` for task search, arrow navigation, and single-key actions; verify the documented key behavior and guards match the implementation.
+- [x] 2.8 Update `docs/design/SPEC.md` for task search, arrow navigation, and single-key actions; verify the documented key behavior and guards match the implementation.
 ## 3. Git task worktrees
 
 - [x] 3.1 Implement validated Git repository/branch checks and task branch/worktree creation using the agreed names and path; verify successful creation, non-Git projects, branch collisions, unusual task titles, and the local exclude rule with temporary Git repositories.
