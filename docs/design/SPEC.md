@@ -30,8 +30,8 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   [amber icon; a button that opens the Agents list filtered to "Needs you"])
   · right: search field (260×48 glass, search icon,
   "Search agents, tasks & actions" text-3, `⌘K` key cap; Ctrl K off macOS), Tasks
-  icon button with a `⌘2` key-cap hint (Ctrl+2 off macOS), "Live · scanning
-  2s" teal-tinted pill with glowing dot, settings button.
+  icon button, "Live · scanning 2s" teal-tinted pill with glowing dot, settings
+  button.
 - **Command palette** (click the Dashboard search trigger or press ⌘K/Ctrl+K
   from either primary view; the shortcut toggles it closed and Esc closes it):
   640px glass modal, 112px from the top over a dimmed, blurred backdrop. 60px
@@ -40,12 +40,12 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   types), a "TASKS" section (shown after typing; matches task ID, title,
   description, and project path; row shows title, `#id · project · status`,
   and an Open terminal action when a worktree exists; without a worktree, show
-  "No worktree · Go to Tasks"), and an "ACTIONS" section (Show Dashboard
-  `⌘1` / Ctrl+1 and Open Tasks `⌘2` / Ctrl+2; selected-agent shortcuts: open
-  folder, copy path, close details; go to each district; show whole city; camera
-  moves; refresh). No-match copy covers agents, tasks, and actions. ↑↓ moves
-  through every section (wraps), ↵ runs the selected result, hover moves the
-  cursor; matches are teal. Footer with key hints.
+  "No worktree · Go to Tasks"), and an "ACTIONS" section (Show Dashboard and
+  Open Tasks; selected-agent actions: open folder, copy path, close details; go
+  to each district; show whole city; camera moves; refresh). No-match copy
+  covers agents, tasks, and actions. ↑↓ moves through every section (wraps), ↵
+  runs the selected result, hover moves the cursor; matches are teal. Footer with
+  key hints.
 - **Hero** (x 40, y 124, w 300): "Agent\nInfrastructure" 36/400, lh 1.08,
   tracking −1; 14px text-2 description; "DISTRICTS" list: rows with 10px
   rounded swatch, provider name, "N houses" right (text-3); selected row has
@@ -53,10 +53,6 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
 - **Camera controls** (x 40, bottom-left above the strip): 44px round glass
   buttons: zoom in, zoom out, reset/rotate, fit. Keys (Ctrl off macOS):
   ⌘+ or ⌘= zooms in, ⌘− zooms out, ⌘0 fits; holding repeats.
-- **View shortcuts** (available from either primary view): `⌘1` shows Dashboard
-  and `⌘2` opens Tasks (Ctrl+1 / Ctrl+2 off macOS). Dashboard remains the
-  startup view. Hints are exposed with `aria-keyshortcuts`; view shortcuts do
-  not intercept text entry, terminal input, or an open modal dialog.
 - **Tower labels** (in-scene HTML): glass pill (swatch + name + count chip),
   thin gradient line down to a glowing anchor dot on the tower top. The
   selected tower's pill has a 1px provider-colour stroke.
@@ -69,6 +65,18 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   and a subagent badge (amber hand + count when a subagent waits on the
   user). "Needs you" rows (the session or one of its subagents awaits
   approval) sort first and get an amber-tinted fill.
+- **Dashboard terminal rail**: a compact, indexed vertical rail just left of
+  the right column, visible beside both the Agents list and selected-house
+  panel. It has one launcher per task terminal known to Argis. Hover or keyboard
+  focus reveals the full task title and aggregate state; activating a launcher
+  opens that task's terminal modal with Agent selected. Aggregate the Agent and
+  `term` tabs in this order: Running when either tab runs; Pending when a tab is
+  starting and neither runs; Unavailable when startup failed and neither tab is
+  running or starting; Completed when a started session exited and neither tab
+  is running, starting, or failed; otherwise Idle. Existing terminal inventory
+  supplies Running, Unavailable, or Completed when no live tab state takes
+  precedence. Use the existing status treatment and tokens: teal for running,
+  amber for pending, red for unavailable, blue for completed, and grey for idle.
 - **Agent detail panel** (right: x 1060, y 124, w 340, padding 24, radius 24,
   glass + radial glow top-right in the provider colour; amber or red glow plus
   a 1px tinted stroke while the session awaits approval or its last turn
@@ -82,7 +90,11 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   "182K output"; Elapsed: `mm:ss`/`h:mm:ss` + "since 10:21"); context window
   bar (6px, readout "131K / 200K · 66%"); meta rows (Directory, Terminal/PID,
   Subagents "4 · 2 running · 1 needs you"); actions: primary teal button
-  "Open folder" + ghost icon button.
+  "Open folder", a conditional Terminal button, and a ghost icon button. Show
+  Terminal only when the selected session's normalized absolute cwd matches a
+  task worktree and that task has an Argis-managed terminal target represented
+  in the rail. It opens the same terminal modal over the Dashboard without
+  switching views.
 - **Subagents strip** (bottom: x 40, y 770, full width − 80, only when the
   selected session has subagents): header column (git-fork icon "Subagents",
   "Spawned by <title> / N total · M running") then equal-width cards (radius
@@ -94,11 +106,11 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
 - The city remains the startup and primary monitoring view. A top-bar Tasks
   icon opens an optional full-window task workspace; Back to city returns to
   monitoring without changing snapshot polling.
-- The workspace header contains "Projects & tasks" and Back to city with a
-  `⌘1` key-cap hint (Ctrl+1 off macOS). The board
-  has an All projects filter, Manage projects action, New task action, and
-  three columns: Pending, In progress, and Other statuses. Stopped, Canceled,
-  and Completed remain individually labeled in the final column.
+- The workspace header contains "Projects & tasks" and a plain Back to city
+  action. The board has an All projects filter, Manage projects action, New
+  task action, and three columns: Pending, In progress, and Other statuses.
+  Stopped, Canceled, and Completed remain individually labeled in the final
+  column.
 - Each task entry shows its generated ID, title, description, project name, and
   exact status. Its action row has four icon buttons in this order: Create
   branch/worktree, Open terminal, previous status, next status. Disable status
