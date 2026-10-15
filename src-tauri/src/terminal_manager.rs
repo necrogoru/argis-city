@@ -365,9 +365,7 @@ impl TerminalManager {
             if !manager.closed_tasks.insert(task_id) {
                 bail!("task terminal sessions are already being deleted");
             }
-            manager
-                .failed_starts
-                .retain(|key, _| key.task_id != task_id);
+            manager.failed_starts.retain(|key, _| key.task_id != task_id);
             manager
                 .by_key
                 .iter()
@@ -447,7 +445,9 @@ impl TerminalManager {
             }));
             entries
         };
-        entries.sort_by_key(|entry| (entry.task_id, matches!(entry.tab, crate::domain::TerminalTab::Term), state_rank(entry.state)));
+        entries.sort_by_key(|entry| {
+            (entry.task_id, matches!(entry.tab, crate::domain::TerminalTab::Term), state_rank(entry.state))
+        });
         entries
     }
 

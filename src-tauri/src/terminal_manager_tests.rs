@@ -131,7 +131,9 @@ fn terminal_inventory_reports_managed_task_tabs_and_lifecycle_state() {
     assert_eq!(wait_for_exit(&completed_events, completed.id), (0, None));
 
     let (failed_sender, _failed_events) = mpsc::channel();
-    assert!(manager.start(spec(62, TerminalTab::Agent, "/definitely/not/an/executable", &[]), sink(failed_sender)).is_err());
+    assert!(manager
+        .start(spec(62, TerminalTab::Agent, "/definitely/not/an/executable", &[]), sink(failed_sender))
+        .is_err());
 
     assert_eq!(
         serde_json::to_value(manager.inventory()).unwrap(),
