@@ -62,10 +62,15 @@ function fit(): void {
   surface.value?.fit();
 }
 
+function focus(): void {
+  if (!props.active) return;
+  surface.value?.focus();
+}
+
 watch(session.status, (status) => emit("statusChange", status), { immediate: true });
 onBeforeUnmount(() => void session.dispose());
 
-defineExpose({ reattach, detach: session.detach, fit });
+defineExpose({ reattach, detach: session.detach, fit, focus });
 </script>
 
 <template>

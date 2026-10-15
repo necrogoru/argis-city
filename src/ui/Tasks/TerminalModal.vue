@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { X } from "@lucide/vue";
 import type { Task, TerminalTab } from "../../domain/types";
+import { getTerminalTabForKey } from "../../domain/terminalNavigation";
 import { useTerminalRailStore } from "../../stores/terminalRail";
 import TerminalSessionPane from "./TerminalSessionPane.vue";
 import type { TerminalStatus } from "./useTerminalSession";
@@ -10,6 +11,7 @@ interface TerminalPaneHandle {
   reattach: () => Promise<void>;
   detach: () => Promise<void>;
   fit: () => void;
+  focus: () => void;
 }
 
 const open = defineModel<boolean>("open", { required: true });
@@ -45,6 +47,14 @@ async function restoreSessions(): Promise<void> {
   restoring.value = false;
 }
 
+async function focusTab(tab: TerminalTab): Promise<void> {
+  await nextTick();
+  if (!open.value || activeTab.value !== tab) return;
+  const pane = tab === "agent" ? agentPane.value : termPane.value;
+  pane?.fit();
+  pane?.focus();
+}
+
 function show(): void {
   const element = dialog.value;
   if (!element || element.open) return;
@@ -58,10 +68,14 @@ function show(): void {
     if (firstOpen) {
       terminalReady.value = true;
       await nextTick();
-      if (open.value) await restoreSessions();
+      if (open.value) {
+        await restoreSessions();
+        await focusTab("agent");
+      }
     } else {
       agentPane.value?.fit();
       termPane.value?.fit();
+      await focusTab("agent");
     }
   });
 }
@@ -95,13 +109,27 @@ function selectTab(tab: TerminalTab): void {
 function handleTabKeydown(event: KeyboardEvent): void {
   if (!(["ArrowLeft", "ArrowRight", "Home", "End"] as string[]).includes(event.key)) return;
   event.preventDefault();
-  const tab: TerminalTab = event.key === "Home" || (event.key === "ArrowLeft" && activeTab.value === "term")
-    ? "agent"
-    : event.key === "End" || (event.key === "ArrowRight" && activeTab.value === "agent")
-      ? "term"
-      : activeTab.value;
+  const tab = getTerminalTabForKey(activeTab.value, event);
+  if (!tab) return;
   selectTab(tab);
   void nextTick(() => (tab === "agent" ? agentTabButton.value : termTabButton.value)?.focus());
+}
+
+function handleDialogKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    close();
+    return;
+  }
+
+  if (event.key !== "Tab") return;
+  const tab = getTerminalTabForKey(activeTab.value, event);
+  if (!tab) return;
+  event.preventDefault();
+  event.stopPropagation();
+  selectTab(tab);
+  void focusTab(tab);
 }
 
 watch(open, (isOpen) => (isOpen ? show() : hide()), { flush: "post" });
@@ -126,6 +154,7 @@ watch(termStatus, (status) => terminalRail.publishTaskStatus(props.task.id, "ter
     aria-labelledby="terminal-dialog-title"
     @close="handleNativeClose"
     @cancel="handleCancel"
+    @keydown.capture="handleDialogKeydown"
   >
     <header class="terminal-header">
       <div class="terminal-heading">
