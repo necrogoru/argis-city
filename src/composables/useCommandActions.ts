@@ -1,13 +1,15 @@
 import { computed, type ComputedRef } from "vue";
 import { storeToRefs } from "pinia";
-import { Copy, FolderOpen, List, Map as MapIcon, MapPin, RefreshCw, X, type LucideIcon } from "@lucide/vue";
+import { Copy, FolderOpen, List, Map as MapIcon, MapPin, Plus, RefreshCw, X, type LucideIcon } from "@lucide/vue";
 import type { PaletteColor } from "../domain/palette";
 import { PROVIDER_ORDER, PROVIDERS } from "../domain/providers";
 import type { Searchable } from "../domain/search";
+import { canCreateTaskFromBoard } from "../domain/taskBoardShortcuts";
 import { useAppViewStore } from "../stores/appView";
 import { useCameraRigStore } from "../stores/cameraRig";
 import { useSelectionStore } from "../stores/selection";
 import { useSnapshotStore } from "../stores/snapshot";
+import { useTaskStore } from "../stores/tasks";
 import { CAMERA_COMMANDS } from "../ui/cameraCommands";
 import { useAgentSource } from "./useAgentSource";
 
@@ -18,7 +20,33 @@ export interface CommandAction extends Searchable {
   color?: PaletteColor;
   /** Right-aligned context, e.g. the selected agent's title. */
   hint?: string;
+  disabled?: boolean;
   run: () => void;
+}
+
+export function invokeCommandAction(
+  action: Pick<CommandAction, "disabled" | "run">,
+  close: () => void,
+): boolean {
+  if (action.disabled) return false;
+  close();
+  action.run();
+  return true;
+}
+
+export function createTaskCommandAction(
+  createTask: () => void,
+  projectCount: number,
+  loading: boolean,
+): CommandAction {
+  return {
+    id: "create-task",
+    label: "Create task",
+    keywords: ["new", "project", "task"],
+    Icon: Plus,
+    disabled: loading || !canCreateTaskFromBoard(projectCount),
+    run: createTask,
+  };
 }
 
 export function appViewNavigationActions(
@@ -50,10 +78,14 @@ export function useCommandActions(): ComputedRef<CommandAction[]> {
   const source = useAgentSource();
   const snapshots = useSnapshotStore();
   const selectionStore = useSelectionStore();
+  const taskStore = useTaskStore();
   const { selection, selectedSession } = storeToRefs(selectionStore);
 
   return computed(() => {
     const actions = appViewNavigationActions(() => appView.showCity(), () => appView.showTasks());
+    actions.push(
+      createTaskCommandAction(() => appView.requestTaskCreation(), taskStore.projects.length, taskStore.searchLoading),
+    );
     const selected = selectedSession.value;
 
     if (selected) {

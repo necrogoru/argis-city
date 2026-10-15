@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, ref, useId, useTemplateRef } from "vue";
 import { storeToRefs } from "pinia";
 import { Search } from "@lucide/vue";
 import { searchActions, searchSessions, searchTasks, tokenize, wrapIndex } from "../../domain/search";
-import { useCommandActions } from "../../composables/useCommandActions";
+import { invokeCommandAction, useCommandActions } from "../../composables/useCommandActions";
 import { useCameraRigStore } from "../../stores/cameraRig";
 import { useSelectionStore } from "../../stores/selection";
 import { useSnapshotStore } from "../../stores/snapshot";
@@ -69,8 +69,12 @@ onMounted(() => {
 });
 
 function run(option: PaletteOptionModel): void {
+  if (option.kind === "action") {
+    invokeCommandAction(option.action, () => emit("close"));
+    return;
+  }
+
   emit("close");
-  if (option.kind === "action") return option.action.run();
   if (option.kind === "agent") {
     selection.selectSession(option.session.id);
     rig.focusSession(option.session.id);

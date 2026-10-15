@@ -25,4 +25,24 @@ describe("useAppViewStore", () => {
     store.showCity();
     expect(store.activeView).toBe("city");
   });
+
+  it("routes task creation from Dashboard and exposes the request once", () => {
+    const store = setup();
+
+    store.requestTaskCreation();
+
+    expect(store.activeView).toBe("tasks");
+    expect(store.consumeTaskCreationRequest()).toBe(true);
+    expect(store.consumeTaskCreationRequest()).toBe(false);
+  });
+
+  it("requests task creation without leaving Tasks", () => {
+    const store = setup();
+    store.showTasks();
+
+    store.requestTaskCreation();
+
+    expect(store.activeView).toBe("tasks");
+    expect(store.consumeTaskCreationRequest()).toBe(true);
+  });
 });

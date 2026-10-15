@@ -13,6 +13,7 @@ import type { PaletteOptionModel } from "./paletteOptionModel";
 
 const props = defineProps<{ option: PaletteOptionModel; domId: string; active: boolean; query: string }>();
 const emit = defineEmits<{ hover: []; run: [] }>();
+const disabled = computed(() => props.option.kind === "action" && props.option.action.disabled === true);
 const tint = computed(() =>
   props.option.kind === "agent" ? { "--tint": cssVar(statusMeta(props.option.session.status).color) } : undefined,
 );
@@ -32,11 +33,12 @@ function projectName(path: string): string {
     :id="domId"
     role="option"
     :aria-selected="active"
+    :aria-disabled="disabled ? 'true' : undefined"
     class="option"
     :style="tint"
     @pointermove="!active && emit('hover')"
     @mousedown.prevent
-    @click="emit('run')"
+    @click="!disabled && emit('run')"
   >
     <template v-if="option.kind === 'agent'">
       <span class="dot" :data-status="option.session.status" aria-hidden="true" />
@@ -87,6 +89,14 @@ function projectName(path: string): string {
 
 .option[aria-selected="true"] {
   background: var(--fill-hover);
+}
+
+.option[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.option[aria-disabled="true"] .label {
+  color: var(--text-2);
 }
 
 .dot {
