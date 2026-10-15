@@ -101,4 +101,34 @@ describe("useTerminalRailStore", () => {
 
     expect(railStore.entries[0]).toMatchObject({ taskId: 7, state: "idle" });
   });
+
+  it("dedupes overlapping refreshes while one is already in flight", async () => {
+    const deferred: { release: (() => void) | null } = { release: null };
+    const listTasks = vi.fn(
+      () => new Promise<Task[]>((resolve) => {
+        deferred.release = () => resolve(tasks);
+      }),
+    );
+    const inventory = vi.fn(async (): Promise<TerminalInventoryEntry[]> => [{ taskId: 8, tab: "agent", state: "completed" }]);
+    const { railStore } = setup({ listTasks, listTerminalInventory: inventory });
+
+    const first = railStore.refreshAll();
+    void railStore.refreshAll();
+    if (deferred.release == null) throw new Error("expected task refresh to be pending");
+    deferred.release();
+
+    await first;
+    expect(listTasks).toHaveBeenCalledTimes(1);
+    expect(inventory).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows a later refresh after the previous refresh resolves", async () => {
+    const inventory = vi.fn(async (): Promise<TerminalInventoryEntry[]> => [{ taskId: 8, tab: "agent", state: "completed" }]);
+    const { railStore } = setup({ listTerminalInventory: inventory });
+
+    await railStore.refreshAll();
+    await railStore.refreshAll();
+
+    expect(inventory).toHaveBeenCalledTimes(2);
+  });
 });

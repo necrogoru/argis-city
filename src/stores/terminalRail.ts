@@ -16,6 +16,7 @@ export const useTerminalRailStore = defineStore("terminalRail", () => {
   const inventory = shallowRef<TerminalInventoryEntry[]>([]);
   const liveStatuses = shallowRef<TerminalRailLiveStatusMap>({});
   const error = shallowRef<string | null>(null);
+  let refreshPromise: Promise<void> | null = null;
 
   const entries = computed(() => aggregateTerminalRailEntries(taskStore.tasks, inventory.value, liveStatuses.value));
 
@@ -26,6 +27,19 @@ export const useTerminalRailStore = defineStore("terminalRail", () => {
     } catch (reason) {
       error.value = errorMessage(reason);
     }
+  }
+
+  function refreshAll(): Promise<void> {
+    if (refreshPromise) return refreshPromise;
+
+    const promise = taskStore
+      .ensureSearchDataLoaded()
+      .then(() => refreshInventory())
+      .finally(() => {
+        if (refreshPromise === promise) refreshPromise = null;
+      });
+    refreshPromise = promise;
+    return promise;
   }
 
   function publishTaskStatus(taskId: number, tab: TerminalTab, status: TerminalStatus): void {
@@ -44,5 +58,5 @@ export const useTerminalRailStore = defineStore("terminalRail", () => {
     liveStatuses.value = next;
   }
 
-  return { entries, error, refreshInventory, publishTaskStatus, clearTaskStatus };
+  return { entries, error, refreshInventory, refreshAll, publishTaskStatus, clearTaskStatus };
 });

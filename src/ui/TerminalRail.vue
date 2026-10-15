@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { terminalRailStateLabel } from "../domain/terminalRail";
 import { useTaskStore } from "../stores/tasks";
@@ -39,15 +39,10 @@ function clearExpanded(taskId: number): void {
   if (expandedTaskId.value === taskId) expandedTaskId.value = null;
 }
 
-async function refresh(): Promise<void> {
-  await taskStore.ensureSearchDataLoaded();
-  await terminalRail.refreshInventory();
-}
-
 function startRefreshLoop(): void {
   if (intervalId != null) return;
   intervalId = window.setInterval(() => {
-    void refresh();
+    void terminalRail.refreshAll();
   }, 2_000);
 }
 
@@ -61,7 +56,7 @@ watch(
   () => props.dashboardVisible,
   (visible) => {
     if (visible) {
-      void refresh();
+      void terminalRail.refreshAll();
       startRefreshLoop();
       return;
     }
@@ -69,13 +64,6 @@ watch(
   },
   { immediate: true },
 );
-
-onMounted(() => {
-  if (props.dashboardVisible) {
-    void refresh();
-    startRefreshLoop();
-  }
-});
 
 onUnmounted(() => {
   stopRefreshLoop();
