@@ -29,17 +29,62 @@ export function tokenize(query: string): string[] {
 
 const WORD_BOUNDARY = /[^\p{L}\p{N}]/u;
 
-/** 3 = prefix, 2 = start of a later word, 1 = anywhere, 0 = absent. */
-function tokenScore(token: string, text: string): number {
-  const haystack = text.toLowerCase();
-  let at = haystack.indexOf(token);
-  if (at < 0) return 0;
+function matchStartScore(text: string, at: number): number {
   if (at === 0) return 3;
-  while (at > 0) {
-    if (WORD_BOUNDARY.test(haystack[at - 1])) return 2;
-    at = haystack.indexOf(token, at + 1);
+  return WORD_BOUNDARY.test(text[at - 1]) ? 2 : 1;
+}
+
+interface TokenMatch {
+  score: number;
+  start: number;
+}
+
+/** Exact matches retain their old scores; fuzzy alignments score by start, gaps, and span. */
+function tokenMatch(token: string, text: string): TokenMatch | null {
+  const haystack = text.toLowerCase();
+  let bestScore = 0;
+  let bestStart = -1;
+
+  for (let at = 0; at < haystack.length; at++) {
+    if (haystack[at] !== token[0] || haystack.length - at < token.length) continue;
+
+    let score: number;
+    if (haystack.startsWith(token, at)) {
+      score = matchStartScore(haystack, at);
+    } else {
+      let cursor = at + 1;
+      let last = at;
+      let matched = true;
+      for (let i = 1; i < token.length; i++) {
+        const found = haystack.indexOf(token[i], cursor);
+        if (found < 0) {
+          matched = false;
+          break;
+        }
+        last = found;
+        cursor = found + 1;
+      }
+      if (!matched) continue;
+
+      const isPrefix = at === 0;
+      const isWordStart = !isPrefix && WORD_BOUNDARY.test(haystack[at - 1]);
+      const base = isPrefix ? 0.9 : isWordStart ? 0.5 : 0.1;
+      const gaps = last - at + 1 - token.length;
+      score = Math.max(0.001, base - gaps * 0.01 - at * 0.001);
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestStart = at;
+    }
   }
-  return 1;
+
+  return bestStart >= 0 ? { score: bestScore, start: bestStart } : null;
+}
+
+/** 3 = prefix, 2 = start of a later word, 1 = substring, lower = subsequence. */
+function tokenScore(token: string, text: string): number {
+  return tokenMatch(token, text)?.score ?? 0;
 }
 
 /**
@@ -70,6 +115,10 @@ export function sessionFields(session: AgentSession): SearchField[] {
   ];
 }
 
+export function scoreSession(session: AgentSession, tokens: readonly string[]): number | null {
+  return scoreFields(tokens, sessionFields(session));
+}
+
 /**
  * Empty query: the `emptyLimit` most urgent sessions (list order). Otherwise
  * every match, best score first, ties in list order.
@@ -82,7 +131,7 @@ export function searchSessions(
   const tokens = tokenize(query);
   if (tokens.length === 0) return [...sessions].sort(compareSessions).slice(0, emptyLimit);
   return sessions
-    .map((session) => ({ session, score: scoreFields(tokens, sessionFields(session)) }))
+    .map((session) => ({ session, score: scoreSession(session, tokens) }))
     .filter((hit): hit is { session: AgentSession; score: number } => hit.score != null)
     .sort((a, b) => b.score - a.score || compareSessions(a.session, b.session))
     .map((hit) => hit.session);
@@ -99,6 +148,10 @@ function taskFields(task: Task, projectPath: string): SearchField[] {
   return fields;
 }
 
+export function scoreTask(task: Task, projectPath: string, tokens: readonly string[]): number | null {
+  return scoreFields(tokens, taskFields(task, projectPath));
+}
+
 /** Task search is opt-in: an empty query leaves the palette's default results uncluttered. */
 export function searchTasks(tasks: readonly Task[], projects: readonly Project[], query: string): Task[] {
   const tokens = tokenize(query);
@@ -109,7 +162,7 @@ export function searchTasks(tasks: readonly Task[], projects: readonly Project[]
     .map((task, index) => ({
       task,
       index,
-      score: scoreFields(tokens, taskFields(task, projectPaths.get(task.projectId) ?? "")),
+      score: scoreTask(task, projectPaths.get(task.projectId) ?? "", tokens),
     }))
     .filter((hit): hit is { task: Task; index: number; score: number } => hit.score !== null)
     .sort((a, b) => b.score - a.score || a.index - b.index)
@@ -121,13 +174,17 @@ export function searchActions<T extends Searchable>(actions: readonly T[], query
   const tokens = tokenize(query);
   if (tokens.length === 0) return [...actions];
   return actions
-    .map((action, index) => {
-      const fields = [{ text: action.label, weight: 2 }, { text: (action.keywords ?? []).join(" "), weight: 1 }];
-      return { action, index, score: scoreFields(tokens, fields) };
-    })
+    .map((action, index) => ({ action, index, score: scoreAction(action, tokens) }))
     .filter((hit): hit is { action: T; index: number; score: number } => hit.score != null)
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .map((hit) => hit.action);
+}
+
+export function scoreAction(action: Searchable, tokens: readonly string[]): number | null {
+  return scoreFields(tokens, [
+    { text: action.label, weight: 2 },
+    { text: (action.keywords ?? []).join(" "), weight: 1 },
+  ]);
 }
 
 /** Split `text` into plain / matched runs for every query token (case-insensitive). */
@@ -136,8 +193,22 @@ export function highlight(text: string, query: string): Segment[] {
   const lower = text.toLowerCase();
   const marked = new Array<boolean>(text.length).fill(false);
   for (const token of tokens) {
+    let found = false;
     for (let at = lower.indexOf(token); at >= 0; at = lower.indexOf(token, at + 1)) {
       marked.fill(true, at, at + token.length);
+      found = true;
+    }
+    if (!found) {
+      const match = tokenMatch(token, lower);
+      if (!match) continue;
+
+      let cursor = match.start;
+      marked[cursor] = true;
+      for (let i = 1; i < token.length; i++) {
+        cursor = lower.indexOf(token[i], cursor + 1);
+        if (cursor < 0) break;
+        marked[cursor] = true;
+      }
     }
   }
   const segments: Segment[] = [];

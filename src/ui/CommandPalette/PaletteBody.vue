@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, ref, useId, useTemplateRef } from "vue";
 import { storeToRefs } from "pinia";
 import { Search } from "@lucide/vue";
-import { searchActions, searchSessions, searchTasks, tokenize, wrapIndex } from "../../domain/search";
+import { tokenize, wrapIndex } from "../../domain/search";
 import { useCommandActions } from "../../composables/useCommandActions";
 import { useCameraRigStore } from "../../stores/cameraRig";
 import { useSelectionStore } from "../../stores/selection";
@@ -14,10 +14,8 @@ import { taskPaletteAction } from "./taskPaletteAction";
 import Kbd from "../common/Kbd.vue";
 import PaletteOption from "./PaletteOption.vue";
 import PaletteSection from "./PaletteSection.vue";
+import { buildPaletteResults } from "./paletteResults";
 import type { PaletteOptionModel } from "./paletteOptionModel";
-
-/** Agents listed before the user types anything (most urgent first). */
-const IDLE_AGENT_LIMIT = 6;
 
 const emit = defineEmits<{ close: [] }>();
 const { snapshot } = storeToRefs(useSnapshotStore());
@@ -35,32 +33,15 @@ const listId = useId();
 const list = useTemplateRef<HTMLDivElement>("list");
 
 const sessions = computed(() => snapshot.value?.sessions ?? []);
-const agents = computed(() => searchSessions(sessions.value, query.value, IDLE_AGENT_LIMIT));
-const tasks = computed(() => searchTasks(taskStore.tasks, taskStore.projects, query.value));
-const matchedActions = computed(() => searchActions(actions.value, query.value));
-const options = computed<PaletteOptionModel[]>(() => [
-  ...agents.value.map((session) => ({ key: `agent:${session.id}`, kind: "agent" as const, session })),
-  ...tasks.value.map((task) => ({
-    key: `task:${task.id}`,
-    kind: "task" as const,
-    task,
-    projectPath: taskStore.projects.find((project) => project.id === task.projectId)?.path ?? "Unknown project",
-  })),
-  ...matchedActions.value.map((action) => ({ key: `action:${action.id}`, kind: "action" as const, action })),
-]);
-const taskStart = computed(() => agents.value.length);
-const actionStart = computed(() => agents.value.length + tasks.value.length);
+const hasQuery = computed(() => tokenize(query.value).length > 0);
+const options = computed<PaletteOptionModel[]>(() =>
+  buildPaletteResults(sessions.value, taskStore.tasks, taskStore.projects, actions.value, query.value),
+);
 const activeIndex = computed(() => {
   const found = options.value.findIndex((o) => o.key === activeKey.value);
   return found >= 0 ? found : options.value.length > 0 ? 0 : -1;
 });
 const optionId = (index: number) => `${listId}-option-${index}`;
-const agentsAside = computed(() => {
-  if (tokenize(query.value).length > 0) return String(agents.value.length);
-  return sessions.value.length > agents.value.length
-    ? `${agents.value.length} of ${sessions.value.length} · type to search`
-    : null;
-});
 
 onMounted(() => {
   void taskStore.ensureSearchDataLoaded().catch((reason: unknown) => {
@@ -128,37 +109,13 @@ function onKeydown(event: KeyboardEvent): void {
   </div>
 
   <div :id="listId" ref="list" role="listbox" aria-label="Results" class="thin-scroll results">
-    <PaletteSection v-if="agents.length > 0" title="Agents" :aside="agentsAside">
+    <PaletteSection v-if="options.length > 0" :title="hasQuery ? 'Results' : 'Actions'">
       <PaletteOption
-        v-for="(option, i) in options.slice(0, agents.length)"
+        v-for="(option, i) in options"
         :key="option.key"
         :option="option"
         :dom-id="optionId(i)"
         :active="i === activeIndex"
-        :query="query"
-        @hover="activeKey = option.key"
-        @run="run(option)"
-      />
-    </PaletteSection>
-    <PaletteSection v-if="tasks.length > 0" title="Tasks" :aside="String(tasks.length)">
-      <PaletteOption
-        v-for="(option, i) in options.slice(taskStart, actionStart)"
-        :key="option.key"
-        :option="option"
-        :dom-id="optionId(taskStart + i)"
-        :active="taskStart + i === activeIndex"
-        :query="query"
-        @hover="activeKey = option.key"
-        @run="run(option)"
-      />
-    </PaletteSection>
-    <PaletteSection v-if="matchedActions.length > 0" title="Actions">
-      <PaletteOption
-        v-for="(option, i) in options.slice(actionStart)"
-        :key="option.key"
-        :option="option"
-        :dom-id="optionId(actionStart + i)"
-        :active="actionStart + i === activeIndex"
         :query="query"
         @hover="activeKey = option.key"
         @run="run(option)"
