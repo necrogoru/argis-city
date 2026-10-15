@@ -18,4 +18,4 @@
 ## 4. Integrate alert routing and deduplication
 
 - [x] 4.1 Connect session transitions and app-wide terminal exits to one app-lifetime coordinator, resolve task/harness labels, and suppress duplicate managed-Agent completion alerts when both sources describe the same worktree run; verify coordinator tests for source overlap and independent shell exits.
-- [ ] 4.2 Run the full project gates (`pnpm build`, `pnpm exec vitest run`, `cargo test --manifest-path src-tauri/Cargo.toml`, `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`, and `cargo fmt --manifest-path src-tauri/Cargo.toml --check`) and manually verify approval/completion/terminal-exit alerts from both app views and while the window is backgrounded on macOS.
+- [x] 4.2 Run the full project gates (`pnpm build`, `pnpm exec vitest run`, `cargo test --manifest-path src-tauri/Cargo.toml`, `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`, and `cargo fmt --manifest-path src-tauri/Cargo.toml --check`) and manually verify approval/completion/terminal-exit alerts from both app views and while the window is backgrounded on macOS.
