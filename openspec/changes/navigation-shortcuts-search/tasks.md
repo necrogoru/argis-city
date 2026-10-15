@@ -25,7 +25,7 @@
 - [x] 4.2 Add a typed Argis-managed terminal inventory to the Rust manager, Tauri command, and mock/Tauri AgentSource implementations; verify tests report task/tab state without discovering external processes and document the transport in `docs/CONTRACT.md`.
 - [x] 4.3 Add the app-level terminal index rail and state aggregation; verify idle, pending, running, completed, and unavailable states, hover/focus expansion, and click-to-open on the Agent tab.
 - [x] 4.4 Match selected-house cwd to normalized task worktree paths and expose Terminal only for a matching Argis terminal; verify match/no-match cases and that the Dashboard lookup does not run Git status checks or change views.
-- [ ] 4.5 Update `docs/design/SPEC.md` with the removed numeric shortcuts, rail, status behavior, and selected-house Terminal action; verify labels and state descriptions match the implementation.
+- [x] 4.5 Update `docs/design/SPEC.md` with the removed numeric shortcuts, rail, status behavior, and selected-house Terminal action; verify labels and state descriptions match the implementation.
 
 ## 5. Integration verification
 
