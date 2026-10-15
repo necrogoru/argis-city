@@ -107,10 +107,35 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   icon opens an optional full-window task workspace; Back to city returns to
   monitoring without changing snapshot polling.
 - The workspace header contains "Projects & tasks" and a plain Back to city
-  action. The board has an All projects filter, Manage projects action, New
-  task action, and three columns: Pending, In progress, and Other statuses.
-  Stopped, Canceled, and Completed remain individually labeled in the final
-  column.
+  action. The board has an All projects filter, a Search tasks field, Manage
+  projects action, New task action, and three columns: Pending, In progress,
+  and Other statuses. Stopped, Canceled, and Completed remain individually
+  labeled in the final column. Search is case-insensitive and matches each
+  whitespace-separated query token against a task's ID (with or without `#`),
+  title, description, project name (the final path segment), or project path;
+  different tokens may match different fields. The project filter intersects
+  the search results. An empty query shows every task eligible for the selected
+  project (or every task under All projects); results retain board order and
+  the three status groups remain in Pending, In progress, Other statuses order.
+- With the search field focused, ArrowDown focuses the first matching task and
+  ArrowUp focuses the last. From a focused task card, ArrowDown and ArrowUp
+  move to the next or previous visible result in board order and wrap at either
+  end. If search or project filtering removes the focused task, clear that
+  focus.
+- Unmodified `c` opens the existing New task flow. Unmodified `b` and `t` on a
+  focused, visible task invoke its existing branch/worktree and terminal
+  actions, respectively. Keep their existing eligibility: `c` requires at
+  least one registered project, `b` requires Git to allow branch creation and
+  no existing task branch, and `t` requires the task's existing worktree and
+  an available embedded terminal. `b` explicitly invokes the branch/worktree
+  action; `t` does not create a branch or worktree as a side effect, and search
+  does not create Git resources.
+- Suppress the single-letter actions while a dialog is open or focus is in an
+  input, textarea, select, contenteditable element, or xterm input; also ignore
+  modified, repeated, or composing key events. Search arrows are the explicit
+  editable-field exception: ArrowDown/ArrowUp navigate matching results there,
+  while other typed characters (including `c`, `b`, and `t`) remain search
+  text.
 - Each task entry shows its generated ID, title, description, project name, and
   exact status. Its action row has four icon buttons in this order: Create
   branch/worktree, Open terminal, previous status, next status. Disable status
