@@ -2,62 +2,49 @@
 
 ## Context
 
-See `proposal.md` for motivation and the capability specs for user-visible behavior. `App.vue` currently switches between the city Dashboard and `TaskWorkspace`; switching views unmounts the workspace. The Dashboard's `TopBar` owns the `⌘K` palette, whose results currently cover agent sessions and actions. `TaskWorkspace` loads the task store, and its load path also refreshes Git status for every task. `TerminalModal` is mounted under `TaskBoard`; it can reattach both terminal tabs for a known task, but there is no terminal-session enumeration operation.
-
-The existing Tauri/mock `AgentSource` already lists tasks and reattaches a terminal by task ID and tab. Task and terminal data remain separate from the agent snapshot and its polling loop.
+`App.vue` already hosts the command palette and one app-level task terminal modal. `RightColumn` switches between the agent list and selected-house panel. Task data can be loaded through the task store without running Git checks. `TerminalManager` owns PTYs keyed by task and tab, but currently exposes no inventory operation; the app-level terminal navigation store tracks only the currently open task.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Route view shortcuts and palette search through shared app-level state so they work consistently across the primary views.
-- Reuse the current task and terminal services and preserve current view, terminal process, and monitoring state when opening a result.
-- Avoid doing Git status checks or creating Git resources just to search.
+- Keep Dashboard as the startup view and retain palette-based navigation/search while removing numeric view bindings and hints.
+- Provide a Dashboard view of Argis-managed task terminals, and a house-summary action that opens only a matching task terminal.
+- Keep terminal inventory separate from the agent snapshot and keep external terminals undiscovered.
 
 **Non-Goals:**
 
-- Add a standalone terminal browser, a direct terminal hotkey, or backend terminal enumeration.
-- Change task lifecycle, terminal startup commands, Git worktree behavior, provider polling, or the Dashboard startup view.
+- Change task lifecycle, worktree creation, terminal process ownership, or agent-provider detection.
+- Add a dedicated terminal browser or a shortcut that bypasses task/worktree safeguards.
+- Change the Dashboard startup view or agent snapshot polling.
 
 ## Decisions
 
-### Handle primary-view shortcuts at the app shell
+### Keep primary-view navigation in the palette
 
-Register Command+1 / Command+2 on macOS and Control+1 / Control+2 elsewhere at the app shell, mapping to Dashboard and Tasks. Reuse the platform detection and shortcut-label conventions in `useModKey`, while adding a guard for editable controls and xterm's input surface. Keep the existing default `city` state unchanged. Show platform-appropriate shortcut hints wherever the destinations are presented, and expose the bindings accessibly.
+Remove the app-shell Command+1/Command+2 and Control+1/Control+2 bindings, their accessible shortcut declarations, and their hints. Keep the Dashboard startup state and the existing searchable Dashboard/Tasks palette actions, but show no numeric shortcut hints for those actions.
 
-This keeps shortcuts available after either view has mounted and avoids duplicating key handlers in view components. Keeping handlers inside `TopBar` or `TaskWorkspace` was rejected because one of those components is unmounted at a time.
+### Expose a narrow inventory of Argis-managed terminals
 
-### Make the palette and terminal host app-level
+Add a typed Tauri/mock operation that reports the task/tab and lifecycle state of sessions owned by `TerminalManager`. The Dashboard rail uses this inventory plus app-session terminal targets already opened in Argis; it never scans processes or treats provider-observed terminals as Argis-owned. Refresh the inventory on app start and after terminal changes, and refresh it while the Dashboard is visible so exits that occur while a modal is closed update the rail. Keep the payload outside `Snapshot` and do not change the provider poller.
 
-Move ownership of palette-open state and the `CommandPalette` instance to the app shell. Keep the Dashboard search trigger as a control for that shared palette, and make the existing `⌘K` / Ctrl+K binding open it from either primary view. The palette remains an overlay and does not change `activeView` when opened or closed.
+Aggregate a task’s two tabs for the rail: running if either tab is running; pending if a tab is starting and none is running; unavailable if startup failed and no tab is active; completed if a started session has exited and neither tab is active; otherwise idle. Use the existing house-status visual treatment for these labels.
 
-Add searchable `Show Dashboard` and `Open Tasks` actions to the existing Actions section. Bind them to the same `appView` store methods as the direct shortcuts, include platform-appropriate shortcut hints, and keep them available alongside task results. This makes the direct shortcuts discoverable without making them the only navigation path.
+### Place the launcher rail alongside the Dashboard right column
 
-Move terminal target/open state to a shared app-level navigation store (or equivalent app-shell state) and render one `TerminalModal` host outside the conditional Dashboard/Tasks view tree. Both a palette result and the task-board action dispatch the same open-terminal request. Closing the modal leaves the current primary view unchanged; keeping the host mounted allows xterm buffers and backend-owned sessions to survive view switches. Replacing one target with another detaches the old UI attachment through the existing terminal-session lifecycle before attaching the new target.
+Keep the existing agent list/selected-house panel behavior. Add a compact vertical indexed rail alongside that content so it remains available in either right-column state. Hover expands a launcher to its full task title; focus and accessible labels expose the same title and state without requiring hover. Activating a launcher opens the app-level modal for that task with the Agent tab selected.
 
-Keeping the modal under `TaskBoard` was rejected because opening a terminal from Dashboard would otherwise require entering Tasks, and switching views would unmount its terminal panes.
+### Match a selected house to its task worktree
 
-### Reuse task data without running Git checks during search
-
-Extend the task store with cached task/project availability suitable for palette search. Search loading uses `listTasks` and `listProjects` only; it must not call `getTaskGitStatus` for every task. Invalidate or refresh the search cache after task/project mutations and refresh it when the palette opens if it has not been loaded yet. Reuse the existing task search ranking/highlight conventions where practical, matching task ID, title, description, and project path.
-
-Calling the current full `load()` path from the palette was rejected because that path checks Git status for each task and is unnecessary for matching or opening a terminal.
-
-### Treat each task as the terminal search target
-
-Search results represent tasks, with project/status context and a direct terminal action. Terminal access uses the existing `reattachTerminalSession(taskId, tab, ...)` operation for the Agent and shell tabs when the modal opens; no separate list-running-sessions API is needed. If no process is attached, the current modal already exposes the controls to start the Agent or shell.
-
-Adding a separate terminal-session chooser or enumerating all PTYs was rejected: the user chose command-palette task/terminal search instead of a dedicated terminal shortcut, and the existing task-keyed reattach operation can restore the relevant sessions after selection.
-
-For a task without a worktree, keep the task searchable, mark terminal access unavailable, and provide a separate explicit action to switch to Tasks. Search itself never invokes branch/worktree creation.
+Load cached task/project data through the existing no-Git-check search path when the Dashboard needs it. Compare the selected house’s normalized `cwd` with each task’s normalized `worktreePath`; show Terminal only for a match that has an Argis-managed terminal target/session. Opening the action uses the shared terminal-navigation state and leaves the Dashboard view unchanged. A missing or stale task match hides the action rather than creating or repairing Git resources.
 
 ## Risks / Trade-offs
 
-- **Palette task data can become stale after edits made elsewhere** → Share the task store, invalidate it on every task/project mutation, and refresh on palette open when needed.
-- **Opening a terminal from Dashboard introduces cross-view UI state** → Keep one terminal target and modal host at the app shell; use the same open action from TaskBoard and palette results.
-- **Global shortcuts can steal input from forms or xterm** → Ignore view-switch shortcuts while focus is in editable elements or terminal input; test these paths on macOS and non-macOS modifier behavior.
-- **Search may return a task whose worktree was removed outside Argis** → Treat terminal reattach/start failures as pane-level errors and keep the user in the current view; do not silently create or repair Git resources.
+- **Inventory can become stale while a terminal modal is closed** → Refresh the small Argis-owned session list independently of agent snapshots while Dashboard is visible.
+- **House and worktree paths can differ in representation** → Normalize path separators and absolute-path syntax before matching; do not infer a match from title or process name.
+- **Rail consumes right-column space** → Keep it compact by default and expand only the hovered/focused entry.
+- **Task search cache may be cold on Dashboard launch** → Load projects/tasks through the cached list path only; do not invoke per-task Git status checks.
 
 ## Migration Plan
 
-No data migration is required. Ship the shortcuts and palette additions as a normal app update. If rolling back, remove the palette result actions and app-level navigation bindings/host; task records, worktrees, terminal-manager ownership, and existing Dashboard behavior remain unchanged.
+No data migration is required. Add the terminal inventory to both AgentSource implementations and the app-shell UI, remove obsolete shortcut handling/hints, and preserve the existing terminal manager lifecycle. Rollback removes the rail/action and inventory transport while leaving task records and terminal process behavior unchanged.

@@ -54,6 +54,46 @@ Argis SHALL show tasks in Pending, In progress, and Other statuses groups, prese
 - **WHEN** a user selects a project filter
 - **THEN** the board shows only tasks assigned to that project while retaining the status groups
 
+### Requirement: Search tasks in the task workspace
+The Tasks workspace SHALL search task identity and project context and filter the grouped board without changing task data.
+
+#### Scenario: Filter tasks by query
+- **WHEN** a user enters a query matching a task ID, title, description, project name, or project path
+- **THEN** the board shows matching tasks in their existing status groups
+
+#### Scenario: Search returns no tasks
+- **WHEN** a query matches no task
+- **THEN** the board shows a no-matches state and does not alter task data
+
+### Requirement: Navigate matching tasks with arrow keys
+The Tasks workspace SHALL let users move keyboard focus through matching tasks in visible board order.
+
+#### Scenario: Move focus through filtered tasks
+- **WHEN** a user presses ArrowDown or ArrowUp from task search or a focused task
+- **THEN** focus moves to the adjacent matching task and remains within the filtered results
+
+### Requirement: Invoke task actions with single-key shortcuts
+In the Tasks workspace, `c` SHALL invoke the existing New task action, and `b`/`t` SHALL invoke the existing branch/terminal action for the focused task.
+
+#### Scenario: Create a task from the keyboard
+- **WHEN** a user presses `c` while task-workspace shortcuts are active
+- **THEN** Argis opens the existing New task flow with the same project availability and validation as the button
+
+#### Scenario: Branch or open the focused task
+- **WHEN** a task is focused and the user presses `b` or `t`
+- **THEN** Argis invokes that task’s existing branch or terminal action without bypassing its availability checks
+
+#### Scenario: Focused task action is unavailable
+- **WHEN** the focused task cannot create a branch or open a terminal
+- **THEN** the shortcut has no side effect and the existing unavailable reason remains available
+
+### Requirement: Keep single-key task actions out of text entry and dialogs
+Argis SHALL NOT invoke `c`, `b`, or `t` task actions while focus is in an unrelated editable control or modal dialog.
+
+#### Scenario: Type in a task search or editor field
+- **WHEN** a user presses `c`, `b`, or `t` while entering text in a field
+- **THEN** Argis preserves text entry and does not invoke a task action
+
 ### Requirement: Task deletion does not depend on Git cleanup
 When a task has an associated branch or worktree, Argis SHALL ask whether to remove those resources during task deletion. If the task has active terminal processes, Argis SHALL stop and reap them before deleting the task or attempting Git cleanup. Task deletion SHALL proceed if Git cleanup is declined or fails, but SHALL abort if an active terminal process cannot be stopped.
 

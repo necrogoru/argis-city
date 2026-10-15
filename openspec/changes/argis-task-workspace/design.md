@@ -2,7 +2,7 @@
 
 ## Context
 
-See `proposal.md` for motivation and `specs/` for user-visible behavior. Argis is a Vue/TresJS frontend over a Tauri 2/Rust backend. The city is the primary view; agent providers are read-only observers polled every two seconds. The frontend uses an injected `AgentSource` with Tauri and browser-mock implementations. Argis currently has no app-owned project/task store or interactive terminal support; bundled `rusqlite` is already available.
+See `proposal.md` for motivation and `specs/` for user-visible behavior. Argis is a Vue/TresJS frontend over a Tauri 2/Rust backend. The city is the primary view; agent providers are read-only observers polled every two seconds. The frontend uses an injected `AgentSource` with Tauri and browser-mock implementations. The project/task store, grouped task board, Git worktree actions, and app-level terminal modal are already implemented. The board has a project filter and button-driven task actions but no task search or single-key task navigation. The modal already closes on Escape and supports arrow-key tab selection; it currently focuses its close button on open and does not implement Ctrl+Tab or focus the xterm input after tab switches.
 
 ## Goals / Non-Goals
 
@@ -11,12 +11,15 @@ See `proposal.md` for motivation and `specs/` for user-visible behavior. Argis i
 - Add optional task and project management without changing the agent-session snapshot contract or writing to provider data.
 - Keep the city as the default monitoring view, while providing a dedicated task workspace and modal/panel flows for editing and terminal use.
 - Create task-scoped Git worktrees and embedded agent/shell sessions with explicit, safe user actions.
+- Add task search and focused-task keyboard actions that reuse the current UI actions and preserve their eligibility checks.
+- Make terminal close/tab controls keyboard-driven and focus the active xterm input when the modal opens or its tab changes.
 
 **Non-Goals:**
 
 - Cross-device synchronization, importing agent plan entries, or changing provider detection.
 - Automatically initializing Git, pushing branches, or modifying tracked project files to configure worktrees.
 - Task dependencies, automatic status transitions, or running task commands from task descriptions.
+- Adding global single-key shortcuts, changing task status from the keyboard, or bypassing the existing branch/worktree safeguards.
 
 ## Decisions
 
@@ -32,7 +35,14 @@ See `proposal.md` for motivation and `specs/` for user-visible behavior. Argis i
 - Add a Tasks entry point from the city. The city remains the initial and primary monitoring view; selecting Tasks switches to a dedicated task workspace and returning to the city preserves monitoring state.
 - Keep project registration and task create/edit/delete confirmation in modal or side-panel UI. The project manager lists registered projects and accepts a local path; an explicit create choice creates a missing directory.
 - Show the board in three top-level groups (Pending, In progress, Other statuses), with distinct stopped/canceled/completed labels and a project filter. Task detail editing does not add a fifth task-card action.
-- Open the task terminal in a large modal over the task workspace. Closing it returns to the board without closing its processes.
+- Open the task terminal in a large modal over the current view. Closing it returns to the previous focus target without closing its processes.
+
+### Keyboard-first task search and actions
+
+- Add a pure task-search helper that matches task ID, title, description, project name, and project path. Apply search together with the existing project filter, retaining the three status groups and their visible ordering.
+- Keep a focused task ID in the board and derive the navigable task order from the visible groups. ArrowDown/ArrowUp from the search field moves focus to the first/last result; from a focused card it moves to the adjacent result, wrapping within the filtered set in the same way as the command palette. If filtering removes the focused task, clear that focus and let the next arrow key choose from the current results.
+- Handle `c` in the active Tasks workspace to call the existing New task flow. Handle `b` and `t` only for a focused task, dispatching the same branch and terminal callbacks as the existing card buttons. Keep project availability, Git status, worktree requirements, disabled states, and explanations unchanged; keyboard actions do not create Git resources implicitly.
+- Ignore single-key actions while an unrelated editable control or dialog has focus. ArrowUp/ArrowDown in the task-search field are the intentional exception; letters typed into search remain text rather than actions.
 
 ### Git worktrees
 
@@ -45,10 +55,16 @@ See `proposal.md` for motivation and `specs/` for user-visible behavior. Argis i
 ### Embedded terminal process lifecycle
 
 - Keep PTY ownership in a backend process manager keyed by task and tab. The Agent tab starts the user-selected supported CLI (Claude Code is the default); the `term` tab starts the user's interactive shell. Both use the associated worktree as their working directory.
-- Use Tauri commands for start/input/resize/stop operations and a Tauri Channel for ordered terminal output. Keep a bounded 1 MiB output tail per PTY and replay it before live output on reattachment. Keep xterm instances mounted while the task board remains mounted and the modal is closed, preserving their full xterm scrollback for a quick close/reopen. Keep processes alive while users switch between task and city views; stop them before their task is deleted, and terminate/reap all remaining Argis-managed processes when the app exits.
+- Use Tauri commands for start/input/resize/stop operations and a Tauri Channel for ordered terminal output. Keep a bounded 1 MiB output tail per PTY and replay it before live output on reattachment. Keep the app-level terminal modal and its xterm panes mounted independently of the conditional city/task view, preserving scrollback for quick close/reopen. Keep processes alive while users switch between task and city views; stop them before their task is deleted, and terminate/reap all remaining Argis-managed processes when the app exits.
 - If starting the agent CLI fails, show the error in the Agent tab and leave the shell tab usable. Do not silently mark the task stopped or otherwise mutate task status.
 - Place a stable terminal-host adapter between Rust PTY handling and the Vue terminal view.
 - Render xterm with a system monospace font and zero letter spacing; keep the app's Outfit UI font for the surrounding controls.
+
+### Terminal modal keyboard controls
+
+- Keep Escape as a modal-level close action and do not stop the Agent or shell process when it closes. The key is consumed by the modal rather than sent to the PTY.
+- Handle Ctrl+Tab only while the terminal modal is open. Prevent the host/browser tab-switch behavior, toggle between Agent and `term`, wait for the selected pane to be visible and fitted, then focus its xterm input. Opening the modal restores the Agent tab first and focuses its input after reattachment completes.
+- Preserve the existing accessible tab buttons and their ArrowLeft/ArrowRight/Home/End navigation. Keyboard focus returns to the element that opened the modal after close.
 
 ### Approved terminal dependencies
 
@@ -69,10 +85,12 @@ See `proposal.md` for motivation and `specs/` for user-visible behavior. Argis i
 - **A worktree can contain user changes when task deletion is requested** → Never force-remove it; proceed with task deletion and report any retained branch/worktree paths.
 - **Agent CLI installations and PATH vary by machine** → Resolve the selected executable at launch, report failures in the Agent tab, and keep the shell tab available.
 - **Terminal output can be high-volume** → Stream in bounded chunks and keep terminal buffers out of the city snapshot/render loop.
+- **Single-key shortcuts can steal task/search text** → Scope them to the Tasks view, ignore editable controls and dialogs, and test the search-arrow exception explicitly.
+- **Ctrl+Tab and Escape are also useful inside terminal programs** → Reserve them for the modal while it is open, as requested; keep all other terminal input flowing unchanged.
 
 ## Migration Plan
 
-1. Add the app-owned SQLite schema and task/project services without changing or migrating agent-tool data.
-2. Add the task workspace and Git operations behind the optional Tasks entry point; retain the city as the startup view.
-3. Add the approved PTY/renderer integration and process cleanup lifecycle.
-4. If rolling back the feature, disable its entry point and retain the app-owned task database and user-created worktrees. Do not automatically remove project data, Git branches, or local exclude entries during rollback.
+1. The task/project store, task workspace, Git operations, and approved PTY/renderer integration are already present; retain their existing local-data and process-safety boundaries.
+2. Add the workspace search/focus model and keyboard handlers around the existing UI actions, then add the modal key handling and xterm focus transitions.
+3. Update keyboard behavior tests and `docs/design/SPEC.md`; no database migration, new dependency, or new Tauri permission is required.
+4. If rolling back the keyboard enhancement, remove its search/focus controls and key handlers while retaining task records, worktrees, terminal processes, and existing pointer actions.

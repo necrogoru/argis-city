@@ -19,6 +19,14 @@
 - [x] 3.2 Verify terminal search results reattach existing Agent/shell sessions or expose the existing start controls when no session is running; verify tasks without worktrees remain searchable, show the unavailable reason and explicit Tasks action, and never create Git resources during search.
 - [x] 3.3 Update the terminal/search portion of `docs/design/SPEC.md`; verify the documented reattach, no-session, and no-worktree behaviors match the implementation.
 
-## 4. Integration verification
+## 4. Dashboard terminal navigation
 
-- [ ] 4.1 Run `pnpm build`, `pnpm exec vitest run`, `cargo test --manifest-path src-tauri/Cargo.toml`, `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`, and `cargo fmt --manifest-path src-tauri/Cargo.toml --check`; manually verify shortcuts and `⌘K` task/terminal search in the desktop app without regressing city monitoring.
+- [ ] 4.1 Remove Command+1/Command+2 and Control+1/Control+2 handling and stale shortcut hints; verify shortcut tests confirm no view switch while palette Dashboard/Tasks actions remain available.
+- [ ] 4.2 Add a typed Argis-managed terminal inventory to the Rust manager, Tauri command, and mock/Tauri AgentSource implementations; verify tests report task/tab state without discovering external processes and document the transport in `docs/CONTRACT.md`.
+- [ ] 4.3 Add the app-level terminal index rail and state aggregation; verify idle, pending, running, completed, and unavailable states, hover/focus expansion, and click-to-open on the Agent tab.
+- [ ] 4.4 Match selected-house cwd to normalized task worktree paths and expose Terminal only for a matching Argis terminal; verify match/no-match cases and that the Dashboard lookup does not run Git status checks or change views.
+- [ ] 4.5 Update `docs/design/SPEC.md` with the removed numeric shortcuts, rail, status behavior, and selected-house Terminal action; verify labels and state descriptions match the implementation.
+
+## 5. Integration verification
+
+- [ ] 5.1 Run `pnpm build`, `pnpm exec vitest run`, `cargo test --manifest-path src-tauri/Cargo.toml`, `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`, and `cargo fmt --manifest-path src-tauri/Cargo.toml --check`; manually verify palette task search, Dashboard startup, numeric shortcut removal, rail behavior, selected-house matching, and uninterrupted city monitoring.

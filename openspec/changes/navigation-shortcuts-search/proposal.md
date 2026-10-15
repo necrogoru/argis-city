@@ -2,23 +2,23 @@
 
 ## Why
 
-Argis makes users switch into the Tasks workspace before they can find a task or open its terminal, while dashboard navigation is mostly mouse-driven. A small set of view shortcuts and task-aware command-palette search will make common destinations reachable without interrupting monitoring.
+Argis keeps Dashboard as its monitoring view, but its numeric view shortcuts are not the most useful keyboard path, and task terminals disappear from view when users return to monitoring. Removing those bindings while adding contextual Dashboard terminal access makes the existing task workflow easier to resume without interrupting monitoring.
 
 ## What Changes
 
-- Add direct keyboard shortcuts for Dashboard and Tasks, with platform-appropriate modifier hints; keep Dashboard as the startup view.
-- Add searchable Dashboard and Tasks navigation actions to the existing command palette as well as the direct shortcuts.
-- Extend the existing `⌘K` / Ctrl+K command palette to search tasks and their terminal targets alongside agents and actions.
-- Let a task search result open its terminal over the current view, reattaching to running sessions or showing the existing start controls when none are running.
-- Keep tasks without worktrees searchable, explain why their terminal cannot open, and offer an explicit action to go to Tasks to create a worktree.
-- Do not add a separate terminal shortcut or create Git worktrees as a side effect of search.
+- Remove Command+1/Command+2 and Control+1/Control+2 as app view-switch shortcuts and remove their hints. Keep Dashboard as the startup view and keep Dashboard/Tasks discoverable through the command palette.
+- Preserve command-palette task search and its task-terminal action.
+- Add a compact, indexed Dashboard rail for tasks with Argis-managed terminal sessions. Tabs expand on hover to reveal the task title, show terminal state, and open that task’s modal on click with the Agent tab selected.
+- In a selected-house summary, show a Terminal action only when the house working directory matches a task worktree with an Argis-managed terminal; open that task’s terminal modal.
+- Expose Argis-owned terminal-session status to the Dashboard without changing agent snapshot polling or discovering external terminals.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `app-view-navigation`: Navigate directly between Dashboard and Tasks with keyboard shortcuts while preserving the default Dashboard view.
-- `command-palette-search`: Search tasks and terminal targets from the command palette and open a task terminal without navigating to the Tasks workspace.
+- `app-view-navigation`: Reach Dashboard and Tasks through palette actions without numeric view-switch shortcuts.
+- `command-palette-search`: Search tasks and open their terminals from the existing command palette.
+- `dashboard-terminal-navigation`: Find and reopen Argis-managed task terminals from the Dashboard rail or a matching selected house.
 
 ### Modified Capabilities
 
@@ -26,6 +26,7 @@ None. The project has no main OpenSpec capability specs yet; these behaviors are
 
 ## Impact
 
-- Frontend: app-level shortcut handling, command-palette search/result actions, task data availability from the dashboard, and an app-level terminal-modal host.
-- Existing task and terminal services are reused; this change does not require a new backend API or dependency unless implementation reveals a gap.
-- No changes to agent snapshot polling, provider observers, or the Dashboard startup behavior.
+- Frontend: app-shell terminal navigation, Dashboard right column/selected-house summary, terminal state presentation, and palette shortcut hints.
+- Transport/backend: a typed inventory/status operation for Argis-managed terminal sessions, implemented in Tauri and browser mock modes; no agent snapshot changes or external process discovery.
+- Tests and design documentation: verify keyboard shortcut removal, task-to-house matching, rail state/expansion, and opening the correct terminal.
+- No new dependency is expected.

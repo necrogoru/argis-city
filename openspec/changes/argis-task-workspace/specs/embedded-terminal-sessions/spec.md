@@ -43,6 +43,28 @@ Argis SHALL provide interactive input and output for the Agent and shell process
 - **WHEN** a user interacts with the selected agent in the Agent tab
 - **THEN** Argis sends input to and displays output from that agent process in the task worktree
 
+### Requirement: Close the terminal modal with Escape
+Argis SHALL close the terminal modal when Escape is pressed while it is open, without stopping its managed terminal processes.
+
+#### Scenario: Close an open terminal
+- **WHEN** a user presses Escape in the terminal modal
+- **THEN** the modal closes and its Agent/shell processes remain available for reattachment
+
+### Requirement: Switch terminal tabs and focus their input with Ctrl+Tab
+While the terminal modal is open, Ctrl+Tab SHALL toggle between the Agent and `term` tabs and focus the active tab’s terminal input.
+
+#### Scenario: Open the terminal modal
+- **WHEN** a task terminal modal opens
+- **THEN** the Agent tab is active and its terminal input receives focus
+
+#### Scenario: Switch from Agent to shell
+- **WHEN** the Agent tab is active and a user presses Ctrl+Tab
+- **THEN** the `term` tab becomes active and its terminal input receives focus
+
+#### Scenario: Switch from shell to Agent
+- **WHEN** the `term` tab is active and a user presses Ctrl+Tab
+- **THEN** the Agent tab becomes active and its terminal input receives focus
+
 ### Requirement: Preserve terminal sessions while Argis is open
 Argis SHALL keep task terminal processes running when users close the terminal modal or switch to monitoring, reconnect tabs to their still-running processes with retained recent output, and SHALL stop those processes when Argis exits or their owning task is deleted.
 
