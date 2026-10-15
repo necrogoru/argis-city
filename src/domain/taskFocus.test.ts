@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { nextVisibleTaskId, taskFocusDirectionForEvent } from "./taskFocus";
+import {
+  adjacentVisibleTaskId,
+  nextVisibleTaskId,
+  taskFocusDirectionForEvent,
+  taskFocusDirectionForKey,
+} from "./taskFocus";
 
 describe("nextVisibleTaskId", () => {
   const visibleTaskIds = [12, 5, 30];
@@ -30,15 +35,61 @@ describe("nextVisibleTaskId", () => {
   });
 });
 
+describe("adjacentVisibleTaskId", () => {
+  const taskColumns = [[1, 2], [3], [], [4, 5, 6]];
+
+  it("moves horizontally to the nearest populated column at the same row", () => {
+    expect(adjacentVisibleTaskId(taskColumns, 1, "right")).toBe(3);
+    expect(adjacentVisibleTaskId(taskColumns, 5, "left")).toBe(3);
+  });
+
+  it("clamps to the last task when the adjacent column has fewer rows", () => {
+    expect(adjacentVisibleTaskId(taskColumns, 2, "right")).toBe(3);
+    expect(adjacentVisibleTaskId(taskColumns, 6, "left")).toBe(3);
+  });
+
+  it("does not wrap at the outer columns or move without a focused task", () => {
+    expect(adjacentVisibleTaskId(taskColumns, 1, "left")).toBeNull();
+    expect(adjacentVisibleTaskId(taskColumns, 6, "right")).toBeNull();
+    expect(adjacentVisibleTaskId(taskColumns, null, "right")).toBeNull();
+  });
+});
+
+describe("taskFocusDirectionForKey", () => {
+  it.each([
+    ["ArrowLeft", "left"], ["h", "left"],
+    ["ArrowDown", "down"], ["j", "down"],
+    ["ArrowUp", "up"], ["k", "up"],
+    ["ArrowRight", "right"], ["l", "right"],
+  ] as const)("maps %s to %s", (key, direction) => {
+    expect(taskFocusDirectionForKey({ key, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false })).toBe(direction);
+  });
+
+  it("ignores modified or unrelated keys", () => {
+    expect(taskFocusDirectionForKey({ key: "h", metaKey: true, ctrlKey: false, altKey: false, shiftKey: false })).toBeNull();
+    expect(taskFocusDirectionForKey({ key: "x", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false })).toBeNull();
+  });
+});
+
 describe("taskFocusDirectionForEvent", () => {
+  const event = (key: string) => ({
+    key,
+    isComposing: false,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+  });
+
   it("allows arrow navigation from a descendant inside a task card", () => {
-    expect(taskFocusDirectionForEvent({ key: "ArrowDown", isComposing: false }, true)).toBe("down");
-    expect(taskFocusDirectionForEvent({ key: "ArrowUp", isComposing: false }, true)).toBe("up");
+    expect(taskFocusDirectionForEvent(event("ArrowDown"), true)).toBe("down");
+    expect(taskFocusDirectionForEvent(event("ArrowUp"), true)).toBe("up");
+    expect(taskFocusDirectionForEvent(event("l"), true)).toBe("right");
   });
 
   it("ignores events outside a task card and composition input", () => {
-    expect(taskFocusDirectionForEvent({ key: "ArrowDown", isComposing: false }, false)).toBeNull();
-    expect(taskFocusDirectionForEvent({ key: "ArrowDown", isComposing: true }, true)).toBeNull();
-    expect(taskFocusDirectionForEvent({ key: "Enter", isComposing: false }, true)).toBeNull();
+    expect(taskFocusDirectionForEvent(event("ArrowDown"), false)).toBeNull();
+    expect(taskFocusDirectionForEvent({ ...event("ArrowDown"), isComposing: true }, true)).toBeNull();
+    expect(taskFocusDirectionForEvent(event("Enter"), true)).toBeNull();
   });
 });

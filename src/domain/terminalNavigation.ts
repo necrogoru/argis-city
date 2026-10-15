@@ -3,6 +3,25 @@ import type { TerminalTab } from "./types";
 type TerminalNavigationKey = Pick<KeyboardEvent, "key" | "ctrlKey">
   & Partial<Pick<KeyboardEvent, "altKey" | "metaKey">>;
 
+type TerminalStartShortcutEvent = Pick<
+  KeyboardEvent,
+  "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "repeat" | "isComposing" | "defaultPrevented"
+>;
+
+export function shouldStartTerminalForKey(event: TerminalStartShortcutEvent, canStart: boolean): boolean {
+  return (
+    canStart &&
+    event.key.toLowerCase() === "s" &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    !event.repeat &&
+    !event.isComposing &&
+    !event.defaultPrevented
+  );
+}
+
 export function getTerminalTabForKey(
   activeTab: TerminalTab,
   event: TerminalNavigationKey,

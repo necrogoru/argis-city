@@ -2,7 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { X } from "@lucide/vue";
 import type { Task, TerminalTab } from "../../domain/types";
-import { getTerminalTabForKey } from "../../domain/terminalNavigation";
+import { getTerminalTabForKey, shouldStartTerminalForKey } from "../../domain/terminalNavigation";
 import { useTerminalRailStore } from "../../stores/terminalRail";
 import TerminalSessionPane from "./TerminalSessionPane.vue";
 import type { TerminalStatus } from "./useTerminalSession";
@@ -12,6 +12,7 @@ interface TerminalPaneHandle {
   detach: () => Promise<void>;
   fit: () => void;
   focus: () => void;
+  start: () => Promise<void>;
 }
 
 const open = defineModel<boolean>("open", { required: true });
@@ -120,6 +121,22 @@ function handleDialogKeydown(event: KeyboardEvent): void {
     event.preventDefault();
     event.stopPropagation();
     close();
+    return;
+  }
+
+  const target = event.target instanceof Element ? event.target : null;
+  const isTerminalInput = Boolean(target?.closest(".xterm-helper-textarea"));
+  const isOtherEditable = Boolean(
+    target?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])"),
+  );
+  const activeStatus = activeTab.value === "agent" ? agentStatus.value : termStatus.value;
+  const canStart = !restoring.value && activeStatus !== "running" && activeStatus !== "starting";
+
+  if ((!isOtherEditable || isTerminalInput) && shouldStartTerminalForKey(event, canStart)) {
+    event.preventDefault();
+    event.stopPropagation();
+    const pane = activeTab.value === "agent" ? agentPane.value : termPane.value;
+    void pane?.start();
     return;
   }
 

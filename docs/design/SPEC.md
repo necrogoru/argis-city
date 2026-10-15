@@ -122,6 +122,12 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   move to the next or previous visible result in board order and wrap at either
   end. If search or project filtering removes the focused task, clear that
   focus.
+- From a focused task card, ArrowLeft/ArrowRight or `h`/`l` move to the nearest
+  populated status column, preserving the row when possible and clamping to the
+  last task in a shorter column; horizontal navigation stops at the outer
+  columns. `j`/`k` mirror ArrowDown/ArrowUp, including the existing board-order
+  wrap. Vim keys are unmodified, do not take input from text fields, and are
+  exposed through the task card's keyboard-shortcut semantics.
 - Unmodified `c` opens the existing New task flow. Unmodified `b` and `t` on a
   focused, visible task invoke its existing branch/worktree and terminal
   actions, respectively. Keep their existing eligibility: `c` requires at
@@ -173,8 +179,11 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   completes, including when the terminal has not started. While the modal is
   open, Ctrl+Tab toggles Agent ↔ `term`, prevents host/browser tab switching,
   then fits and focuses the active terminal input. Keep the accessible tab-button
-  ArrowLeft/ArrowRight/Home/End navigation. Escape closes the modal even from
-  xterm, returns focus to the opener, and leaves both PTYs alive for reattachment.
+  ArrowLeft/ArrowRight/Home/End navigation. Unmodified `s` starts the selected
+  Agent or shell pane when it is startable, including while xterm has focus;
+  when running, `s` remains terminal input. Ignore modified, repeated, composing,
+  and form-control keystrokes. Escape closes the modal even from xterm, returns
+  focus to the opener, and leaves both PTYs alive for reattachment.
 
 ## Progress readouts
 Progress is a real estimate only when it comes from a plan (`execution`) or

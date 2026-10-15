@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getTerminalTabForKey } from "./terminalNavigation";
+import { getTerminalTabForKey, shouldStartTerminalForKey } from "./terminalNavigation";
 
 describe("getTerminalTabForKey", () => {
   it.each([
@@ -31,5 +31,48 @@ describe("getTerminalTabForKey", () => {
 
   it("ignores keys outside the terminal shortcuts", () => {
     expect(getTerminalTabForKey("agent", { key: "Escape", ctrlKey: false })).toBeNull();
+  });
+});
+
+describe("shouldStartTerminalForKey", () => {
+  const event = (key: string, modifiers: Partial<{
+    metaKey: boolean;
+    ctrlKey: boolean;
+    altKey: boolean;
+    shiftKey: boolean;
+    repeat: boolean;
+    isComposing: boolean;
+    defaultPrevented: boolean;
+  }> = {}) => ({
+    key,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    repeat: false,
+    isComposing: false,
+    defaultPrevented: false,
+    ...modifiers,
+  });
+
+  it("starts the selected pane for an unmodified S when it can start", () => {
+    expect(shouldStartTerminalForKey(event("s"), true)).toBe(true);
+  });
+
+  it("does not start for other keys or when the selected pane is already running", () => {
+    expect(shouldStartTerminalForKey(event("b"), true)).toBe(false);
+    expect(shouldStartTerminalForKey(event("s"), false)).toBe(false);
+  });
+
+  it.each([
+    ["Meta", { metaKey: true }],
+    ["Control", { ctrlKey: true }],
+    ["Alt", { altKey: true }],
+    ["Shift", { shiftKey: true }],
+    ["repeated", { repeat: true }],
+    ["composing", { isComposing: true }],
+    ["already handled", { defaultPrevented: true }],
+  ] as const)("ignores %s keystrokes", (_label, modifiers) => {
+    expect(shouldStartTerminalForKey(event("s", modifiers), true)).toBe(false);
   });
 });

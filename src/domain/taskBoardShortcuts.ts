@@ -1,9 +1,12 @@
 import type { Task, TaskGitStatus } from "./types";
 import { isViewShortcutBlocked, type ShortcutTargetLike } from "./appViewShortcuts";
-import type { TaskFocusDirection } from "./taskFocus";
+import { taskFocusDirectionForKey, type TaskFocusDirection } from "./taskFocus";
 
 export type TaskBoardShortcutAction = "createTask" | "createBranch" | "openTerminal";
-export type TaskBoardNavigationEvent = Pick<KeyboardEvent, "key" | "isComposing" | "defaultPrevented">;
+export type TaskBoardNavigationEvent = Pick<
+  KeyboardEvent,
+  "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "isComposing" | "defaultPrevented"
+>;
 
 export type TaskBoardShortcutEvent = Pick<
   KeyboardEvent,
@@ -31,16 +34,14 @@ export function taskBoardActionForShortcut(
   }
 }
 
-/** Starts arrow-key task navigation outside cards without taking keys from inputs or dialogs. */
+/** Starts arrow/Vim-key task navigation outside cards without taking keys from inputs or dialogs. */
 export function taskBoardNavigationDirection(
   event: TaskBoardNavigationEvent,
   target: ShortcutTargetLike | null,
   hasOpenDialog = false,
 ): TaskFocusDirection | null {
   if (event.defaultPrevented || event.isComposing || isViewShortcutBlocked(target, hasOpenDialog)) return null;
-  if (event.key === "ArrowDown") return "down";
-  if (event.key === "ArrowUp") return "up";
-  return null;
+  return taskFocusDirectionForKey(event);
 }
 
 /** Returns the focused task only when it remains in the visible, filtered board results. */

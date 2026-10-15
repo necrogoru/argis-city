@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import type { Task, TaskDeletionOutcome, TaskStatus } from "../../domain/types";
 import { groupTasks } from "../../domain/tasks";
-import { nextVisibleTaskId, type TaskFocusDirection } from "../../domain/taskFocus";
+import { adjacentVisibleTaskId, nextVisibleTaskId, type TaskFocusDirection } from "../../domain/taskFocus";
 import { searchBoardTasks } from "../../domain/taskSearch";
 import {
   canCreateTaskBranch,
@@ -43,6 +43,9 @@ const groups = computed(() => {
 const visibleTaskIds = computed(() =>
   store.loading ? [] : groups.value.flatMap((group) => group.tasks.map((task) => task.id)),
 );
+const visibleTaskColumns = computed(() =>
+  store.loading ? [] : groups.value.map((group) => group.tasks.map((task) => task.id)),
+);
 const projectPaths = computed(() => new Map(store.projects.map((project) => [project.id, project.path])));
 const projectsOpen = ref(false);
 const taskEditorOpen = ref(false);
@@ -58,12 +61,15 @@ function setTaskCardRef(taskId: number, card: TaskCardHandle | null): void {
   else taskCardRefs.delete(taskId);
 }
 
-function focusNextVisibleTask(currentTaskId: number | null, direction: TaskFocusDirection): void {
-  const nextTaskId = nextVisibleTaskId(visibleTaskIds.value, currentTaskId, direction);
-  if (nextTaskId == null) return;
+function focusNextVisibleTask(currentTaskId: number | null, direction: TaskFocusDirection): boolean {
+  const nextTaskId = direction === "left" || direction === "right"
+    ? adjacentVisibleTaskId(visibleTaskColumns.value, currentTaskId, direction)
+    : nextVisibleTaskId(visibleTaskIds.value, currentTaskId, direction);
+  if (nextTaskId == null) return false;
 
   focusedTaskId.value = nextTaskId;
   taskCardRefs.get(nextTaskId)?.focus();
+  return true;
 }
 
 function handleSearchKeydown(event: KeyboardEvent): void {
@@ -91,9 +97,9 @@ function handleTaskBoardShortcut(event: KeyboardEvent): void {
   const hasOpenDialog =
     projectsOpen.value || taskEditorOpen.value || document.querySelector("dialog[open]") !== null;
   const direction = taskBoardNavigationDirection(event, target, hasOpenDialog);
-  if (direction !== null && visibleTaskIds.value.length > 0) {
+  const currentTaskId = direction === "left" || direction === "right" ? focusedTaskId.value : null;
+  if (direction !== null && focusNextVisibleTask(currentTaskId, direction)) {
     event.preventDefault();
-    focusNextVisibleTask(null, direction);
     return;
   }
 
@@ -237,7 +243,7 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
       </section>
     </div>
     <span id="task-search-hint" class="visually-hidden">
-      Use the up and down arrow keys to move focus through matching tasks.
+      Use the up and down arrow keys to focus matching tasks, then use arrow keys or h, j, k, l to navigate the board.
     </span>
 
     <ProjectManagerDialog v-model:open="projectsOpen" :projects="store.projects" />

@@ -3,7 +3,7 @@ import { computed, ref } from "vue";
 import { ChevronDown, ChevronUp, GitBranch, SquareTerminal } from "@lucide/vue";
 import type { Task, TaskGitStatus, TaskStatus } from "../../domain/types";
 import { nextTaskStatus, previousTaskStatus, TASK_STATUS_LABELS } from "../../domain/tasks";
-import { taskFocusDirectionForEvent } from "../../domain/taskFocus";
+import { taskFocusDirectionForEvent, type TaskFocusDirection } from "../../domain/taskFocus";
 import { canCreateTaskBranch, canOpenTaskTerminal } from "../../domain/taskBoardShortcuts";
 
 const props = defineProps<{
@@ -19,7 +19,7 @@ const emit = defineEmits<{
   openTerminal: [];
   focusTask: [];
   blurTask: [];
-  navigate: [direction: "down" | "up"];
+  navigate: [direction: TaskFocusDirection];
 }>();
 const cardElement = ref<HTMLElement | null>(null);
 
@@ -63,7 +63,7 @@ defineExpose({ focus });
     class="task-card"
     :data-status="props.task.status"
     :aria-label="`Task #${props.task.id}: ${props.task.title}`"
-    aria-keyshortcuts="ArrowDown ArrowUp"
+    aria-keyshortcuts="ArrowLeft ArrowDown ArrowUp ArrowRight h j k l"
     tabindex="0"
     @focus="emit('focusTask')"
     @blur="emit('blurTask')"

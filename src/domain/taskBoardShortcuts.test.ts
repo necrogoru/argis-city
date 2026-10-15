@@ -79,8 +79,18 @@ describe("taskBoardNavigationDirection", () => {
     expect(taskBoardNavigationDirection(key("ArrowUp"), target("button"))).toBe("up");
   });
 
+  it.each([
+    ["ArrowLeft", "left"], ["h", "left"],
+    ["ArrowDown", "down"], ["j", "down"],
+    ["ArrowUp", "up"], ["k", "up"],
+    ["ArrowRight", "right"], ["l", "right"],
+  ] as const)("maps %s to %s outside a task card", (value, direction) => {
+    expect(taskBoardNavigationDirection(key(value), target("button"))).toBe(direction);
+  });
+
   it("leaves arrows to text fields, dialogs, and handlers that already consumed them", () => {
     expect(taskBoardNavigationDirection(key("ArrowDown"), target("input"))).toBeNull();
+    expect(taskBoardNavigationDirection(key("h"), target("input"))).toBeNull();
     expect(taskBoardNavigationDirection(key("ArrowDown"), target("button"), true)).toBeNull();
     expect(taskBoardNavigationDirection(key("ArrowDown", { defaultPrevented: true }), target("button"))).toBeNull();
     expect(taskBoardNavigationDirection(key("ArrowDown", { isComposing: true }), target("button"))).toBeNull();

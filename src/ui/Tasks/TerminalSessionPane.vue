@@ -70,7 +70,7 @@ function focus(): void {
 watch(session.status, (status) => emit("statusChange", status), { immediate: true });
 onBeforeUnmount(() => void session.dispose());
 
-defineExpose({ reattach, detach: session.detach, fit, focus });
+defineExpose({ reattach, detach: session.detach, fit, focus, start });
 </script>
 
 <template>
@@ -93,11 +93,12 @@ defineExpose({ reattach, detach: session.detach, fit, focus });
           <option value="opencode">OpenCode</option>
           <option value="pi">Pi</option>
         </select>
-        <button type="button" :disabled="props.restoring" @click="start">Start Agent</button>
+        <button type="button" aria-keyshortcuts="s" :disabled="props.restoring" @click="start">Start Agent</button>
       </div>
       <button
         v-else-if="props.tab === 'term' && session.status.value !== 'running' && session.status.value !== 'starting'"
         type="button"
+        aria-keyshortcuts="s"
         :disabled="props.restoring"
         @click="start"
       >
