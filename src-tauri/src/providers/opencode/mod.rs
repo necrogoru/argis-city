@@ -13,10 +13,10 @@ mod tests_v2;
 
 use super::{candidate_since, AgentProvider, CollectContext};
 use crate::domain::{AgentSession, ProviderId};
-use crate::shared::liveness::{written_recently, ToolProcesses};
+use crate::shared::liveness::{canonical, written_recently, ToolProcesses};
 use build::Sources;
 pub use catalog::ModelCatalog;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use store::OpenCodeStore;
 
 pub struct OpenCodeProvider {
@@ -35,6 +35,19 @@ impl OpenCodeProvider {
         self.models = models;
         self
     }
+}
+
+pub(crate) fn has_resume_reference(root: &Path, session_id: &str, worktree: &Path) -> anyhow::Result<bool> {
+    let database = root.join("opencode.db");
+    if !database.is_file() {
+        return Ok(false);
+    }
+    let store = OpenCodeStore::open(&database)?;
+    let worktree = canonical(worktree);
+    Ok(store
+        .recent_roots(0)?
+        .into_iter()
+        .any(|session| session.id == session_id && canonical(&session.directory) == worktree))
 }
 
 impl AgentProvider for OpenCodeProvider {

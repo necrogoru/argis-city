@@ -13,7 +13,12 @@ use crate::shared::liveness::ToolProcesses;
 use crate::shared::text::title_or_dir;
 use discover::{live_files, Candidate};
 use parking_lot::Mutex;
+use std::path::Path;
 use std::path::PathBuf;
+use std::{
+    fs,
+    io::{BufRead, BufReader},
+};
 use transcript::PiState;
 
 pub struct PiProvider {
@@ -26,6 +31,32 @@ impl PiProvider {
     pub fn new(root: PathBuf) -> Self {
         Self { root, transcripts: Mutex::new(JsonlTailCache::new()) }
     }
+}
+
+pub(crate) fn has_resume_reference(root: &Path, session_id: &str, worktree: &Path) -> bool {
+    let worktree = crate::shared::liveness::canonical(worktree);
+    let sessions_dir = root.join("sessions").join(discover::encode_cwd(&worktree));
+    let Ok(entries) = fs::read_dir(sessions_dir) else { return false };
+
+    entries.flatten().any(|entry| {
+        let path = entry.path();
+        if !path.extension().is_some_and(|extension| extension == "jsonl") {
+            return false;
+        }
+        let Ok(file) = fs::File::open(&path) else { return false };
+        let mut reader = BufReader::new(file);
+        let mut first_line = String::new();
+        if reader.read_line(&mut first_line).is_err() {
+            return false;
+        }
+        let Ok(header) = serde_json::from_str::<serde_json::Value>(&first_line) else { return false };
+        let native = header
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .or_else(|| path.file_stem().and_then(|stem| stem.to_str()));
+        let cwd = header.get("cwd").and_then(serde_json::Value::as_str).map(Path::new);
+        native == Some(session_id) && cwd.is_some_and(|cwd| crate::shared::liveness::canonical(cwd) == worktree)
+    })
 }
 
 impl AgentProvider for PiProvider {

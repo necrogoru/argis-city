@@ -18,12 +18,32 @@ export const useTerminalRailStore = defineStore("terminalRail", () => {
   const error = shallowRef<string | null>(null);
   let refreshPromise: Promise<void> | null = null;
 
-  const entries = computed(() => aggregateTerminalRailEntries(taskStore.tasks, inventory.value, liveStatuses.value));
+  const entries = computed(() => aggregateTerminalRailEntries(
+    taskStore.tasks,
+    inventory.value,
+    liveStatuses.value,
+    taskStore.taskAgentResumes,
+  ));
 
   async function refreshInventory(): Promise<void> {
     try {
-      inventory.value = await source.listTerminalInventory();
+      const previousStates = new Map(
+        inventory.value.map((entry) => [`${entry.taskId}:${entry.tab}`, entry.state]),
+      );
+      const nextInventory = await source.listTerminalInventory();
+      const completedSessionAppeared = nextInventory.some(
+        (entry) => (entry.state === "completed" || entry.state === "failed") &&
+          previousStates.get(`${entry.taskId}:${entry.tab}`) !== entry.state,
+      );
+      inventory.value = nextInventory;
       error.value = null;
+      if (completedSessionAppeared) {
+        try {
+          await taskStore.refreshTaskAgentResumes();
+        } catch (reason) {
+          error.value = errorMessage(reason);
+        }
+      }
     } catch (reason) {
       error.value = errorMessage(reason);
     }

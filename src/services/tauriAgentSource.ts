@@ -112,6 +112,21 @@ export function createTauriAgentSource(): AgentSource {
         return attachment;
       });
     },
+    resumeTaskAgent(taskId, size, onEvent) {
+      const tab: TerminalTab = "agent";
+      const key = terminalChannelKey(taskId, tab);
+      const entry = makeTerminalChannel(key, onEvent);
+      return keepTerminalAttachment(
+        taskId,
+        tab,
+        key,
+        entry,
+        invoke<TerminalAttachment>("resume_task_agent", { taskId, size, onEvent: entry.channel }),
+      ).then((attachment) => {
+        if (!attachment) throw new Error("task agent conversation could not be resumed");
+        return attachment;
+      });
+    },
     reattachTerminalSession(taskId, tab, onEvent) {
       const key = terminalChannelKey(taskId, tab);
       const entry = makeTerminalChannel(key, onEvent);

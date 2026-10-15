@@ -204,6 +204,14 @@ export class MockAgentSource implements AgentSource {
     return null;
   }
 
+  async resumeTaskAgent(
+    _taskId: number,
+    _size: TerminalSize,
+    _onEvent: (event: TerminalEvent) => void,
+  ): Promise<TerminalAttachment> {
+    throw new Error("Embedded terminal processes are only available in the Argis desktop app");
+  }
+
   async sendTerminalInput(_sessionId: number, _data: string): Promise<void> {
     throw new Error("Embedded terminal processes are only available in the Argis desktop app");
   }

@@ -111,6 +111,7 @@ pub fn run() {
             commands::inspect_task_git_status,
             commands::create_task_worktree,
             commands::start_terminal_session,
+            commands::resume_task_agent,
             commands::reattach_terminal_session,
             commands::terminal_input,
             commands::resize_terminal_session,

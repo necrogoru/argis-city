@@ -10,6 +10,8 @@ use crate::git_worktrees::{
 };
 use crate::monitor::Monitor;
 use crate::project_paths::register_project as register_project_path;
+use crate::system::HomePaths;
+use crate::task_resume::{ensure_provider_reference_exists, resume_process_spec};
 use crate::task_store::{TaskStore, TaskStoreState};
 use crate::terminal_manager::{TerminalEventSink, TerminalManager, TerminalProcessSpec};
 use std::fs;
@@ -61,7 +63,17 @@ pub async fn list_tasks(project_id: Option<i64>, state: State<'_, TaskStoreState
 
 #[tauri::command]
 pub async fn list_task_agent_resumes(state: State<'_, TaskStoreState>) -> Result<Vec<TaskAgentResume>, String> {
-    task_store_operation(state, |store| store.list_task_agent_resumes()).await
+    let store = state.store()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let paths = HomePaths::detect().map_err(|error| error.to_string())?;
+        let references = store.list_task_agent_resumes().map_err(|error| error.to_string())?;
+        Ok(references
+            .into_iter()
+            .filter(|reference| validated_task_resume(&store, &paths, reference).is_ok())
+            .collect())
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -69,7 +81,16 @@ pub async fn get_task_agent_resume(
     task_id: i64,
     state: State<'_, TaskStoreState>,
 ) -> Result<Option<TaskAgentResume>, String> {
-    task_store_operation(state, move |store| store.get_task_agent_resume(task_id)).await
+    let store = state.store()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(reference) = store.get_task_agent_resume(task_id).map_err(|error| error.to_string())? else {
+            return Ok(None);
+        };
+        let paths = HomePaths::detect().map_err(|error| error.to_string())?;
+        Ok(validated_task_resume(&store, &paths, &reference).is_ok().then_some(reference))
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -159,6 +180,32 @@ pub async fn start_terminal_session(
 }
 
 #[tauri::command]
+pub async fn resume_task_agent(
+    task_id: i64,
+    size: TerminalSize,
+    on_event: Channel<TerminalEvent>,
+    task_state: State<'_, TaskStoreState>,
+    terminal_state: State<'_, Arc<TerminalManager>>,
+) -> Result<TerminalAttachment, String> {
+    let store = task_state.store()?;
+    let manager = Arc::clone(&terminal_state);
+    let sink = terminal_event_sink(on_event);
+    tauri::async_runtime::spawn_blocking(move || {
+        let cwd = validated_task_worktree_path(&store, task_id)?;
+        let reference = store
+            .get_task_agent_resume(task_id)?
+            .ok_or_else(|| anyhow::anyhow!("no saved agent conversation is available for this task"))?;
+        let spec = resume_process_spec(task_id, &reference, &cwd, size)?;
+        let paths = HomePaths::detect()?;
+        ensure_provider_reference_exists(&paths, &reference, &spec.cwd)?;
+        manager.start_or_reattach_with_attachment(spec, sink)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub async fn reattach_terminal_session(
     task_id: i64,
     tab: TerminalTab,
@@ -234,6 +281,12 @@ fn delete_task_with_terminal_cleanup(
     let outcome = delete_task_with_git_cleanup(store, task_id, remove_git_resources);
     manager.finish_task_deletion(task_id, outcome.as_ref().is_ok_and(|result| result.task_deleted));
     outcome
+}
+
+fn validated_task_resume(store: &TaskStore, paths: &HomePaths, reference: &TaskAgentResume) -> anyhow::Result<()> {
+    let cwd = validated_task_worktree_path(store, reference.task_id)?;
+    let spec = resume_process_spec(reference.task_id, reference, &cwd, TerminalSize::default())?;
+    ensure_provider_reference_exists(paths, reference, &spec.cwd)
 }
 
 fn terminal_process_spec(
@@ -346,6 +399,7 @@ mod tests {
     fn task_deletion_stops_a_terminal_before_removing_its_worktree() {
         let parent = tempfile::tempdir().unwrap();
         let (store, task, worktree) = task_with_worktree(parent.path());
+        save_test_resume(&store, &task, &worktree.worktree_path);
         let manager = TerminalManager::default();
         let spec = TerminalProcessSpec {
             key: TerminalSessionKey { task_id: task.id, tab: TerminalTab::Term },
@@ -364,6 +418,7 @@ mod tests {
         assert_eq!(manager.active_session_count(), 0);
         assert!(!Path::new(&worktree.worktree_path).exists());
         assert!(store.get_task(task.id).is_err());
+        assert!(store.get_task_agent_resume(task.id).unwrap().is_none());
     }
 
     #[cfg(unix)]
@@ -395,6 +450,7 @@ mod tests {
     fn task_deletion_aborts_and_preserves_git_resources_if_terminal_manager_cannot_stop() {
         let parent = tempfile::tempdir().unwrap();
         let (store, task, worktree) = task_with_worktree(parent.path());
+        let resume = save_test_resume(&store, &task, &worktree.worktree_path);
         let manager = TerminalManager::default();
         manager.shutdown().unwrap();
 
@@ -402,7 +458,30 @@ mod tests {
 
         assert!(error.to_string().contains("shutting down"));
         assert!(store.get_task(task.id).is_ok());
+        assert_eq!(store.get_task_agent_resume(task.id).unwrap(), Some(resume));
         assert!(Path::new(&worktree.worktree_path).is_dir());
+    }
+
+    #[test]
+    fn saved_resume_is_visible_only_while_its_native_record_and_task_worktree_validate() {
+        let parent = tempfile::tempdir().unwrap();
+        let (store, task, worktree) = task_with_worktree(parent.path());
+        let reference = save_test_resume(&store, &task, &worktree.worktree_path);
+        let paths = HomePaths::from_home(&parent.path().join("agent-home"));
+        let transcript =
+            paths.claude.join("projects").join("argis").join(format!("{}.jsonl", reference.native_reference));
+        fs::create_dir_all(transcript.parent().unwrap()).unwrap();
+        fs::write(&transcript, "{}\n").unwrap();
+
+        assert!(validated_task_resume(&store, &paths, &reference).is_ok());
+        assert!(validated_task_resume(
+            &store,
+            &paths,
+            &TaskAgentResume { worktree_path: parent.path().to_string_lossy().into_owned(), ..reference.clone() }
+        )
+        .is_err());
+        fs::remove_file(transcript).unwrap();
+        assert!(validated_task_resume(&store, &paths, &reference).is_err());
     }
 
     fn task_with_worktree(parent: &Path) -> (TaskStore, Task, TaskWorktree) {
@@ -420,6 +499,18 @@ mod tests {
         let task = store.create_task(project.id, "Terminal cleanup", "").unwrap();
         let worktree = create_git_worktree(&store, task.id).unwrap();
         (store, task, worktree)
+    }
+
+    fn save_test_resume(store: &TaskStore, task: &Task, worktree_path: &str) -> TaskAgentResume {
+        let reference = TaskAgentResume {
+            task_id: task.id,
+            provider: crate::domain::ProviderId::Claude,
+            native_reference: "12345678-1234-4abc-8def-123456789099".to_owned(),
+            worktree_path: worktree_path.to_owned(),
+            last_observed_at_ms: 1_790_000_000_000,
+        };
+        store.save_task_agent_resume(&reference).unwrap();
+        reference
     }
 
     fn git_success(path: &Path, args: &[&str]) {

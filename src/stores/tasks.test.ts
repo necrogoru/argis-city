@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "vue";
 import { createPinia, setActivePinia } from "pinia";
-import type { Project, Task } from "../domain/types";
+import type { Project, Task, TaskAgentResume } from "../domain/types";
 import type { AgentSource } from "../services/agentSource";
 import { agentSourceKey } from "../composables/useAgentSource";
 import { useTaskStore } from "./tasks";
@@ -57,6 +57,7 @@ function setup(overrides: Partial<AgentSource> = {}) {
       worktreePath: `/projects/argis/.argis/worktrees/${id}-task`,
     })),
     startTerminalSession: async () => { throw new Error("unused test operation"); },
+    resumeTaskAgent: async () => { throw new Error("unused test operation"); },
     reattachTerminalSession: async () => null,
     sendTerminalInput: async () => {},
     resizeTerminalSession: async () => {},
@@ -81,9 +82,25 @@ describe("useTaskStore", () => {
 
     expect(source.listProjects).toHaveBeenCalledOnce();
     expect(source.listTasks).toHaveBeenCalledOnce();
+    expect(source.listTaskAgentResumes).toHaveBeenCalledOnce();
     expect(source.getTaskGitStatus).not.toHaveBeenCalled();
     expect(store.projects).toEqual([project]);
     expect(store.tasks).toEqual([task]);
+  });
+
+  it("loads durable agent resume references alongside tasks after app startup", async () => {
+    const reference: TaskAgentResume = {
+      taskId: task.id,
+      provider: "codex",
+      nativeReference: "opaque-native-id",
+      worktreePath: "/worktrees/task",
+      lastObservedAtMs: 100,
+    };
+    const { store } = setup({ listTaskAgentResumes: async () => [reference] });
+
+    await store.ensureSearchDataLoaded();
+
+    expect(store.taskAgentResumes).toEqual([reference]);
   });
 
   it("reloads cached search data after a task mutation", async () => {

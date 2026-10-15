@@ -160,6 +160,8 @@ fn provider_collects_live_sessions_with_subagents() {
         r#"{"agentType":"Explore","description":"Scan repo"}"#,
     )
     .unwrap();
+    assert!(super::has_resume_reference(&root, session_id));
+    assert!(!super::has_resume_reference(&root, "12345678-1234-4abc-8def-123456789099"));
 
     let proc =
         ProcessInfo { pid: 100, parent_pid: None, name: "claude".into(), cmd: vec![], cwd: None, started_at_ms: 500 };

@@ -23,6 +23,7 @@ one tower per tool (provider), one house per live session, subagents as cards.
 | command | `inspect_task_git_status` | `{ taskId }` → `TaskGitStatus`                    |
 | command | `create_task_worktree`    | `{ taskId }` → `TaskWorktree`                     |
 | command | `start_terminal_session`  | `{ taskId, tab, agentCli, size, onEvent }` → `TerminalAttachment` |
+| command | `resume_task_agent`       | `{ taskId, size, onEvent }` → `TerminalAttachment` |
 | command | `reattach_terminal_session` | `{ taskId, tab, onEvent }` → `TerminalAttachment \| null` |
 | command | `terminal_input`          | `{ sessionId, data }` → `()`                     |
 | command | `resize_terminal_session` | `{ sessionId, size }` → `()`                     |
@@ -50,7 +51,9 @@ opaque `nativeReference`, the canonical `worktreePath`, and
 latest reference per task and is deleted by the task foreign-key cascade. A
 provider reference is not a terminal process ID and does not restore a PTY or
 terminal buffer. `save_task_agent_resume` replaces the task's prior reference;
-the UI reads one or all references through the corresponding get/list commands.
+the get/list commands return only references whose task worktree and provider
+record still validate. A stale reference is omitted so the UI can offer Start
+new without suggesting that resume will work.
 
 Before `delete_task` attempts Git cleanup or removes the task record, it stops
 and reaps every active terminal process for that task. If process cleanup fails,
@@ -122,7 +125,9 @@ creates and records both resources only for an eligible task.
   zero when omitted. Closing only the modal keeps its Channels and xterm buffers
   attached. Switching away from the task board detaches Channels while leaving
   PTYs alive. Argis stops and reaps all remaining PTYs on app exit and stops a
-  task's PTYs before task deletion. xterm uses a system monospace font with zero
+  task's PTYs before task deletion. Stop sends an interrupt through the PTY and
+  to the managed child, waits at most 500 ms for graceful exit, then force-kills
+  and reaps any child that remains. xterm uses a system monospace font with zero
   letter spacing; the surrounding UI continues to use Outfit.
 - Browser mock mode does not launch local processes: reattach returns `null`,
   start/input/resize report that embedded processes require the desktop app, and
@@ -137,8 +142,9 @@ program plus separate argument values, never through a shell string. Reference
 discovery must bind a provider-native ID to the Argis-launched process and task;
 matching by title or working directory alone is insufficient. A missing,
 stale, unsupported, or ambiguous reference is unavailable, not a reason to
-guess. Resume starts a new CLI process; it does not restore the previous PTY or
-xterm buffer.
+guess. Before launch, Argis validates the task and canonical worktree binding,
+the provider-native ID shape, and the referenced provider record. Resume starts a
+new CLI process; it does not restore the previous PTY or xterm buffer.
 
 Provider support matrix (verified 2026-10-15 against vendor documentation and
 the installed Claude Code 2.1.300, Codex CLI 0.148.0, OpenCode 2.0.29, and Pi

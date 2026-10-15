@@ -78,6 +78,8 @@ fn provider_matches_process_by_cwd_dir() {
         assistant("stop", 1, 1, 1, 1),
     ];
     fs::write(dir.join("2026_s-1.jsonl"), lines.iter().map(|l| format!("{l}\n")).collect::<String>()).unwrap();
+    assert!(super::has_resume_reference(root.path(), "s-1", work.path()));
+    assert!(!super::has_resume_reference(root.path(), "s-missing", work.path()));
     let now = system_time_ms(SystemTime::now());
     let proc = ProcessInfo {
         pid: 31,

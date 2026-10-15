@@ -1,13 +1,15 @@
-import type { Task, TerminalInventoryEntry, TerminalInventoryState, TerminalTab } from "./types";
+import type { ProviderId, Task, TaskAgentResume, TerminalInventoryEntry, TerminalInventoryState, TerminalTab } from "./types";
 import type { TerminalStatus } from "../ui/Tasks/useTerminalSession";
+import { PROVIDERS } from "./providers";
 
-export type TerminalRailState = "idle" | "pending" | "running" | "completed" | "unavailable";
+export type TerminalRailState = "idle" | "pending" | "running" | "completed" | "resumable" | "unavailable";
 
 export interface TerminalRailEntry {
   taskId: number;
   index: number;
   title: string;
   state: TerminalRailState;
+  resumeProvider: ProviderId | null;
 }
 
 export type TerminalRailLiveStatusMap = Record<number, Partial<Record<TerminalTab, TerminalStatus>>>;
@@ -53,8 +55,10 @@ export function aggregateTerminalRailEntries(
   tasks: Task[],
   inventory: TerminalInventoryEntry[],
   liveStatuses: TerminalRailLiveStatusMap,
+  resumes: TaskAgentResume[] = [],
 ): TerminalRailEntry[] {
   const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const resumeByTaskId = new Map(resumes.map((resume) => [resume.taskId, resume]));
   const orderedTaskIds = [
     ...tasks.map((task) => task.id),
     ...inventory
@@ -71,11 +75,15 @@ export function aggregateTerminalRailEntries(
       .map((entry) => entry.state);
     const liveState = liveStatuses[taskId];
     const statuses = [liveState?.agent, liveState?.term].filter((value): value is TerminalStatus => value != null);
+    const resume = resumeByTaskId.get(taskId);
+    const terminalState = aggregateTaskState(inventoryStates, statuses);
+    const hasLiveProcess = terminalState === "running" || terminalState === "pending";
     return [{
       taskId,
       index: index + 1,
       title: task.title,
-      state: aggregateTaskState(inventoryStates, statuses),
+      state: !hasLiveProcess && resume ? "resumable" : terminalState,
+      resumeProvider: resume?.provider ?? null,
     }];
   });
 }
@@ -86,6 +94,14 @@ export function terminalRailStateLabel(state: TerminalRailState): string {
     case "pending": return "Pending";
     case "running": return "Running";
     case "completed": return "Completed";
+    case "resumable": return "Resumable";
     case "unavailable": return "Unavailable";
   }
+}
+
+export function terminalRailEntryLabel(entry: TerminalRailEntry): string {
+  if (entry.state === "resumable" && entry.resumeProvider) {
+    return `Resume ${PROVIDERS[entry.resumeProvider].label}`;
+  }
+  return terminalRailStateLabel(entry.state);
 }

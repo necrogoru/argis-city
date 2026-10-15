@@ -292,6 +292,42 @@ fn running_agent_inventory_is_bound_to_live_managed_agent_ptys() {
 
 #[cfg(unix)]
 #[test]
+fn stop_waits_for_a_graceful_interrupt_before_reaping_the_agent() {
+    let manager = TerminalManager::default();
+    let directory = tempfile::tempdir().unwrap();
+    let marker = directory.path().join("graceful-stop");
+    let command = format!(
+        "process.on('SIGINT', () => {{ require('fs').writeFileSync({}, 'done'); process.exit(0); }}); console.log('READY'); setInterval(() => {{}}, 1000);",
+        serde_json::to_string(&marker.to_string_lossy()).unwrap()
+    );
+    let (sender, events) = mpsc::channel();
+    let session = manager.start(spec(55, TerminalTab::Agent, "node", &["-e", &command]), sink(sender)).unwrap();
+    assert!(output_until(&events, "READY").contains("READY"));
+
+    manager.stop(session.id).unwrap();
+
+    assert!(marker.is_file(), "the process should get a chance to handle Ctrl-C before it is killed");
+    assert_eq!(manager.active_session_count(), 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn stop_escalates_after_a_bounded_grace_period_when_interrupt_is_ignored() {
+    let manager = TerminalManager::default();
+    let (sender, events) = mpsc::channel();
+    let command = "printf 'READY\\n'; trap '' INT; exec /bin/sleep 30";
+    let session = manager.start(spec(56, TerminalTab::Agent, "/bin/sh", &["-c", command]), sink(sender)).unwrap();
+    assert!(output_until(&events, "READY").contains("READY"));
+    let started = Instant::now();
+
+    manager.stop(session.id).unwrap();
+
+    assert!(started.elapsed() < Duration::from_secs(2), "forced termination must not wait indefinitely");
+    assert_eq!(manager.active_session_count(), 0);
+}
+
+#[cfg(unix)]
+#[test]
 fn task_deletion_stops_sessions_and_blocks_new_processes_until_the_outcome_is_known() {
     let manager = TerminalManager::default();
     let (agent_sender, _agent_events) = mpsc::channel();

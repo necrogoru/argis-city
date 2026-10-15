@@ -1,8 +1,13 @@
-use crate::domain::{AgentSession, ProviderId, Snapshot, TaskAgentResume, TerminalAgent};
+use crate::domain::{
+    AgentSession, ProviderId, Snapshot, TaskAgentResume, TerminalAgent, TerminalSessionKey, TerminalSize, TerminalTab,
+};
 use crate::shared::liveness::canonical;
+use crate::system::HomePaths;
 use crate::task_store::TaskStore;
-use crate::terminal_manager::ManagedAgentProcess;
+use crate::terminal_manager::{ManagedAgentProcess, TerminalProcessSpec};
+use anyhow::{bail, Context};
 use std::collections::HashSet;
+use std::fs;
 use std::path::Path;
 
 /// Binds a provider snapshot entry to a live Argis-launched Agent process.
@@ -69,6 +74,86 @@ fn provider_id(agent: TerminalAgent) -> ProviderId {
     }
 }
 
+pub(crate) fn resume_process_spec(
+    task_id: i64,
+    reference: &TaskAgentResume,
+    task_worktree: &Path,
+    size: TerminalSize,
+) -> anyhow::Result<TerminalProcessSpec> {
+    if reference.task_id != task_id {
+        bail!("agent resume reference belongs to a different task");
+    }
+    if !validate_reference_identifier(reference.provider, &reference.native_reference) {
+        bail!("agent resume reference is invalid");
+    }
+    if reference.last_observed_at_ms < 0 {
+        bail!("agent resume timestamp is invalid");
+    }
+
+    let task_worktree = fs::canonicalize(task_worktree).context("resolving task worktree")?;
+    let reference_worktree = fs::canonicalize(&reference.worktree_path).context("resolving saved resume worktree")?;
+    if task_worktree != reference_worktree {
+        bail!("agent resume reference belongs to a different task worktree");
+    }
+
+    let agent_cli = terminal_agent(reference.provider);
+    let args = match reference.provider {
+        ProviderId::Claude => vec!["--resume".to_owned(), reference.native_reference.clone()],
+        ProviderId::Codex => vec!["resume".to_owned(), reference.native_reference.clone()],
+        ProviderId::Opencode => vec!["--session".to_owned(), reference.native_reference.clone()],
+        ProviderId::Pi => vec!["--session".to_owned(), reference.native_reference.clone()],
+    };
+
+    Ok(TerminalProcessSpec {
+        key: TerminalSessionKey { task_id, tab: TerminalTab::Agent },
+        agent_cli: Some(agent_cli),
+        program: agent_cli.executable().into(),
+        args,
+        cwd: task_worktree,
+        size,
+    })
+}
+
+pub(crate) fn validate_reference_identifier(provider: ProviderId, native: &str) -> bool {
+    valid_native_reference(provider, native)
+}
+
+pub(crate) fn ensure_provider_reference_exists(
+    paths: &HomePaths,
+    reference: &TaskAgentResume,
+    worktree: &Path,
+) -> anyhow::Result<()> {
+    if !validate_reference_identifier(reference.provider, &reference.native_reference) {
+        bail!("agent resume reference is invalid");
+    }
+
+    let exists = match reference.provider {
+        ProviderId::Claude => {
+            crate::providers::claude::has_resume_reference(&paths.claude, &reference.native_reference)
+        }
+        ProviderId::Codex => {
+            crate::providers::codex::has_resume_reference(&paths.codex, &reference.native_reference, worktree)?
+        }
+        ProviderId::Opencode => {
+            crate::providers::opencode::has_resume_reference(&paths.opencode, &reference.native_reference, worktree)?
+        }
+        ProviderId::Pi => crate::providers::pi::has_resume_reference(&paths.pi, &reference.native_reference, worktree),
+    };
+    if !exists {
+        bail!("saved provider conversation is no longer available for this task worktree");
+    }
+    Ok(())
+}
+
+fn terminal_agent(provider: ProviderId) -> TerminalAgent {
+    match provider {
+        ProviderId::Claude => TerminalAgent::Claude,
+        ProviderId::Codex => TerminalAgent::Codex,
+        ProviderId::Opencode => TerminalAgent::OpenCode,
+        ProviderId::Pi => TerminalAgent::Pi,
+    }
+}
+
 fn native_reference(session: &AgentSession) -> Option<String> {
     let (prefix, native) = session.id.split_once(':')?;
     if prefix != session.provider.as_str() || !valid_native_reference(session.provider, native) {
@@ -109,8 +194,15 @@ fn is_native_id_byte(byte: u8) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{native_reference, record_agent_session_references, reference_for_process};
-    use crate::domain::{AgentSession, AgentStatus, Progress, ProviderId, Snapshot, TerminalAgent, TokenUsage};
+    use super::{
+        ensure_provider_reference_exists, native_reference, record_agent_session_references, reference_for_process,
+        resume_process_spec,
+    };
+    use crate::domain::{
+        AgentSession, AgentStatus, Progress, ProviderId, Snapshot, TaskAgentResume, TerminalAgent, TerminalSize,
+        TerminalTab, TokenUsage,
+    };
+    use crate::system::HomePaths;
     use crate::task_store::TaskStore;
     use crate::terminal_manager::ManagedAgentProcess;
     use std::collections::HashSet;
@@ -291,5 +383,101 @@ mod tests {
 
         assert!(store.list_task_agent_resumes().unwrap().is_empty());
         assert!(observed.is_empty());
+    }
+
+    #[test]
+    fn resume_specs_use_provider_native_argument_vectors() {
+        let cwd = tempfile::tempdir().unwrap();
+        let native_ids = [
+            (
+                ProviderId::Claude,
+                "12345678-1234-4abc-8def-123456789010",
+                vec!["--resume", "12345678-1234-4abc-8def-123456789010"],
+            ),
+            (
+                ProviderId::Codex,
+                "12345678-1234-4abc-8def-123456789011",
+                vec!["resume", "12345678-1234-4abc-8def-123456789011"],
+            ),
+            (ProviderId::Opencode, "ses_abc123", vec!["--session", "ses_abc123"]),
+            (ProviderId::Pi, "s-12", vec!["--session", "s-12"]),
+        ];
+
+        for (provider, native_reference, expected_args) in native_ids {
+            let reference = TaskAgentResume {
+                task_id: 17,
+                provider,
+                native_reference: native_reference.to_owned(),
+                worktree_path: cwd.path().canonicalize().unwrap().to_string_lossy().into_owned(),
+                last_observed_at_ms: 2_000,
+            };
+            let spec = resume_process_spec(17, &reference, cwd.path(), TerminalSize::default()).unwrap();
+            let agent = provider_to_agent(provider);
+
+            assert_eq!(spec.key.task_id, 17);
+            assert_eq!(spec.key.tab, TerminalTab::Agent);
+            assert_eq!(spec.agent_cli, Some(agent));
+            assert_eq!(spec.program, PathBuf::from(agent.executable()));
+            assert_eq!(spec.args, expected_args.into_iter().map(str::to_owned).collect::<Vec<_>>());
+            assert_eq!(spec.cwd, cwd.path().canonicalize().unwrap());
+        }
+    }
+
+    #[test]
+    fn resume_specs_reject_invalid_native_ids_task_ids_and_worktree_bindings() {
+        let cwd = tempfile::tempdir().unwrap();
+        let other_worktree = tempfile::tempdir().unwrap();
+        let canonical_cwd = cwd.path().canonicalize().unwrap().to_string_lossy().into_owned();
+        let valid = TaskAgentResume {
+            task_id: 17,
+            provider: ProviderId::Claude,
+            native_reference: "12345678-1234-4abc-8def-123456789012".to_owned(),
+            worktree_path: canonical_cwd,
+            last_observed_at_ms: 2_000,
+        };
+
+        assert!(resume_process_spec(18, &valid, cwd.path(), TerminalSize::default()).is_err());
+        assert!(resume_process_spec(
+            17,
+            &TaskAgentResume { native_reference: "../other-session".to_owned(), ..valid.clone() },
+            cwd.path(),
+            TerminalSize::default()
+        )
+        .is_err());
+        assert!(resume_process_spec(
+            17,
+            &TaskAgentResume {
+                worktree_path: other_worktree.path().canonicalize().unwrap().to_string_lossy().into_owned(),
+                ..valid
+            },
+            cwd.path(),
+            TerminalSize::default()
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn resume_is_unavailable_when_the_native_provider_record_is_stale() {
+        let home = tempfile::tempdir().unwrap();
+        let worktree = tempfile::tempdir().unwrap();
+        let paths = HomePaths::from_home(home.path());
+        let reference = TaskAgentResume {
+            task_id: 17,
+            provider: ProviderId::Claude,
+            native_reference: "12345678-1234-4abc-8def-123456789013".to_owned(),
+            worktree_path: worktree.path().canonicalize().unwrap().to_string_lossy().into_owned(),
+            last_observed_at_ms: 2_000,
+        };
+
+        assert!(ensure_provider_reference_exists(&paths, &reference, worktree.path()).is_err());
+    }
+
+    fn provider_to_agent(provider: ProviderId) -> TerminalAgent {
+        match provider {
+            ProviderId::Claude => TerminalAgent::Claude,
+            ProviderId::Codex => TerminalAgent::Codex,
+            ProviderId::Opencode => TerminalAgent::OpenCode,
+            ProviderId::Pi => TerminalAgent::Pi,
+        }
     }
 }

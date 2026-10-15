@@ -114,6 +114,8 @@ fn provider_reads_sqlite_with_real_columns() {
             .unwrap();
     }
     drop(conn);
+    assert!(super::has_resume_reference(root.path(), "ses_root", work.path()).unwrap());
+    assert!(!super::has_resume_reference(root.path(), "ses_missing", work.path()).unwrap());
 
     let provider = OpenCodeProvider::new(root.path().to_path_buf());
     let proc = ProcessInfo {

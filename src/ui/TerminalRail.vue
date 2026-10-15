@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
-import { terminalRailStateLabel } from "../domain/terminalRail";
+import { terminalRailEntryLabel } from "../domain/terminalRail";
 import { useTaskStore } from "../stores/tasks";
 import { useTerminalNavigationStore } from "../stores/terminalNavigation";
 import { useTerminalRailStore } from "../stores/terminalRail";
@@ -22,6 +22,7 @@ function railTint(state: (typeof entries.value)[number]["state"]): string {
     case "running": return "var(--teal)";
     case "pending": return "var(--amber)";
     case "completed": return "var(--blue)";
+    case "resumable": return "var(--teal)";
     case "unavailable": return "var(--red)";
     case "idle": return "var(--grey)";
   }
@@ -79,7 +80,7 @@ onUnmounted(() => {
           class="rail-button"
           :data-expanded="expandedTaskId === entry.taskId"
           :style="{ '--rail-tint': railTint(entry.state) }"
-          :aria-label="`Open Agent terminal for task ${entry.index}: ${entry.title}. ${terminalRailStateLabel(entry.state)}.`"
+          :aria-label="`Open Agent terminal for task ${entry.index}: ${entry.title}. ${terminalRailEntryLabel(entry)}.`"
           @click="openAgentTab(entry.taskId)"
           @pointerenter="setExpanded(entry.taskId)"
           @pointerleave="clearExpanded(entry.taskId)"
@@ -90,7 +91,7 @@ onUnmounted(() => {
           <span class="rail-dot" aria-hidden="true" />
           <span class="rail-details">
             <span class="rail-title">{{ entry.title }}</span>
-            <span class="rail-state">{{ terminalRailStateLabel(entry.state) }}</span>
+            <span class="rail-state">{{ terminalRailEntryLabel(entry) }}</span>
           </span>
         </button>
       </li>

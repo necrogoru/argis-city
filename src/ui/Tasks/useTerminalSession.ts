@@ -3,6 +3,7 @@ import type {
   TerminalAgent,
   TerminalAttachment,
   TerminalEvent,
+  TaskAgentResume,
   TerminalSize,
   TerminalTab,
 } from "../../domain/types";
@@ -13,6 +14,8 @@ export type TerminalStatus = "notStarted" | "starting" | "running" | "exited" | 
 export type TerminalSessionService = Pick<
   AgentSource,
   | "startTerminalSession"
+  | "resumeTaskAgent"
+  | "getTaskAgentResume"
   | "reattachTerminalSession"
   | "sendTerminalInput"
   | "resizeTerminalSession"
@@ -33,6 +36,9 @@ function errorMessage(error: unknown): string {
 
 export function useTerminalSession(options: TerminalSessionOptions) {
   const attachment = shallowRef<TerminalAttachment | null>(null);
+  const resumeReference = shallowRef<TaskAgentResume | null>(null);
+  const resumeLookupComplete = ref(false);
+  const resumeUnavailable = ref(false);
   const status = ref<TerminalStatus>("notStarted");
   const error = ref<string | null>(null);
   const connected = computed(() => status.value === "running");
@@ -59,6 +65,7 @@ export function useTerminalSession(options: TerminalSessionOptions) {
       case "exited":
         status.value = "exited";
         error.value = null;
+        void lookupResumeReference(operation);
         break;
     }
   }
@@ -71,12 +78,30 @@ export function useTerminalSession(options: TerminalSessionOptions) {
     }
   }
 
+  async function lookupResumeReference(operation: number): Promise<void> {
+    if (options.tab !== "agent") return;
+    try {
+      const reference = await options.source.getTaskAgentResume(options.taskId);
+      if (!isCurrent(operation)) return;
+      resumeReference.value = reference;
+      resumeUnavailable.value = reference === null;
+    } catch {
+      if (!isCurrent(operation)) return;
+      resumeReference.value = null;
+      resumeUnavailable.value = true;
+    } finally {
+      if (isCurrent(operation)) resumeLookupComplete.value = true;
+    }
+  }
+
   function acceptAttachment(result: TerminalAttachment): void {
     attachment.value = result;
     if (status.value === "starting") status.value = result.session.running ? "running" : "exited";
   }
 
-  async function start(agentCli: TerminalAgent | null): Promise<void> {
+  async function launch(
+    launchProcess: (size: TerminalSize, onEvent: (event: TerminalEvent) => void) => Promise<TerminalAttachment>,
+  ): Promise<void> {
     if (disposed) return;
     const size = options.getSize();
     if (!size) {
@@ -85,27 +110,33 @@ export function useTerminalSession(options: TerminalSessionOptions) {
       return;
     }
 
-    const operation = ++generation;
+    const generationId = ++generation;
     attachment.value = null;
     status.value = "starting";
     error.value = null;
     try {
-      const result = await options.source.startTerminalSession(
-        options.taskId,
-        options.tab,
-        agentCli,
-        size,
-        (event) => receive(operation, event),
-      );
-      if (!isCurrent(operation)) {
+      const result = await launchProcess(size, (event) => receive(generationId, event));
+      if (!isCurrent(generationId)) {
         await detachRemote(result);
         return;
       }
       acceptAttachment(result);
     } catch (reason) {
-      if (!isCurrent(operation)) return;
+      if (!isCurrent(generationId)) return;
       status.value = "error";
       error.value = errorMessage(reason);
+    }
+  }
+
+  async function start(agentCli: TerminalAgent | null): Promise<void> {
+    await launch((size, onEvent) => options.source.startTerminalSession(options.taskId, options.tab, agentCli, size, onEvent));
+  }
+
+  async function resume(): Promise<void> {
+    await launch((size, onEvent) => options.source.resumeTaskAgent(options.taskId, size, onEvent));
+    if (status.value === "error") {
+      resumeReference.value = null;
+      resumeUnavailable.value = true;
     }
   }
 
@@ -127,9 +158,11 @@ export function useTerminalSession(options: TerminalSessionOptions) {
       }
       if (!result) {
         status.value = "notStarted";
+        await lookupResumeReference(operation);
         return;
       }
       acceptAttachment(result);
+      if (options.tab === "agent" && !result.session.running) await lookupResumeReference(operation);
     } catch (reason) {
       if (!isCurrent(operation)) return;
       status.value = "error";
@@ -173,5 +206,20 @@ export function useTerminalSession(options: TerminalSessionOptions) {
     await detach();
   }
 
-  return { attachment, status, error, connected, start, reattach, sendInput, resize, detach, dispose };
+  return {
+    attachment,
+    resumeReference,
+    resumeLookupComplete,
+    resumeUnavailable,
+    status,
+    error,
+    connected,
+    start,
+    resume,
+    reattach,
+    sendInput,
+    resize,
+    detach,
+    dispose,
+  };
 }

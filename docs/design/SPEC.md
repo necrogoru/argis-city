@@ -69,14 +69,18 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   the right column, visible beside both the Agents list and selected-house
   panel. It has one launcher per task terminal known to Argis. Hover or keyboard
   focus reveals the full task title and aggregate state; activating a launcher
-  opens that task's terminal modal with Agent selected. Aggregate the Agent and
-  `term` tabs in this order: Running when either tab runs; Pending when a tab is
+  opens that task's terminal modal with Agent selected. A task with no live PTY
+  and a validated saved reference remains listed after restart. Aggregate the
+  Agent and `term` tabs in this order: Running when either tab runs; Pending when a tab is
   starting and neither runs; Unavailable when startup failed and neither tab is
   running or starting; Completed when a started session exited and neither tab
   is running, starting, or failed; otherwise Idle. Existing terminal inventory
   supplies Running, Unavailable, or Completed when no live tab state takes
-  precedence. Use the existing status treatment and tokens: teal for running,
-  amber for pending, red for unavailable, blue for completed, and grey for idle.
+  precedence. With no live process, a valid saved conversation changes the
+  launcher state to Resumable and identifies its CLI as "Resume <CLI>"; it
+  never represents a restored PTY or terminal buffer. Use the existing status
+  treatment and tokens: teal for running/resumable, amber for pending, red for
+  unavailable, blue for completed, and grey for idle.
 - **Agent detail panel** (right: x 1060, y 124, w 340, padding 24, radius 24,
   glass + radial glow top-right in the provider colour; amber or red glow plus
   a 1px tinted stroke while the session awaits approval or its last turn
@@ -134,8 +138,9 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   least one registered project, `b` requires Git to allow branch creation and
   no existing task branch, and `t` requires the task's existing worktree and
   an available embedded terminal. `b` explicitly invokes the branch/worktree
-  action; `t` does not create a branch or worktree as a side effect, and search
-  does not create Git resources.
+  action; `t` opens the task's shared Agent resume flow without changing the app
+  view and does not create a branch or worktree as a side effect. Search does
+  not create Git resources.
 - Suppress the single-letter actions while a dialog is open or focus is in an
   input, textarea, select, contenteditable element, or xterm input; also ignore
   modified, repeated, or composing key events. Search arrows are the explicit
@@ -160,16 +165,22 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
 - Opening a task terminal shows a large centered terminal modal over the current view.
   Its header identifies the task and worktree, with Agent and `term` tabs above
   full-size xterm viewports. Before process startup, each viewport stays blank
-  and its tab reads `Not started`. The Agent pane offers a CLI selector defaulted
-  to Claude Code and a Start Agent action; the `term` pane has an explicit Start
-  shell action. Tab labels reflect startup, running, exited, and unavailable
+  and its tab reads `Not started`. A live Agent PTY reattaches directly. With no
+  live Agent PTY, the Agent pane offers `Resume <CLI>` when a saved reference is
+  valid, plus a CLI selector and `Start new` action; missing or stale references
+  show "Resume unavailable" while keeping `Start new` available. The `term`
+  pane has an explicit Start shell action. Tab labels reflect startup, running,
+  exited, and unavailable
   states, with launch errors shown inside only the affected pane. Closing returns
   to the current view while leaving processes and mounted xterm buffers
   available. The terminal host lives outside the conditional Dashboard/Tasks
   view tree, so switching views does not detach its tabs. A task result selected
   in `⌘K` opens the same modal over the current view without navigating to Tasks;
   running Agent and shell sessions reattach, and absent sessions show the
-  existing start controls. Tasks without worktrees remain searchable and show
+  existing resume-or-new controls. Dashboard launchers, the task-board `t`
+  shortcut, and a matching selected-house Terminal action all open this same
+  task-scoped modal without switching views. Tasks without worktrees remain
+  searchable and show
   "No worktree · Go to Tasks"; search never creates Git resources. When a
   terminal target is later reopened after detachment, retained recent PTY output
   is restored before live output. Terminal text uses a system monospace font

@@ -48,6 +48,12 @@ export interface AgentSource {
     size: TerminalSize,
     onEvent: (event: TerminalEvent) => void,
   ): Promise<TerminalAttachment>;
+  /** Resume the task's saved native conversation in a new Agent PTY. */
+  resumeTaskAgent(
+    taskId: number,
+    size: TerminalSize,
+    onEvent: (event: TerminalEvent) => void,
+  ): Promise<TerminalAttachment>;
   reattachTerminalSession(
     taskId: number,
     tab: TerminalTab,

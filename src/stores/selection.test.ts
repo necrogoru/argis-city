@@ -48,6 +48,7 @@ function setup() {
       worktreePath: `/projects/argis/.argis/worktrees/${id}-task`,
     }),
     startTerminalSession: async () => { throw new Error("unused test operation"); },
+    resumeTaskAgent: async () => { throw new Error("unused test operation"); },
     reattachTerminalSession: async () => null,
     sendTerminalInput: async () => {},
     resizeTerminalSession: async () => {},

@@ -9,10 +9,12 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::PathBuf;
+#[cfg(unix)]
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
 
 const OUTPUT_CHUNK_SIZE: usize = 8 * 1024;
 const MAX_INPUT_SIZE: usize = 64 * 1024;
@@ -20,6 +22,8 @@ const MAX_COMMAND_ARGUMENTS: usize = 256;
 const MAX_COMMAND_ARGUMENT_BYTES: usize = 8 * 1024;
 const MAX_TERMINAL_DIMENSION: u16 = 1_000;
 const OUTPUT_HISTORY_MAX_BYTES: usize = 1024 * 1024;
+const TERMINAL_STOP_GRACE_PERIOD: Duration = Duration::from_millis(500);
+const TERMINAL_STOP_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 impl TerminalSize {
     fn validate(self) -> anyhow::Result<Self> {
@@ -592,12 +596,19 @@ impl ManagedSession {
 
     fn stop(&self) -> anyhow::Result<()> {
         if self.running.load(Ordering::Acquire) {
-            // Ctrl-C reaches the PTY's foreground process group before the direct child is killed.
+            // Deliver Ctrl-C through the PTY and a direct interrupt so noninteractive CLIs can exit cleanly too.
             let mut writer = self.writer.lock();
             let _ = writer.write_all(&[0x03]);
             let _ = writer.flush();
             drop(writer);
-            let kill_error = self.killer.lock().kill().err();
+            interrupt_child(self.info.process_id);
+
+            let deadline = Instant::now() + TERMINAL_STOP_GRACE_PERIOD;
+            while self.running.load(Ordering::Acquire) && Instant::now() < deadline {
+                thread::sleep(TERMINAL_STOP_POLL_INTERVAL);
+            }
+
+            let kill_error = if self.running.load(Ordering::Acquire) { self.killer.lock().kill().err() } else { None };
             let worker = self.worker.lock().take();
             if let Some(worker) = worker {
                 worker.join().map_err(|_| anyhow!("terminal output worker panicked"))?;
@@ -616,6 +627,19 @@ impl ManagedSession {
         Ok(())
     }
 }
+
+#[cfg(unix)]
+fn interrupt_child(process_id: Option<u32>) {
+    let Some(process_id) = process_id else { return };
+    let _ = Command::new("/bin/kill")
+        .args(["-INT", &process_id.to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+#[cfg(not(unix))]
+fn interrupt_child(_process_id: Option<u32>) {}
 
 fn state_rank(state: TerminalInventoryState) -> u8 {
     match state {

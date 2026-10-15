@@ -165,6 +165,8 @@ fn provider_reads_index_rollouts_and_children() {
         cwd: Some(work.clone()),
         started_at_ms: now - 10_000,
     };
+    assert!(super::has_resume_reference(&root, thread_id, &work).unwrap());
+    assert!(!super::has_resume_reference(&root, "12345678-1234-4abc-8def-123456789099", &work).unwrap());
     let provider = CodexProvider::new(root);
     let sessions = provider.collect(&CollectContext { processes: vec![proc.clone()], now_ms: now }).unwrap();
     assert_eq!(sessions.len(), 1);

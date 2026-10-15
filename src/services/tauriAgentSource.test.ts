@@ -181,6 +181,29 @@ describe("TauriAgentSource project and task operations", () => {
     });
   });
 
+  it("resumes a task's saved Agent conversation through the dedicated Tauri command", async () => {
+    const attachment: TerminalAttachment = {
+      session: {
+        id: 31,
+        key: { taskId: task.id, tab: "agent" },
+        agentCli: "codex",
+        processId: 41,
+        running: true,
+      },
+      attachmentId: 71,
+    };
+    invoke.mockResolvedValueOnce(attachment);
+    const source = createTauriAgentSource();
+    const onEvent = vi.fn<(event: TerminalEvent) => void>();
+
+    await expect(source.resumeTaskAgent(task.id, { cols: 80, rows: 24 }, onEvent)).resolves.toEqual(attachment);
+    expect(invoke).toHaveBeenCalledWith("resume_task_agent", {
+      taskId: task.id,
+      size: { cols: 80, rows: 24 },
+      onEvent: expect.any(Object),
+    });
+  });
+
   it("reattaches to a running task tab and detaches its output channel without stopping it", async () => {
     const attachment: TerminalAttachment = {
       session: {

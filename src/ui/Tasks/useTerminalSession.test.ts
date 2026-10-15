@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { TerminalAgent, TerminalAttachment, TerminalEvent, TerminalSize, TerminalTab } from "../../domain/types";
+import type {
+  TaskAgentResume,
+  TerminalAgent,
+  TerminalAttachment,
+  TerminalEvent,
+  TerminalSize,
+  TerminalTab,
+} from "../../domain/types";
 import type { TerminalSessionService } from "./useTerminalSession";
 import { useTerminalSession } from "./useTerminalSession";
 
@@ -18,6 +25,8 @@ const size: TerminalSize = { cols: 88, rows: 28 };
 
 function createSource(): TerminalSessionService & {
   startTerminalSession: ReturnType<typeof vi.fn<TerminalSessionService["startTerminalSession"]>>;
+  resumeTaskAgent: ReturnType<typeof vi.fn<TerminalSessionService["resumeTaskAgent"]>>;
+  getTaskAgentResume: ReturnType<typeof vi.fn<TerminalSessionService["getTaskAgentResume"]>>;
   reattachTerminalSession: ReturnType<typeof vi.fn<TerminalSessionService["reattachTerminalSession"]>>;
   sendTerminalInput: ReturnType<typeof vi.fn<TerminalSessionService["sendTerminalInput"]>>;
   resizeTerminalSession: ReturnType<typeof vi.fn<TerminalSessionService["resizeTerminalSession"]>>;
@@ -25,6 +34,8 @@ function createSource(): TerminalSessionService & {
 } {
   return {
     startTerminalSession: vi.fn<TerminalSessionService["startTerminalSession"]>(),
+    resumeTaskAgent: vi.fn<TerminalSessionService["resumeTaskAgent"]>(),
+    getTaskAgentResume: vi.fn<TerminalSessionService["getTaskAgentResume"]>(async () => null),
     reattachTerminalSession: vi.fn<TerminalSessionService["reattachTerminalSession"]>(),
     sendTerminalInput: vi.fn<TerminalSessionService["sendTerminalInput"]>(async () => {}),
     resizeTerminalSession: vi.fn<TerminalSessionService["resizeTerminalSession"]>(async () => {}),
@@ -76,6 +87,17 @@ describe("useTerminalSession", () => {
     expect(session.status.value).toBe("running");
   });
 
+  it("resumes the saved task conversation through a new Agent PTY", async () => {
+    const { source, session } = setup();
+    source.resumeTaskAgent.mockResolvedValue(attachment);
+
+    await session.resume();
+
+    expect(source.resumeTaskAgent).toHaveBeenCalledWith(12, size, expect.any(Function));
+    expect(session.attachment.value).toEqual(attachment);
+    expect(session.status.value).toBe("running");
+  });
+
   it("reattaches a running process and forwards input and resize", async () => {
     const { source, session } = setup("term", null);
     const shellAttachment: TerminalAttachment = {
@@ -102,6 +124,73 @@ describe("useTerminalSession", () => {
 
     expect(session.status.value).toBe("notStarted");
     expect(session.attachment.value).toBeNull();
+    expect(source.getTaskAgentResume).toHaveBeenCalledWith(12);
+    expect(session.resumeLookupComplete.value).toBe(true);
+    expect(session.resumeUnavailable.value).toBe(true);
+  });
+
+  it("loads the saved provider only after finding no live Agent PTY", async () => {
+    const { source, session } = setup();
+    const reference: TaskAgentResume = {
+      taskId: 12,
+      provider: "opencode",
+      nativeReference: "ses_abc123",
+      worktreePath: "/worktrees/12",
+      lastObservedAtMs: 100,
+    };
+    source.reattachTerminalSession.mockResolvedValue(null);
+    source.getTaskAgentResume.mockResolvedValue(reference);
+
+    await session.reattach();
+
+    expect(session.resumeReference.value).toEqual(reference);
+    expect(session.resumeUnavailable.value).toBe(false);
+  });
+
+  it("does not offer a second conversation when an Agent PTY is already live", async () => {
+    const { source, session } = setup();
+    source.reattachTerminalSession.mockResolvedValue(attachment);
+
+    await session.reattach();
+
+    expect(source.getTaskAgentResume).not.toHaveBeenCalled();
+    expect(session.status.value).toBe("running");
+  });
+
+  it("checks for a saved conversation after a live Agent PTY exits", async () => {
+    const { source, session } = setup();
+    source.reattachTerminalSession.mockResolvedValue(attachment);
+    source.getTaskAgentResume.mockResolvedValue({
+      taskId: 12,
+      provider: "claude",
+      nativeReference: "12345678-1234-4abc-8def-123456789014",
+      worktreePath: "/worktrees/12",
+      lastObservedAtMs: 100,
+    });
+    await session.reattach();
+    const onEvent = source.reattachTerminalSession.mock.calls[0][2];
+
+    onEvent({ type: "exited", sessionId: attachment.session.id, exitCode: 0, signal: null });
+    await vi.waitFor(() => expect(session.resumeReference.value?.provider).toBe("claude"));
+
+    expect(source.getTaskAgentResume).toHaveBeenCalledOnce();
+  });
+
+  it("checks saved metadata when the reattached PTY has already exited", async () => {
+    const { source, session } = setup();
+    source.reattachTerminalSession.mockResolvedValue({ ...attachment, session: { ...attachment.session, running: false } });
+    source.getTaskAgentResume.mockResolvedValue({
+      taskId: 12,
+      provider: "claude",
+      nativeReference: "12345678-1234-4abc-8def-123456789010",
+      worktreePath: "/worktrees/12",
+      lastObservedAtMs: 100,
+    });
+
+    await session.reattach();
+
+    expect(session.status.value).toBe("exited");
+    expect(session.resumeReference.value?.provider).toBe("claude");
   });
 
   it("shows launch and process errors without marking the process connected", async () => {
@@ -113,6 +202,25 @@ describe("useTerminalSession", () => {
     expect(session.status.value).toBe("error");
     expect(session.error.value).toBe("claude CLI was not found");
     expect(session.connected.value).toBe(false);
+  });
+
+  it("keeps a failed resume unavailable while leaving new-session launch separate", async () => {
+    const { source, session } = setup();
+    session.resumeReference.value = {
+      taskId: 12,
+      provider: "claude",
+      nativeReference: "12345678-1234-4abc-8def-123456789010",
+      worktreePath: "/worktrees/12",
+      lastObservedAtMs: 100,
+    };
+    source.resumeTaskAgent.mockRejectedValue(new Error("saved provider conversation is no longer available"));
+
+    await session.resume();
+
+    expect(session.status.value).toBe("error");
+    expect(session.resumeUnavailable.value).toBe(true);
+    expect(session.resumeReference.value).toBeNull();
+    expect(source.startTerminalSession).not.toHaveBeenCalled();
   });
 
   it("reflects terminal error and exit events in the connection status", async () => {

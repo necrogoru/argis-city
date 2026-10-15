@@ -1,6 +1,14 @@
 import { defineStore } from "pinia";
 import { ref, shallowRef } from "vue";
-import type { Project, Task, TaskDeletionOutcome, TaskGitStatus, TaskStatus, TaskWorktree } from "../domain/types";
+import type {
+  Project,
+  Task,
+  TaskAgentResume,
+  TaskDeletionOutcome,
+  TaskGitStatus,
+  TaskStatus,
+  TaskWorktree,
+} from "../domain/types";
 import { taskBranchName, taskWorktreePath } from "../domain/tasks";
 import { useAgentSource } from "../composables/useAgentSource";
 import { useTerminalRailStore } from "./terminalRail";
@@ -14,6 +22,7 @@ export const useTaskStore = defineStore("tasks", () => {
   const terminalRail = useTerminalRailStore();
   const projects = shallowRef<Project[]>([]);
   const tasks = shallowRef<Task[]>([]);
+  const taskAgentResumes = shallowRef<TaskAgentResume[]>([]);
   const gitStatuses = shallowRef<Record<number, TaskGitStatus>>({});
   const loading = ref(false);
   const searchLoading = ref(false);
@@ -34,12 +43,15 @@ export const useTaskStore = defineStore("tasks", () => {
     }
 
     const revision = searchDataRevision;
-    const promise = Promise.all([source.listProjects(), source.listTasks()]).then(([nextProjects, nextTasks]) => {
-      if (revision !== searchDataRevision) return;
-      projects.value = nextProjects;
-      tasks.value = nextTasks;
-      loadedSearchDataRevision = revision;
-    });
+    const promise = Promise.all([source.listProjects(), source.listTasks(), source.listTaskAgentResumes()]).then(
+      ([nextProjects, nextTasks, nextResumes]) => {
+        if (revision !== searchDataRevision) return;
+        projects.value = nextProjects;
+        tasks.value = nextTasks;
+        taskAgentResumes.value = nextResumes;
+        loadedSearchDataRevision = revision;
+      },
+    );
     searchDataPromise = promise;
     searchLoading.value = true;
     try {
@@ -54,6 +66,10 @@ export const useTaskStore = defineStore("tasks", () => {
     }
 
     if (loadedSearchDataRevision !== searchDataRevision) await ensureSearchDataLoaded();
+  }
+
+  async function refreshTaskAgentResumes(): Promise<void> {
+    taskAgentResumes.value = await source.listTaskAgentResumes();
   }
 
   async function perform<T>(operation: () => Promise<T>): Promise<T | null> {
@@ -124,6 +140,7 @@ export const useTaskStore = defineStore("tasks", () => {
     const outcome = await perform(() => source.deleteTask(id, removeGitResources));
     if (!outcome?.taskDeleted) return null;
     tasks.value = tasks.value.filter((task) => task.id !== id);
+    taskAgentResumes.value = taskAgentResumes.value.filter((reference) => reference.taskId !== id);
     invalidateSearchData();
     terminalRail.clearTaskStatus(id);
     const nextStatuses = { ...gitStatuses.value };
@@ -163,6 +180,7 @@ export const useTaskStore = defineStore("tasks", () => {
     tasks.value = tasks.value.map((task) =>
       task.id === id ? { ...task, branchName: worktree.branchName, worktreePath: worktree.worktreePath } : task,
     );
+    taskAgentResumes.value = taskAgentResumes.value.filter((reference) => reference.taskId !== id);
     invalidateSearchData();
     await refreshTaskGitStatus(id);
     return worktree;
@@ -171,11 +189,13 @@ export const useTaskStore = defineStore("tasks", () => {
   return {
     projects,
     tasks,
+    taskAgentResumes,
     gitStatuses,
     loading,
     searchLoading,
     error,
     ensureSearchDataLoaded,
+    refreshTaskAgentResumes,
     load,
     addProject,
     createTask,
