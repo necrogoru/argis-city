@@ -40,6 +40,7 @@ use terminal_manager::TerminalManager;
 
 /// Event the UI listens on (`SNAPSHOT_EVENT` in `src/domain/types.ts`).
 pub const SNAPSHOT_EVENT: &str = "agents://snapshot";
+pub const TERMINAL_EXIT_EVENT: &str = "terminal://exited";
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 /// The real registry: every provider over the given tool dirs, live
@@ -65,8 +66,8 @@ pub fn run() {
     let poller_monitor = Arc::clone(&monitor);
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(monitor)
-        .manage(Arc::new(TerminalManager::default()))
         .setup(move |app| {
             let task_store_path = app
                 .path()
@@ -74,6 +75,14 @@ pub fn run() {
                 .map(|directory| directory.join("argis.sqlite"))
                 .map_err(|error| error.to_string());
             app.manage(TaskStoreState::from_path(task_store_path));
+
+            let handle = app.handle().clone();
+            let terminal_manager = Arc::new(TerminalManager::with_lifecycle_sink(Arc::new(move |event| {
+                if let Err(error) = handle.emit(TERMINAL_EXIT_EVENT, &event) {
+                    eprintln!("failed to publish terminal exit event: {error}");
+                }
+            })));
+            app.manage(terminal_manager);
 
             let handle = app.handle().clone();
             let poller = Poller::spawn(poller_monitor, POLL_INTERVAL, move |snapshot| {
@@ -100,7 +109,8 @@ pub fn run() {
             commands::terminal_input,
             commands::resize_terminal_session,
             commands::detach_terminal_session,
-            commands::list_terminal_inventory
+            commands::list_terminal_inventory,
+            commands::play_alert_sound
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

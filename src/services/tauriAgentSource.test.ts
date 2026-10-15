@@ -1,11 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Project, Task, TerminalAttachment, TerminalEvent, TerminalInventoryEntry } from "../domain/types";
+import type {
+  Project,
+  Task,
+  TerminalAttachment,
+  TerminalEvent,
+  TerminalInventoryEntry,
+  TerminalLifecycleEvent,
+} from "../domain/types";
 import { createTauriAgentSource } from "./tauriAgentSource";
 
-const { invoke, channelHandlers } = vi.hoisted(() => ({
-  invoke: vi.fn(),
-  channelHandlers: [] as Array<(message: unknown) => void>,
-}));
+const { invoke, channelHandlers, eventHandlers, listenState } = vi.hoisted(() => {
+  const state = {
+    handlers: [] as Array<{ name: string; callback: (event: { payload: unknown }) => void }>,
+    unlistenCalls: 0,
+  };
+  return {
+    invoke: vi.fn(),
+    channelHandlers: [] as Array<(message: unknown) => void>,
+    eventHandlers: state.handlers,
+    listenState: state,
+  };
+});
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke,
@@ -26,6 +41,18 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: (name: string, callback: (event: { payload: unknown }) => void) => {
+    const entry = { name, callback };
+    eventHandlers.push(entry);
+    return Promise.resolve(() => {
+      listenState.unlistenCalls += 1;
+      const index = eventHandlers.indexOf(entry);
+      if (index >= 0) eventHandlers.splice(index, 1);
+    });
+  },
+}));
+
 const project: Project = { id: 4, path: "/projects/argis" };
 const task: Task = {
   id: 12,
@@ -41,6 +68,8 @@ describe("TauriAgentSource project and task operations", () => {
   beforeEach(() => {
     invoke.mockReset();
     channelHandlers.length = 0;
+    eventHandlers.length = 0;
+    listenState.unlistenCalls = 0;
   });
 
   it("registers a project path and returns the saved project", async () => {
@@ -197,5 +226,37 @@ describe("TauriAgentSource project and task operations", () => {
     await expect(createTauriAgentSource().listTerminalInventory()).resolves.toEqual(inventory);
 
     expect(invoke).toHaveBeenCalledWith("list_terminal_inventory");
+  });
+
+  it("plays the native alert sound through the backend command", async () => {
+    invoke.mockResolvedValue(undefined);
+
+    await createTauriAgentSource().playAlertSound();
+
+    expect(invoke).toHaveBeenCalledWith("play_alert_sound");
+  });
+
+  it("subscribes to app-wide terminal exits independently of a terminal attachment", async () => {
+    const source = createTauriAgentSource();
+    const callback = vi.fn<(event: TerminalLifecycleEvent) => void>();
+    const event: TerminalLifecycleEvent = {
+      taskId: task.id,
+      tab: "agent",
+      agentCli: "claude",
+      sessionId: 22,
+      exitCode: 0,
+      signal: null,
+    };
+
+    const unsubscribe = source.subscribeTerminalExit(callback);
+    expect(eventHandlers).toHaveLength(1);
+    expect(eventHandlers[0].name).toBe("terminal://exited");
+    eventHandlers[0].callback({ payload: event });
+    expect(callback).toHaveBeenCalledWith(event);
+
+    unsubscribe();
+    await Promise.resolve();
+    expect(listenState.unlistenCalls).toBe(1);
+    expect(eventHandlers).toHaveLength(0);
   });
 });

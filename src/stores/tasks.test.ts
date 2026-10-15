@@ -23,6 +23,8 @@ function setup(overrides: Partial<AgentSource> = {}) {
     getSnapshot: async () => ({ generatedAt: 1, sessions: [], providers: [] }),
     refresh: async () => ({ generatedAt: 1, sessions: [], providers: [] }),
     subscribe: () => () => {},
+    subscribeTerminalExit: () => () => {},
+    playAlertSound: async () => {},
     openPath: async () => {},
     listProjects: vi.fn(async () => [project]),
     addProject: vi.fn(async (path) => ({ id: 2, path })),

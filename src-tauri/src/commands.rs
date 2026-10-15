@@ -14,6 +14,7 @@ use crate::task_store::{TaskStore, TaskStoreState};
 use crate::terminal_manager::{TerminalEventSink, TerminalManager, TerminalProcessSpec};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::Arc;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, State};
@@ -190,6 +191,24 @@ pub fn detach_terminal_session(
 #[tauri::command]
 pub fn list_terminal_inventory(terminal_state: State<'_, Arc<TerminalManager>>) -> Vec<TerminalInventoryEntry> {
     terminal_state.inventory()
+}
+
+/// Plays macOS's built-in Ping sound as a fallback when a desktop notification cannot be delivered.
+#[tauri::command]
+pub async fn play_alert_sound() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let status = Command::new("/usr/bin/afplay")
+            .arg("/System/Library/Sounds/Ping.aiff")
+            .status()
+            .map_err(|error| format!("could not start macOS alert sound: {error}"))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(format!("macOS alert sound exited with {status}"))
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 fn terminal_event_sink(channel: Channel<TerminalEvent>) -> TerminalEventSink {

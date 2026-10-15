@@ -10,6 +10,7 @@ import type {
   TerminalAttachment,
   TerminalEvent,
   TerminalInventoryEntry,
+  TerminalLifecycleEvent,
   TerminalSize,
   TerminalTab,
 } from "../../domain/types";
@@ -68,6 +69,10 @@ export class MockAgentSource implements AgentSource {
         this.timer = null;
       }
     };
+  }
+
+  subscribeTerminalExit(_callback: (event: TerminalLifecycleEvent) => void): () => void {
+    return () => {};
   }
 
   async openPath(path: string): Promise<void> {
@@ -192,6 +197,8 @@ export class MockAgentSource implements AgentSource {
   async listTerminalInventory(): Promise<TerminalInventoryEntry[]> {
     return [];
   }
+
+  async playAlertSound(): Promise<void> {}
 
   private findTask(id: number): Task {
     const task = this.tasks.find((candidate) => candidate.id === id);

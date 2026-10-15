@@ -1,5 +1,7 @@
-use crate::domain::{TerminalAgent, TerminalEvent, TerminalSessionKey, TerminalSize, TerminalTab};
-use crate::terminal_manager::{TerminalEventSink, TerminalManager, TerminalProcessSpec};
+use crate::domain::{
+    TerminalAgent, TerminalEvent, TerminalLifecycleEvent, TerminalSessionKey, TerminalSize, TerminalTab,
+};
+use crate::terminal_manager::{TerminalEventSink, TerminalLifecycleSink, TerminalManager, TerminalProcessSpec};
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
@@ -25,6 +27,55 @@ fn terminal_agent_choices_map_to_fixed_executable_names() {
     assert_eq!(TerminalAgent::Codex.executable(), "codex");
     assert_eq!(TerminalAgent::OpenCode.executable(), "opencode");
     assert_eq!(TerminalAgent::Pi.executable(), "pi");
+}
+
+#[cfg(unix)]
+#[test]
+fn terminal_manager_broadcasts_one_typed_event_for_a_process_exit() {
+    let (exit_sender, exits) = mpsc::channel();
+    let manager = TerminalManager::with_lifecycle_sink(lifecycle_sink(exit_sender));
+    let (output_sender, _output_events) = mpsc::channel();
+    let session =
+        manager.start(spec(73, TerminalTab::Term, "/bin/sh", &["-c", "exit 7"]), sink(output_sender)).unwrap();
+
+    let event = exits.recv_timeout(Duration::from_secs(5)).unwrap();
+
+    assert_eq!(
+        event,
+        TerminalLifecycleEvent {
+            task_id: 73,
+            tab: TerminalTab::Term,
+            agent_cli: None,
+            session_id: session.id,
+            exit_code: 7,
+            signal: None,
+        }
+    );
+    assert!(matches!(exits.recv_timeout(Duration::from_millis(100)), Err(mpsc::RecvTimeoutError::Timeout)));
+}
+
+#[test]
+fn terminal_lifecycle_event_serializes_with_camel_case_fields() {
+    let event = TerminalLifecycleEvent {
+        task_id: 73,
+        tab: TerminalTab::Agent,
+        agent_cli: Some(TerminalAgent::OpenCode),
+        session_id: 9,
+        exit_code: 1,
+        signal: Some("SIGTERM".to_owned()),
+    };
+
+    assert_eq!(
+        serde_json::to_value(event).unwrap(),
+        serde_json::json!({
+            "taskId": 73,
+            "tab": "agent",
+            "agentCli": "opencode",
+            "sessionId": 9,
+            "exitCode": 1,
+            "signal": "SIGTERM"
+        })
+    );
 }
 
 #[test]
@@ -149,6 +200,12 @@ fn terminal_inventory_reports_managed_task_tabs_and_lifecycle_state() {
 
 fn sink(sender: Sender<TerminalEvent>) -> TerminalEventSink {
     Arc::new(move |event| sender.send(event).map_err(|error| error.to_string()))
+}
+
+fn lifecycle_sink(sender: Sender<TerminalLifecycleEvent>) -> TerminalLifecycleSink {
+    Arc::new(move |event| {
+        let _ = sender.send(event);
+    })
 }
 
 fn output_until(receiver: &Receiver<TerminalEvent>, needle: &str) -> String {

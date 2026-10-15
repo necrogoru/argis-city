@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref, shallowRef } from "vue";
 import type { Snapshot } from "../domain/types";
 import { useAgentSource } from "../composables/useAgentSource";
+import { useSessionAlertCoordinator } from "./sessionAlerts";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -14,6 +15,7 @@ function errorMessage(error: unknown): string {
  */
 export const useSnapshotStore = defineStore("snapshot", () => {
   const source = useAgentSource();
+  const sessionAlertCoordinator = useSessionAlertCoordinator();
   const snapshot = shallowRef<Snapshot | null>(null);
   const error = ref<string | null>(null);
 
@@ -22,6 +24,7 @@ export const useSnapshotStore = defineStore("snapshot", () => {
     if (snapshot.value && snapshot.value.generatedAt > next.generatedAt) return;
     snapshot.value = next;
     error.value = null;
+    sessionAlertCoordinator.acceptSnapshot(next);
   }
 
   source.subscribe(accept);
