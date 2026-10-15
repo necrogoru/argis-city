@@ -35,17 +35,20 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
 - **Command palette** (click the Dashboard search trigger or press ⌘K/Ctrl+K
   from either primary view; the shortcut toggles it closed and Esc closes it):
   640px glass modal, 112px from the top over a dimmed, blurred backdrop. 60px
-  search row, then an "AGENTS" section (status dot, highlighted title,
-  `provider · model · ~/dir`, status pill; the 6 most urgent until the user
-  types), a "TASKS" section (shown after typing; matches task ID, title,
-  description, and project path; row shows title, `#id · project · status`,
-  and an Open terminal action when a worktree exists; without a worktree, show
-  "No worktree · Go to Tasks"), and an "ACTIONS" section (Show Dashboard and
-  Open Tasks; selected-agent actions: open folder, copy path, close details; go
-  to each district; show whole city; camera moves; refresh). No-match copy
-  covers agents, tasks, and actions. ↑↓ moves through every section (wraps), ↵
-  runs the selected result, hover moves the cursor; matches are teal. Footer with
-  key hints.
+  search row, then an "ACTIONS" section containing only Open Tasks and Show
+  Dashboard, in that order, while the query is empty. After typing, show one
+  globally ranked "RESULTS" section mixing agents, tasks, and actions. Search is
+  case-insensitive and whitespace-tokenized; each token may match as an ordered
+  subsequence of a searchable field, with stronger/closer matches first and
+  deterministic ties. Agent rows use a status dot, highlighted title,
+  `provider · model · ~/dir`, and status pill. Task rows match task ID, title,
+  description, and project path, and show `#id · project · status` plus an Open
+  terminal action when a worktree exists; without a worktree, show
+  "No worktree · Go to Tasks". Actions include Show Dashboard and Open Tasks,
+  selected-agent actions (open folder, copy path, close details), district and
+  city navigation, camera moves, and refresh. No-match copy covers agents,
+  tasks, and actions. ↑↓ moves through the results (wraps), ↵ runs the selected
+  result, hover moves the cursor; matches are teal. Footer with key hints.
 - **Hero** (x 40, y 124, w 300): "Agent\nInfrastructure" 36/400, lh 1.08,
   tracking −1; 14px text-2 description; "DISTRICTS" list: rows with 10px
   rounded swatch, provider name, "N houses" right (text-3); selected row has

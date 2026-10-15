@@ -57,6 +57,26 @@ describe("scoreFields", () => {
     expect(scoreFields(["arg", "claude"], fields)).toBe(6 + 3);
     expect(scoreFields(["arg", "codex"], fields)).toBeNull();
   });
+
+  it("matches case-insensitive subsequences with omitted characters", () => {
+    expect(scoreFields(["optsk"], [{ text: "oPEn TaSkS", weight: 1 }])).not.toBeNull();
+  });
+
+  it("requires every query token to match a searchable field", () => {
+    const fields = [{ text: "Open Tasks", weight: 1 }, { text: "Dashboard", weight: 1 }];
+    expect(scoreFields(["op", "tsk"], fields)).not.toBeNull();
+    expect(scoreFields(["op", "missing"], fields)).toBeNull();
+  });
+
+  it("scores prefix and word-boundary subsequences above weak interior matches", () => {
+    const score = (text: string) => scoreFields(["ot"], [{ text, weight: 1 }]) ?? 0;
+    expect(score("Open Tasks")).toBeGreaterThan(score("soft"));
+  });
+
+  it("ranks a contiguous interior hit above a non-contiguous prefix hit", () => {
+    const score = (text: string) => scoreFields(["ab"], [{ text, weight: 1 }]) ?? 0;
+    expect(score("xxab")).toBeGreaterThan(score("a---b"));
+  });
 });
 
 describe("searchSessions", () => {
@@ -141,6 +161,17 @@ describe("highlight", () => {
 
   it("merges overlapping and adjacent tokens", () => {
     expect(highlight("argis", "arg gis")).toEqual([{ text: "argis", match: true }]);
+  });
+
+  it("highlights the matched characters of a fuzzy subsequence", () => {
+    expect(highlight("Open Tasks", "optsk")).toEqual([
+      { text: "Op", match: true },
+      { text: "en ", match: false },
+      { text: "T", match: true },
+      { text: "a", match: false },
+      { text: "sk", match: true },
+      { text: "s", match: false },
+    ]);
   });
 
   it("returns the text unmarked for an empty query", () => {
