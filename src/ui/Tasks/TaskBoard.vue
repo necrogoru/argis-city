@@ -13,12 +13,14 @@ import {
   taskBoardNavigationDirection,
 } from "../../domain/taskBoardShortcuts";
 import { useTaskStore } from "../../stores/tasks";
+import { useAppViewStore } from "../../stores/appView";
 import ProjectManagerDialog from "./ProjectManagerDialog.vue";
 import TaskCard from "./TaskCard.vue";
 import TaskEditorDialog from "./TaskEditorDialog.vue";
 import { useTerminalNavigationStore } from "../../stores/terminalNavigation";
 
 const store = useTaskStore();
+const appView = useAppViewStore();
 const terminalNavigation = useTerminalNavigationStore();
 const projectFilter = ref<number | null>(null);
 const taskSearchQuery = ref("");
@@ -128,7 +130,22 @@ function handleTaskBoardShortcut(event: KeyboardEvent): void {
   openTerminal(task);
 }
 
-onMounted(() => window.addEventListener("keydown", handleTaskBoardShortcut));
+function consumeTaskCreationRequest(): void {
+  if (appView.consumeTaskCreationRequest()) createTask();
+}
+
+watch(
+  () => appView.createTaskRequested,
+  (requested) => {
+    if (requested) consumeTaskCreationRequest();
+  },
+  { flush: "post" },
+);
+
+onMounted(() => {
+  window.addEventListener("keydown", handleTaskBoardShortcut);
+  consumeTaskCreationRequest();
+});
 onBeforeUnmount(() => window.removeEventListener("keydown", handleTaskBoardShortcut));
 
 function createTask(): void {

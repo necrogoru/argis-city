@@ -5,6 +5,7 @@ export type AppView = "city" | "tasks";
 
 export const useAppViewStore = defineStore("appView", () => {
   const activeView = ref<AppView>("city");
+  const createTaskRequested = ref(false);
 
   function showCity(): void {
     activeView.value = "city";
@@ -14,5 +15,16 @@ export const useAppViewStore = defineStore("appView", () => {
     activeView.value = "tasks";
   }
 
-  return { activeView, showCity, showTasks };
+  function requestTaskCreation(): void {
+    createTaskRequested.value = true;
+    showTasks();
+  }
+
+  function consumeTaskCreationRequest(): boolean {
+    if (!createTaskRequested.value) return false;
+    createTaskRequested.value = false;
+    return true;
+  }
+
+  return { activeView, createTaskRequested, showCity, showTasks, requestTaskCreation, consumeTaskCreationRequest };
 });
