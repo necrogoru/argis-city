@@ -153,9 +153,9 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   focused, visible task invoke its existing branch/worktree and terminal
   actions, respectively. Keep their existing eligibility: `c` requires at
   least one registered project, `b` requires Git to allow branch creation and
-  no existing task branch, and `t` requires the task's existing worktree and
-  an available embedded terminal. `b` explicitly invokes the branch/worktree
-  action; `t` opens the task's shared Agent resume flow without changing the app
+  no existing task branch, and `t` requires the task's existing worktree. `b`
+  explicitly invokes the branch/worktree action; `t` opens the task's shared
+  Agent resume flow without changing the app
   view and does not create a branch or worktree as a side effect. Search does
   not create Git resources.
 - Suppress the single-letter actions and Vim task navigation while a dialog is
@@ -214,6 +214,39 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   when running, `s` remains terminal input. Ignore modified, repeated, composing,
   and form-control keystrokes. Escape closes the modal even from xterm, returns
   focus to the opener, and leaves both PTYs alive for reattachment.
+
+### Task-board presentation
+- The three task groups use open, evenly distributed lanes with consistent
+  gutters and whitespace; do not enclose a lane in a panel. Task cards remain
+  the primary boundaries. At narrow widths, stack the lanes without horizontal
+  overflow.
+- Keep each task's exact status label visible. Pending uses the neutral
+  `--text-2` color; In progress uses `--teal`, Stopped `--amber`, Canceled
+  `--red`, and Completed `--blue`. Status labels use a 12% semantic-color fill
+  and a 42% semantic-color border; do not tint the full card.
+- Normal-size task-board text, including task metadata, lane headings, and
+  status labels, maintains at least 4.5:1 contrast against its rendered
+  background.
+- A successful status change briefly fades the status label from a stronger
+  semantic tint (28% fill / 72% border) to its resting treatment over 480 ms.
+  The feedback does not change card dimensions or position and is disabled when
+  `prefers-reduced-motion: reduce` is active.
+- Keep a compact shortcut legend visible directly below the board toolbar at
+  all times. Reuse the existing keycap treatment; let the legend wrap at narrow
+  widths without horizontal overflow. Show ArrowUp/ArrowDown or `j`/`k` for
+  within-lane movement; ArrowLeft/ArrowRight or `h`/`l` for movement between
+  lanes; `gg` for the first visible task and `Shift+G` for the last; and `c`,
+  `b`, and `t` for task actions.
+- Shortcut behavior and availability: with Search tasks focused,
+  ArrowDown/ArrowUp focus the first/last matching task. From a focused card,
+  ArrowDown/ArrowUp or `j`/`k` move within its lane without crossing lanes;
+  ArrowLeft/ArrowRight or `h`/`l` move to the nearest populated lane. `gg` is
+  two unmodified `g` presses within 500 ms; `Shift+G` focuses the last visible
+  task. Unmodified `c` opens New task only when a project is registered; `b`
+  creates a branch/worktree only for a focused visible task eligible for branch
+  creation with no existing branch; `t` opens the focused visible task's shared
+  Agent-resume terminal flow only when its worktree exists. Keep the existing
+  input (including xterm), dialog, modifier, repeat, and composition guards.
 
 ## Progress readouts
 Progress is a real estimate only when it comes from a plan (`execution`) or

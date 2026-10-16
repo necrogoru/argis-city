@@ -20,6 +20,7 @@ import {
 } from "../../domain/taskBoardShortcuts";
 import { useTaskStore } from "../../stores/tasks";
 import { useAppViewStore } from "../../stores/appView";
+import Kbd from "../common/Kbd.vue";
 import ProjectManagerDialog from "./ProjectManagerDialog.vue";
 import TaskCard from "./TaskCard.vue";
 import TaskEditorDialog from "./TaskEditorDialog.vue";
@@ -60,6 +61,8 @@ const projectsOpen = ref(false);
 const taskEditorOpen = ref(false);
 const editingTask = shallowRef<Task | null>(null);
 const deletionNotice = ref<string | null>(null);
+const statusFeedbackVersions = ref<Record<number, number>>({});
+const statusFeedbackTimeouts = new Map<number, ReturnType<typeof setTimeout>>();
 
 watch(visibleTaskIds, (taskIds) => {
   if (focusedTaskId.value != null && !taskIds.includes(focusedTaskId.value)) focusedTaskId.value = null;
@@ -174,7 +177,10 @@ onMounted(() => {
   window.addEventListener("keydown", handleTaskBoardShortcut);
   consumeTaskCreationRequest();
 });
-onBeforeUnmount(() => window.removeEventListener("keydown", handleTaskBoardShortcut));
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", handleTaskBoardShortcut);
+  statusFeedbackTimeouts.forEach((timeout) => clearTimeout(timeout));
+});
 
 function createTask(): void {
   editingTask.value = null;
@@ -186,8 +192,22 @@ function editTask(task: Task): void {
   taskEditorOpen.value = true;
 }
 
-function updateStatus(task: Task, status: TaskStatus): void {
-  void store.updateTaskStatus(task.id, status);
+async function updateStatus(task: Task, status: TaskStatus): Promise<void> {
+  const updated = await store.updateTaskStatus(task.id, status);
+  if (!updated) return;
+
+  const previousTimeout = statusFeedbackTimeouts.get(task.id);
+  if (previousTimeout) clearTimeout(previousTimeout);
+  statusFeedbackVersions.value = {
+    ...statusFeedbackVersions.value,
+    [task.id]: (statusFeedbackVersions.value[task.id] ?? 0) + 1,
+  };
+  statusFeedbackTimeouts.set(task.id, setTimeout(() => {
+    const nextVersions = { ...statusFeedbackVersions.value };
+    delete nextVersions[task.id];
+    statusFeedbackVersions.value = nextVersions;
+    statusFeedbackTimeouts.delete(task.id);
+  }, 480));
 }
 
 function createBranch(task: Task): void {
@@ -250,6 +270,31 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
       </div>
     </div>
 
+    <div class="task-shortcut-legend" role="group" aria-label="Task board keyboard shortcuts">
+      <span class="task-shortcut-group">
+        <span class="task-shortcut-label">Within lane</span>
+        <span class="task-shortcut-keys">
+          <Kbd>↑</Kbd><Kbd>↓</Kbd><span>or</span><Kbd>j</Kbd><Kbd>k</Kbd>
+        </span>
+      </span>
+      <span class="task-shortcut-group">
+        <span class="task-shortcut-label">Between lanes</span>
+        <span class="task-shortcut-keys">
+          <Kbd>←</Kbd><Kbd>→</Kbd><span>or</span><Kbd>h</Kbd><Kbd>l</Kbd>
+        </span>
+      </span>
+      <span class="task-shortcut-group">
+        <span class="task-shortcut-label">First / last task</span>
+        <span class="task-shortcut-keys"><Kbd>gg</Kbd><span>/</span><Kbd>Shift+G</Kbd></span>
+      </span>
+      <span class="task-shortcut-group">
+        <span class="task-shortcut-label">Task actions when available</span>
+        <span class="task-shortcut-keys">
+          <Kbd>c</Kbd><span>new</span><Kbd>b</Kbd><span>branch</span><Kbd>t</Kbd><span>terminal</span>
+        </span>
+      </span>
+    </div>
+
     <p v-if="store.error" class="board-error" role="alert">{{ store.error }}</p>
     <div v-if="deletionNotice" class="deletion-notice" role="alert">
       <p>{{ deletionNotice }}</p>
@@ -274,6 +319,7 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
               :project-path="projectPaths.get(task.projectId) ?? 'Unknown project'"
               :git-status="store.gitStatuses[task.id] ?? null"
               :can-open-terminal="task.worktreePath !== null"
+              :status-feedback-version="statusFeedbackVersions[task.id] ?? 0"
               @edit="editTask(task)"
               @move-status="updateStatus(task, $event)"
               @create-branch="createBranch(task)"
@@ -320,6 +366,34 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
 .board-toolbar {
   justify-content: space-between;
   gap: 12px;
+}
+
+.task-shortcut-legend,
+.task-shortcut-group,
+.task-shortcut-keys {
+  display: flex;
+  align-items: center;
+}
+
+.task-shortcut-legend {
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: -8px;
+  color: var(--text-2);
+  font-size: 11px;
+}
+
+.task-shortcut-group {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.task-shortcut-label {
+  color: var(--text-2);
+}
+
+.task-shortcut-keys {
+  gap: 4px;
 }
 
 .project-filter,
@@ -451,17 +525,13 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
-  gap: 16px;
+  gap: 24px;
 }
 
 .task-column {
   display: grid;
   min-width: 0;
-  gap: 14px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-panel);
-  background: var(--fill-subtle);
+  gap: 16px;
 }
 
 .column-header {
@@ -494,7 +564,7 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
 
 .task-list {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;

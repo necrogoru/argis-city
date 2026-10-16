@@ -11,6 +11,7 @@ const props = defineProps<{
   projectPath: string;
   gitStatus: TaskGitStatus | null;
   canOpenTerminal?: boolean;
+  statusFeedbackVersion?: number;
 }>();
 const emit = defineEmits<{
   edit: [];
@@ -80,7 +81,12 @@ defineExpose({ focus });
 
     <div class="task-card-meta">
       <span class="project-name" :title="props.projectPath">{{ projectName }}</span>
-      <span class="status-label" :data-status="props.task.status">{{ TASK_STATUS_LABELS[props.task.status] }}</span>
+      <span
+        :key="props.statusFeedbackVersion ?? 0"
+        class="status-label"
+        :class="{ 'status-label--changed': (props.statusFeedbackVersion ?? 0) > 0 }"
+        :data-status="props.task.status"
+      >{{ TASK_STATUS_LABELS[props.task.status] }}</span>
     </div>
 
     <div class="task-actions" role="group" :aria-label="`Actions for ${props.task.title}`">
@@ -209,43 +215,59 @@ defineExpose({ focus });
 }
 
 .status-label {
+  --status-color: var(--text-2);
+
   flex: none;
-  padding: 4px 7px;
-  border: 1px solid var(--border);
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--status-color) 42%, transparent);
   border-radius: var(--radius-pill);
-  color: var(--text-2);
-  font-size: 10px;
-  font-weight: 500;
+  background: color-mix(in srgb, var(--status-color) 12%, transparent);
+  color: var(--status-color);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .status-label[data-status="inProgress"] {
-  border-color: color-mix(in srgb, var(--teal) 24%, transparent);
-  background: color-mix(in srgb, var(--teal) 10%, transparent);
-  color: var(--teal);
+  --status-color: var(--teal);
 }
 
 .status-label[data-status="stopped"] {
-  border-color: color-mix(in srgb, var(--amber) 24%, transparent);
-  background: color-mix(in srgb, var(--amber) 10%, transparent);
-  color: var(--amber);
+  --status-color: var(--amber);
 }
 
 .status-label[data-status="canceled"] {
-  border-color: color-mix(in srgb, var(--red) 24%, transparent);
-  background: color-mix(in srgb, var(--red) 10%, transparent);
-  color: var(--red);
+  --status-color: var(--red);
 }
 
 .status-label[data-status="completed"] {
-  border-color: color-mix(in srgb, var(--blue) 24%, transparent);
-  background: color-mix(in srgb, var(--blue) 10%, transparent);
-  color: var(--blue);
+  --status-color: var(--blue);
+}
+
+.status-label--changed {
+  animation: task-status-feedback 480ms var(--ease-out) both;
+}
+
+@keyframes task-status-feedback {
+  from {
+    border-color: color-mix(in srgb, var(--status-color) 72%, transparent);
+    background: color-mix(in srgb, var(--status-color) 28%, transparent);
+  }
+
+  to {
+    border-color: color-mix(in srgb, var(--status-color) 42%, transparent);
+    background: color-mix(in srgb, var(--status-color) 12%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-label--changed {
+    animation: none;
+  }
 }
 
 .task-actions {
   gap: 6px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
 }
 
 .task-action {
