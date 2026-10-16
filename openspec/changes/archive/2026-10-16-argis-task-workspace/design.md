@@ -44,6 +44,15 @@ See `proposal.md` for motivation and `specs/` for user-visible behavior. Argis i
 - Handle `c` in the active Tasks workspace to call the existing New task flow. Handle `b` and `t` only for a focused task, dispatching the same branch and terminal callbacks as the existing card buttons. Keep project availability, Git status, worktree requirements, disabled states, and explanations unchanged; keyboard actions do not create Git resources implicitly.
 - Ignore single-key actions while an unrelated editable control or dialog has focus. ArrowUp/ArrowDown in the task-search field are the intentional exception; letters typed into search remain text rather than actions.
 
+### Task-board visual refinement
+
+- Scope visual changes to the Tasks view. Preserve the full-window workspace and Back to city action; do not add a persistent navigation rail, change the Dashboard, or alter global design tokens.
+- Keep the three equal status lanes, but use lane headings, counts, gutters, and whitespace rather than enclosing each lane in a bordered panel. Keep task cards as the primary visual boundaries and remove the extra divider above each card's action row. Refine component-level spacing for a consistent rhythm without changing the shared spacing tokens.
+- Keep the existing semantic status palette: Pending is neutral, In progress is teal, Stopped is amber, Canceled is red, and Completed is blue. Make these accents easier to scan in lane headings and status chips without tinting entire cards or introducing a new palette.
+- Maintain at least 4.5:1 contrast for normal-size text against its rendered background. The existing `text-3` token is approximately 4.8:1 on the current task-card surface; recheck any status-chip or lane-header color/background combinations if their treatment changes.
+- Use a brief, non-layout-shifting transition when a task status changes; do not add continuous status pulsing. Respect the existing `prefers-reduced-motion` behavior.
+- Keep a compact keyboard-shortcut legend always visible directly below the board toolbar, using the existing keycap treatment. Show within-lane movement (`ArrowUp`/`ArrowDown`, `j`/`k`), lane movement (`ArrowLeft`/`ArrowRight`, `h`/`l`), first/last task (`gg`, `Shift+G`), and task actions (`c`, `b`, `t`). Allow the legend to wrap at narrow window widths.
+
 ### Git worktrees
 
 - Run Git through a backend service using discrete process arguments, never by interpolating task text into a shell command. Canonicalize and validate the registered project path before Git operations.
