@@ -35,5 +35,5 @@
 
 ## 5. Integration verification
 
-- [ ] 5.1 Verify the task and terminal workflows do not regress monitoring by running `pnpm build`, `pnpm exec vitest run`, `cargo test --manifest-path src-tauri/Cargo.toml`, `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`, and `cargo fmt --manifest-path src-tauri/Cargo.toml --check`; manually check task search, arrow navigation, `c`/`b`/`t`, text-entry guards, Escape, Ctrl+Tab focus, terminal persistence, and city/task navigation in the desktop app.
+- [x] 5.1 Verify the task and terminal workflows do not regress monitoring by running `pnpm build`, `pnpm exec vitest run`, `cargo test --manifest-path src-tauri/Cargo.toml`, `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`, and `cargo fmt --manifest-path src-tauri/Cargo.toml --check`; manually check task search, arrow navigation, `c`/`b`/`t`, text-entry guards, Escape, Ctrl+Tab focus, terminal persistence, and city/task navigation in the desktop app.
 - [x] 5.2 Re-run `openspec validate argis-task-workspace --strict` against the revised artifacts and resolve any findings before implementation is considered ready.
