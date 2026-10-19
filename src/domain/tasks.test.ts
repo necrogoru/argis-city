@@ -4,6 +4,7 @@ import {
   groupTasks,
   nextTaskStatus,
   previousTaskStatus,
+  taskStatusForShortcut,
   taskBranchName,
   taskWorktreePath,
   TASK_STATUS_ORDER,
@@ -53,7 +54,53 @@ describe("task status order", () => {
       completed: "Completed",
     });
   });
+
+  it("maps number keys to statuses in the board order", () => {
+    expect(["1", "2", "3", "4", "5"].map((key) => taskStatusForShortcut(statusKey(key)))).toEqual(
+      TASK_STATUS_ORDER,
+    );
+    expect(taskStatusForShortcut(statusKey("0"))).toBeNull();
+    expect(taskStatusForShortcut(statusKey("6"))).toBeNull();
+    expect(taskStatusForShortcut(statusKey("s"))).toBeNull();
+  });
+
+  it.each([
+    ["Meta", { metaKey: true }],
+    ["Control", { ctrlKey: true }],
+    ["Alt", { altKey: true }],
+    ["Shift", { shiftKey: true }],
+    ["repeated", { repeat: true }],
+    ["composing", { isComposing: true }],
+    ["already handled", { defaultPrevented: true }],
+  ] as const)("ignores %s status shortcuts", (_label, modifiers) => {
+    expect(taskStatusForShortcut(statusKey("1", modifiers))).toBeNull();
+  });
 });
+
+function statusKey(
+  key: string,
+  modifiers: Partial<{
+    metaKey: boolean;
+    ctrlKey: boolean;
+    altKey: boolean;
+    shiftKey: boolean;
+    repeat: boolean;
+    isComposing: boolean;
+    defaultPrevented: boolean;
+  }> = {},
+) {
+  return {
+    key,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    repeat: false,
+    isComposing: false,
+    defaultPrevented: false,
+    ...modifiers,
+  };
+}
 
 describe("task Git names", () => {
   it("uses stable IDs and normalized title slugs", () => {

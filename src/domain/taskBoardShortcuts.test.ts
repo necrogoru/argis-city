@@ -40,6 +40,7 @@ describe("taskBoardActionForShortcut", () => {
     ["c", "createTask"],
     ["b", "createBranch"],
     ["t", "openTerminal"],
+    ["s", "changeStatus"],
     ["C", "createTask"],
   ] as const)("maps %s to %s", (value, action) => {
     expect(taskBoardActionForShortcut(key(value), target("button"))).toBe(action);
@@ -62,15 +63,19 @@ describe("taskBoardActionForShortcut", () => {
 
   it.each(["input", "textarea", "select"])("does not take text entry from %s", (tagName) => {
     expect(taskBoardActionForShortcut(key("c"), target(tagName))).toBeNull();
+    expect(taskBoardActionForShortcut(key("s"), target(tagName))).toBeNull();
   });
 
   it("does not take text entry from contenteditable or xterm input", () => {
     expect(taskBoardActionForShortcut(key("t"), target("div", { isContentEditable: true }))).toBeNull();
     expect(taskBoardActionForShortcut(key("t"), target("div", { matches: ".xterm-helper-textarea" }))).toBeNull();
+    expect(taskBoardActionForShortcut(key("s"), target("div", { isContentEditable: true }))).toBeNull();
+    expect(taskBoardActionForShortcut(key("s"), target("div", { matches: ".xterm-helper-textarea" }))).toBeNull();
   });
 
   it("ignores shortcuts while any dialog is open", () => {
     expect(taskBoardActionForShortcut(key("c"), target("button"), true)).toBeNull();
+    expect(taskBoardActionForShortcut(key("s"), target("button"), true)).toBeNull();
   });
 });
 

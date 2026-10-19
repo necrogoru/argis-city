@@ -1,5 +1,10 @@
 import type { Task, TaskStatus } from "./types";
 
+type TaskStatusShortcutEvent = Pick<
+  KeyboardEvent,
+  "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "repeat" | "isComposing" | "defaultPrevented"
+>;
+
 export const TASK_STATUS_ORDER: readonly TaskStatus[] = ["pending", "inProgress", "stopped", "canceled", "completed"];
 
 export const TASK_STATUS_LABELS: Readonly<Record<TaskStatus, string>> = {
@@ -24,6 +29,23 @@ export function previousTaskStatus(status: TaskStatus): TaskStatus | null {
 export function nextTaskStatus(status: TaskStatus): TaskStatus | null {
   const index = TASK_STATUS_ORDER.indexOf(status);
   return index >= 0 && index < TASK_STATUS_ORDER.length - 1 ? TASK_STATUS_ORDER[index + 1] : null;
+}
+
+export function taskStatusForShortcut(event: TaskStatusShortcutEvent): TaskStatus | null {
+  if (
+    event.defaultPrevented ||
+    event.isComposing ||
+    event.repeat ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.altKey ||
+    event.shiftKey ||
+    !/^[1-5]$/.test(event.key)
+  ) {
+    return null;
+  }
+
+  return TASK_STATUS_ORDER[Number(event.key) - 1] ?? null;
 }
 
 export function groupTasks(tasks: readonly Task[], projectId: number | null = null): TaskGroups {

@@ -2,7 +2,11 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { X } from "@lucide/vue";
 import type { Task, TerminalTab } from "../../domain/types";
-import { getTerminalTabForKey, shouldStartTerminalForKey } from "../../domain/terminalNavigation";
+import {
+  getTerminalTabForKey,
+  shouldCloseTerminalModalForKey,
+  shouldStartTerminalForKey,
+} from "../../domain/terminalNavigation";
 import { useTerminalRailStore } from "../../stores/terminalRail";
 import TerminalSessionPane from "./TerminalSessionPane.vue";
 import type { TerminalStatus } from "./useTerminalSession";
@@ -95,6 +99,8 @@ function close(): void {
 
 function handleCancel(event: Event): void {
   event.preventDefault();
+  const activeElement = document.activeElement instanceof Element ? document.activeElement : null;
+  if (activeElement?.closest(".xterm-helper-textarea")) return;
   close();
 }
 
@@ -117,15 +123,16 @@ function handleTabKeydown(event: KeyboardEvent): void {
 }
 
 function handleDialogKeydown(event: KeyboardEvent): void {
-  if (event.key === "Escape") {
+  const target = event.target instanceof Element ? event.target : null;
+  const isTerminalInput = Boolean(target?.closest(".xterm-helper-textarea"));
+
+  if (shouldCloseTerminalModalForKey(event, isTerminalInput)) {
     event.preventDefault();
     event.stopPropagation();
     close();
     return;
   }
 
-  const target = event.target instanceof Element ? event.target : null;
-  const isTerminalInput = Boolean(target?.closest(".xterm-helper-textarea"));
   const isOtherEditable = Boolean(
     target?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])"),
   );
@@ -169,6 +176,8 @@ watch(termStatus, (status) => terminalRail.publishTaskStatus(props.task.id, "ter
     ref="dialog"
     class="terminal-dialog"
     aria-labelledby="terminal-dialog-title"
+    aria-describedby="terminal-dialog-shortcuts"
+    aria-keyshortcuts="Control+Shift+W"
     @close="handleNativeClose"
     @cancel="handleCancel"
     @keydown.capture="handleDialogKeydown"
@@ -240,7 +249,7 @@ watch(termStatus, (status) => terminalRail.publishTaskStatus(props.task.id, "ter
 
     <footer class="terminal-footer">
       <span>Task workspace</span>
-      <span>Close terminal to return to the board</span>
+      <span id="terminal-dialog-shortcuts">Ctrl+Shift+W closes · Escape goes to terminal when focused</span>
     </footer>
   </dialog>
 </template>

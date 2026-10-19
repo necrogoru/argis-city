@@ -50,6 +50,12 @@ function handleKeydown(event: KeyboardEvent): void {
   emit("navigate", direction);
 }
 
+function handleFocusout(event: FocusEvent): void {
+  const card = event.currentTarget as HTMLElement;
+  if (event.relatedTarget instanceof Node && card.contains(event.relatedTarget)) return;
+  emit("blurTask");
+}
+
 function focus(): void {
   cardElement.value?.focus();
 }
@@ -65,10 +71,10 @@ defineExpose({ focus });
     :data-status="props.task.status"
     :aria-label="`Task #${props.task.id}: ${props.task.title}`"
     aria-describedby="task-board-navigation-hint"
-    aria-keyshortcuts="ArrowLeft ArrowDown ArrowUp ArrowRight h j k l Shift+G"
+    aria-keyshortcuts="ArrowLeft ArrowDown ArrowUp ArrowRight h j k l Shift+G s"
     tabindex="0"
-    @focus="emit('focusTask')"
-    @blur="emit('blurTask')"
+    @focusin="emit('focusTask')"
+    @focusout="handleFocusout"
     @keydown="handleKeydown"
   >
     <div class="task-card-heading">

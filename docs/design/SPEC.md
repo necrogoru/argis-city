@@ -158,18 +158,27 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   Agent resume flow without changing the app
   view and does not create a branch or worktree as a side effect. Search does
   not create Git resources.
+- Unmodified `s` on a focused, visible task opens a status picker. The picker
+  lists all statuses in the fixed task-status order, with `1` through `5`
+  selecting Pending, In progress, Stopped, Canceled, and Completed. Selecting a
+  status closes the picker and returns focus to the same task, including when it
+  moves to another column; canceling also restores focus to that task.
 - Suppress the single-letter actions and Vim task navigation while a dialog is
   open or focus is in an input, textarea, select, contenteditable element, or
   xterm input; also ignore modified, repeated, or composing key events, except
   for the intentional `Shift+G` motion. Search arrows are the explicit
   editable-field exception: ArrowDown/ArrowUp navigate matching results there,
-  while other typed characters (including `c`, `b`, and `t`) remain search
+  while other typed characters (including `c`, `b`, `s`, and `t`) remain search
   text.
 - Each task entry shows its generated ID, title, description, project name, and
   exact status. Its action row has four icon buttons in this order: Create
   branch/worktree, Open terminal, previous status, next status. Disable status
   movement at the ends of the fixed status order and explain unavailable Git
   or terminal actions without removing their place in the row.
+- The status picker is a compact native modal using the approved panel, border,
+  and radius tokens. Show five full-width status rows with `1`–`5` keycaps and
+  mark the task's current status; number keys and row buttons select a status,
+  and Escape cancels.
 - Manage projects uses a modal listing registered local paths and an add-path
   form with an explicit "Create the directory if it doesn’t exist" checkbox.
   New task and edit task use a modal form for task name and description; task
@@ -212,8 +221,10 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   ArrowLeft/ArrowRight/Home/End navigation. Unmodified `s` starts the selected
   Agent or shell pane when it is startable, including while xterm has focus;
   when running, `s` remains terminal input. Ignore modified, repeated, composing,
-  and form-control keystrokes. Escape closes the modal even from xterm, returns
-  focus to the opener, and leaves both PTYs alive for reattachment.
+  and form-control keystrokes. Escape is passed to xterm and does not close the
+  modal while terminal input has focus. `Ctrl+Shift+W` closes the modal from any
+  focus target; Escape still closes it when focus is outside terminal input.
+  Closing returns focus to the opener and leaves both PTYs alive for reattachment.
 
 ### Task-board presentation
 - The three task groups use open, evenly distributed lanes with consistent
@@ -236,7 +247,7 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   widths without horizontal overflow. Show ArrowUp/ArrowDown or `j`/`k` for
   within-lane movement; ArrowLeft/ArrowRight or `h`/`l` for movement between
   lanes; `gg` for the first visible task and `Shift+G` for the last; and `c`,
-  `b`, and `t` for task actions.
+  `b`, `t`, and `s` for task actions.
 - Shortcut behavior and availability: with Search tasks focused,
   ArrowDown/ArrowUp focus the first/last matching task. From a focused card,
   ArrowDown/ArrowUp or `j`/`k` move within its lane without crossing lanes;
@@ -245,8 +256,11 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   task. Unmodified `c` opens New task only when a project is registered; `b`
   creates a branch/worktree only for a focused visible task eligible for branch
   creation with no existing branch; `t` opens the focused visible task's shared
-  Agent-resume terminal flow only when its worktree exists. Keep the existing
-  input (including xterm), dialog, modifier, repeat, and composition guards.
+  Agent-resume terminal flow only when its worktree exists; `s` opens the status
+  picker for a focused visible task, where `1`–`5` select the status in the
+  fixed order. Selecting a status keeps focus on that task after a column move.
+  Keep the existing input (including xterm), dialog, modifier, repeat, and
+  composition guards.
 
 ## Progress readouts
 Progress is a real estimate only when it comes from a plan (`execution`) or

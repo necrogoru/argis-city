@@ -8,6 +8,30 @@ type TerminalStartShortcutEvent = Pick<
   "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "repeat" | "isComposing" | "defaultPrevented"
 >;
 
+type TerminalCloseShortcutEvent = Pick<
+  KeyboardEvent,
+  "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "repeat" | "isComposing" | "defaultPrevented"
+>;
+
+export function shouldCloseTerminalModalForKey(
+  event: TerminalCloseShortcutEvent,
+  terminalInputFocused: boolean,
+): boolean {
+  if (event.defaultPrevented || event.repeat || event.isComposing) return false;
+
+  if (event.key === "Escape") {
+    return !terminalInputFocused && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
+  }
+
+  return (
+    event.key.toLowerCase() === "w" &&
+    event.ctrlKey &&
+    event.shiftKey &&
+    !event.metaKey &&
+    !event.altKey
+  );
+}
+
 export function shouldStartTerminalForKey(event: TerminalStartShortcutEvent, canStart: boolean): boolean {
   return (
     canStart &&

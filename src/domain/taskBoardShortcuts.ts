@@ -2,7 +2,7 @@ import type { Task, TaskGitStatus } from "./types";
 import { isViewShortcutBlocked, type ShortcutTargetLike } from "./appViewShortcuts";
 import { taskFocusDirectionForKey, type TaskFocusDirection } from "./taskFocus";
 
-export type TaskBoardShortcutAction = "createTask" | "createBranch" | "openTerminal";
+export type TaskBoardShortcutAction = "createTask" | "createBranch" | "openTerminal" | "changeStatus";
 export type TaskBoardNavigationEvent = Pick<
   KeyboardEvent,
   "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "isComposing" | "defaultPrevented"
@@ -77,6 +77,8 @@ export function taskBoardActionForShortcut(
       return "createBranch";
     case "t":
       return "openTerminal";
+    case "s":
+      return "changeStatus";
     default:
       return null;
   }

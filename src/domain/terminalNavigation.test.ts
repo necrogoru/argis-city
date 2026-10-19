@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getTerminalTabForKey, shouldStartTerminalForKey } from "./terminalNavigation";
+import {
+  getTerminalTabForKey,
+  shouldCloseTerminalModalForKey,
+  shouldStartTerminalForKey,
+} from "./terminalNavigation";
 
 describe("getTerminalTabForKey", () => {
   it.each([
@@ -74,5 +78,50 @@ describe("shouldStartTerminalForKey", () => {
     ["already handled", { defaultPrevented: true }],
   ] as const)("ignores %s keystrokes", (_label, modifiers) => {
     expect(shouldStartTerminalForKey(event("s", modifiers), true)).toBe(false);
+  });
+});
+
+describe("shouldCloseTerminalModalForKey", () => {
+  const event = (key: string, modifiers: Partial<{
+    metaKey: boolean;
+    ctrlKey: boolean;
+    altKey: boolean;
+    shiftKey: boolean;
+    repeat: boolean;
+    isComposing: boolean;
+    defaultPrevented: boolean;
+  }> = {}) => ({
+    key,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    repeat: false,
+    isComposing: false,
+    defaultPrevented: false,
+    ...modifiers,
+  });
+
+  it("closes on Ctrl+Shift+W, including while the terminal has focus", () => {
+    expect(shouldCloseTerminalModalForKey(event("w", { ctrlKey: true, shiftKey: true }), true)).toBe(true);
+  });
+
+  it("does not consume Escape when terminal input is focused", () => {
+    expect(shouldCloseTerminalModalForKey(event("Escape"), true)).toBe(false);
+  });
+
+  it("keeps Escape as a close shortcut outside terminal input", () => {
+    expect(shouldCloseTerminalModalForKey(event("Escape"), false)).toBe(true);
+  });
+
+  it.each([
+    ["unmodified W", event("w")],
+    ["Ctrl+W", event("w", { ctrlKey: true })],
+    ["modified chord", event("w", { ctrlKey: true, shiftKey: true, altKey: true })],
+    ["repeated chord", event("w", { ctrlKey: true, shiftKey: true, repeat: true })],
+    ["composing chord", event("w", { ctrlKey: true, shiftKey: true, isComposing: true })],
+    ["handled chord", event("w", { ctrlKey: true, shiftKey: true, defaultPrevented: true })],
+  ] as const)("ignores %s", (_label, keyEvent) => {
+    expect(shouldCloseTerminalModalForKey(keyEvent, true)).toBe(false);
   });
 });

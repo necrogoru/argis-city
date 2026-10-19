@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import type { Task, TaskDeletionOutcome, TaskStatus } from "../../domain/types";
 import { groupTasks } from "../../domain/tasks";
 import {
@@ -24,6 +24,7 @@ import Kbd from "../common/Kbd.vue";
 import ProjectManagerDialog from "./ProjectManagerDialog.vue";
 import TaskCard from "./TaskCard.vue";
 import TaskEditorDialog from "./TaskEditorDialog.vue";
+import TaskStatusDialog from "./TaskStatusDialog.vue";
 import { useTerminalNavigationStore } from "../../stores/terminalNavigation";
 
 const store = useTaskStore();
@@ -60,6 +61,8 @@ const projectPaths = computed(() => new Map(store.projects.map((project) => [pro
 const projectsOpen = ref(false);
 const taskEditorOpen = ref(false);
 const editingTask = shallowRef<Task | null>(null);
+const statusDialogOpen = ref(false);
+const statusTask = shallowRef<Task | null>(null);
 const deletionNotice = ref<string | null>(null);
 const statusFeedbackVersions = ref<Record<number, number>>({});
 const statusFeedbackTimeouts = new Map<number, ReturnType<typeof setTimeout>>();
@@ -149,6 +152,13 @@ function handleTaskBoardShortcut(event: KeyboardEvent): void {
   const task = focusedVisibleTask(focusedTaskId.value, visibleTaskIds.value, store.tasks);
   if (!task) return;
 
+  if (action === "changeStatus") {
+    event.preventDefault();
+    statusTask.value = task;
+    statusDialogOpen.value = true;
+    return;
+  }
+
   if (action === "createBranch") {
     if (!canCreateTaskBranch(task, store.gitStatuses[task.id] ?? null)) return;
     event.preventDefault();
@@ -208,6 +218,15 @@ async function updateStatus(task: Task, status: TaskStatus): Promise<void> {
     statusFeedbackVersions.value = nextVersions;
     statusFeedbackTimeouts.delete(task.id);
   }, 480));
+
+  await nextTick();
+  focusTaskCard(task.id);
+}
+
+async function updateSelectedTaskStatus(status: TaskStatus): Promise<void> {
+  const task = statusTask.value;
+  statusDialogOpen.value = false;
+  if (task) await updateStatus(task, status);
 }
 
 function createBranch(task: Task): void {
@@ -291,6 +310,7 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
         <span class="task-shortcut-label">Task actions when available</span>
         <span class="task-shortcut-keys">
           <Kbd>c</Kbd><span>new</span><Kbd>b</Kbd><span>branch</span><Kbd>t</Kbd><span>terminal</span>
+          <Kbd>s</Kbd><span>status</span>
         </span>
       </span>
     </div>
@@ -336,7 +356,8 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
     <span id="task-board-navigation-hint" class="visually-hidden">
       With Search tasks focused, use ArrowDown or ArrowUp to focus matching tasks. On a task card, use ArrowDown or j and
       ArrowUp or k to move within its status pane, ArrowLeft or h and ArrowRight or l to move between panes, press g
-      twice to focus the first visible task, or press Shift+G to focus the last.
+      twice to focus the first visible task, press Shift+G to focus the last, or press s to choose a status with keys 1
+      through 5.
     </span>
 
     <ProjectManagerDialog v-model:open="projectsOpen" :projects="store.projects" />
@@ -345,6 +366,11 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
       :projects="store.projects"
       :task="editingTask"
       @deleted="handleTaskDeleted"
+    />
+    <TaskStatusDialog
+      v-model:open="statusDialogOpen"
+      :task="statusTask"
+      @select="updateSelectedTaskStatus"
     />
   </section>
 </template>
