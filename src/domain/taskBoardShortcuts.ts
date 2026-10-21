@@ -20,7 +20,7 @@ export interface TaskBoardJumpResolution {
 
 export type TaskBoardShortcutEvent = Pick<
   KeyboardEvent,
-  "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "repeat" | "isComposing"
+  "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "repeat" | "isComposing" | "defaultPrevented"
 >;
 
 const DOUBLE_G_WINDOW_MS = 500;
@@ -67,7 +67,7 @@ export function taskBoardActionForShortcut(
   target: ShortcutTargetLike | null,
   hasOpenDialog = false,
 ): TaskBoardShortcutAction | null {
-  if (event.repeat || event.isComposing || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return null;
+  if (event.defaultPrevented || event.repeat || event.isComposing || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return null;
   if (isViewShortcutBlocked(target, hasOpenDialog)) return null;
 
   switch (event.key.toLowerCase()) {

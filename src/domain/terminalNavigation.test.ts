@@ -102,8 +102,9 @@ describe("shouldCloseTerminalModalForKey", () => {
     ...modifiers,
   });
 
-  it("closes on Ctrl+Shift+W, including while the terminal has focus", () => {
-    expect(shouldCloseTerminalModalForKey(event("w", { ctrlKey: true, shiftKey: true }), true)).toBe(true);
+  it("closes on Ctrl+Esc, including while the terminal has focus", () => {
+    expect(shouldCloseTerminalModalForKey(event("Escape", { ctrlKey: true }), true)).toBe(true);
+    expect(shouldCloseTerminalModalForKey(event("Escape", { ctrlKey: true }), false)).toBe(true);
   });
 
   it("does not consume Escape when terminal input is focused", () => {
@@ -114,13 +115,21 @@ describe("shouldCloseTerminalModalForKey", () => {
     expect(shouldCloseTerminalModalForKey(event("Escape"), false)).toBe(true);
   });
 
+  it("does not close on the legacy Ctrl+Shift+W chord", () => {
+    expect(shouldCloseTerminalModalForKey(event("w", { ctrlKey: true, shiftKey: true }), true)).toBe(false);
+  });
+
   it.each([
     ["unmodified W", event("w")],
     ["Ctrl+W", event("w", { ctrlKey: true })],
-    ["modified chord", event("w", { ctrlKey: true, shiftKey: true, altKey: true })],
-    ["repeated chord", event("w", { ctrlKey: true, shiftKey: true, repeat: true })],
-    ["composing chord", event("w", { ctrlKey: true, shiftKey: true, isComposing: true })],
-    ["handled chord", event("w", { ctrlKey: true, shiftKey: true, defaultPrevented: true })],
+    ["Shift+Escape", event("Escape", { shiftKey: true })],
+    ["Alt+Escape", event("Escape", { altKey: true })],
+    ["Meta+Escape", event("Escape", { metaKey: true })],
+    ["Ctrl+Shift+Esc", event("Escape", { ctrlKey: true, shiftKey: true })],
+    ["Ctrl+Alt+Esc", event("Escape", { ctrlKey: true, altKey: true })],
+    ["repeated Ctrl+Esc", event("Escape", { ctrlKey: true, repeat: true })],
+    ["composing Ctrl+Esc", event("Escape", { ctrlKey: true, isComposing: true })],
+    ["handled Ctrl+Esc", event("Escape", { ctrlKey: true, defaultPrevented: true })],
   ] as const)("ignores %s", (_label, keyEvent) => {
     expect(shouldCloseTerminalModalForKey(keyEvent, true)).toBe(false);
   });

@@ -50,6 +50,10 @@ describe("taskBoardActionForShortcut", () => {
     expect(taskBoardActionForShortcut(key("x"), target("button"))).toBeNull();
   });
 
+  it("does not run an action when another shortcut handler already consumed the key", () => {
+    expect(taskBoardActionForShortcut(key("t", { defaultPrevented: true }), target("button"))).toBeNull();
+  });
+
   it.each([
     ["Meta", { metaKey: true }],
     ["Control", { ctrlKey: true }],

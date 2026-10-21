@@ -20,16 +20,12 @@ export function shouldCloseTerminalModalForKey(
   if (event.defaultPrevented || event.repeat || event.isComposing) return false;
 
   if (event.key === "Escape") {
-    return !terminalInputFocused && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
+    if (event.metaKey || event.altKey || event.shiftKey) return false;
+    if (event.ctrlKey) return true;
+    return !terminalInputFocused;
   }
 
-  return (
-    event.key.toLowerCase() === "w" &&
-    event.ctrlKey &&
-    event.shiftKey &&
-    !event.metaKey &&
-    !event.altKey
-  );
+  return false;
 }
 
 export function shouldStartTerminalForKey(event: TerminalStartShortcutEvent, canStart: boolean): boolean {

@@ -35,8 +35,10 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
 - **Command palette** (click the Dashboard search trigger or press ⌘K/Ctrl+K
   from either primary view; the shortcut toggles it closed and Esc closes it):
   640px glass modal, 112px from the top over a dimmed, blurred backdrop. 60px
-  search row, then an "ACTIONS" section containing only Open Tasks and Show
-  Dashboard, in that order, while the query is empty. After typing, show one
+  search row, then an "ACTIONS" section containing Open Tasks, Show Dashboard,
+  and Create task, in that order, while the query is empty. Create task remains
+  visible but disabled while no project is registered or project data is still
+  loading. After typing, show one
   globally ranked "RESULTS" section mixing agents, tasks, and actions. Search is
   case-insensitive and whitespace-tokenized; each token may match as an ordered
   subsequence of a searchable field, with stronger/closer matches first and
@@ -44,11 +46,20 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   `provider · model · ~/dir`, and status pill. Task rows match task ID, title,
   description, and project path, and show `#id · project · status` plus an Open
   terminal action when a worktree exists; without a worktree, show
-  "No worktree · Go to Tasks". Actions include Show Dashboard and Open Tasks,
-  selected-agent actions (open folder, copy path, close details), district and
-  city navigation, camera moves, and refresh. No-match copy covers agents,
-  tasks, and actions. ↑↓ moves through the results (wraps), ↵ runs the selected
-  result, hover moves the cursor; matches are teal. Footer with key hints.
+  "No worktree · Go to Tasks". Actions include Open Tasks, Show Dashboard, and
+  Create task, selected-agent actions (open folder, copy path, close details),
+  district and city navigation, camera moves, and refresh. No-match copy covers
+  agents, tasks, and actions. ↑↓ moves through the results (wraps), ↵ runs the
+  selected result, hover moves the cursor; matches are teal. Footer with key
+  hints.
+- **View shortcuts**: from either primary view, unmodified `g` then `d` within
+  500 ms shows Dashboard and `g` then `t` shows Tasks. The first `g` is not
+  consumed, so the task board's `gg` motion still works. Ignore modified,
+  repeated, composing, or already-handled key events, and do not start or
+  complete a chord while any modal dialog (including the terminal modal or
+  command palette) is open or focus is in an input, textarea, select,
+  contenteditable element, or xterm input. A completed chord consumes only its
+  second key, so `g t` on Tasks does not also open the focused task's terminal.
 - **Hero** (x 40, y 124, w 300): "Agent\nInfrastructure" 36/400, lh 1.08,
   tracking −1; 14px text-2 description; "DISTRICTS" list: rows with 10px
   rounded swatch, provider name, "N houses" right (text-3); selected row has
@@ -148,7 +159,10 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
 - In the task board, `gg` (two consecutive unmodified `g` presses within 500 ms)
   focuses the first visible task, and `Shift+G` focuses the last visible task in
   the current filtered board order. A pending `g` is cleared by unrelated or
-  ineligible key events.
+  ineligible key events. The app-level `g d` and `g t` chords take precedence:
+  when the second key completes a view chord, the board does not also run its
+  single-key action, and `gg`/`Shift+G` remain unchanged because the prefix `g`
+  itself is not consumed.
 - Unmodified `c` opens the existing New task flow. Unmodified `b` and `t` on a
   focused, visible task invoke its existing branch/worktree and terminal
   actions, respectively. Keep their existing eligibility: `c` requires at
@@ -222,8 +236,9 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   Agent or shell pane when it is startable, including while xterm has focus;
   when running, `s` remains terminal input. Ignore modified, repeated, composing,
   and form-control keystrokes. Escape is passed to xterm and does not close the
-  modal while terminal input has focus. `Ctrl+Shift+W` closes the modal from any
-  focus target; Escape still closes it when focus is outside terminal input.
+  modal while terminal input has focus. `Ctrl+Esc` closes the modal from any
+  focus target, including xterm input; plain Escape still closes it when focus
+  is outside terminal input. `Ctrl+Shift+W` no longer closes the modal.
   Closing returns focus to the opener and leaves both PTYs alive for reattachment.
 
 ### Task-board presentation

@@ -20,7 +20,7 @@ export function buildPaletteResults(
   const tokens = tokenize(query);
   if (tokens.length === 0) {
     const actionById = new Map(actions.map((action) => [action.id, action]));
-    return ["view:tasks", "view:city"].flatMap((id) => {
+    return ["view:tasks", "view:city", "create-task"].flatMap((id) => {
       const action = actionById.get(id);
       return action ? [{ key: `action:${action.id}`, kind: "action" as const, action }] : [];
     });

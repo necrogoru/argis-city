@@ -16,6 +16,7 @@ const action = (id: string, label: string): CommandAction => ({
 const actions = [
   action("view:city", "Show Dashboard"),
   action("view:tasks", "Open Tasks"),
+  action("create-task", "Create task"),
   action("zoom-in", "Zoom in"),
   action("refresh", "Refresh agents now"),
 ];
@@ -35,10 +36,29 @@ const tasks: Task[] = [
 ];
 
 describe("buildPaletteResults", () => {
-  it("shows only Open Tasks then Show Dashboard for an empty query", () => {
+  it("shows Open Tasks, Show Dashboard, and Create task for an empty query", () => {
     const results = buildPaletteResults(sessions, tasks, projects, actions, "  ");
 
-    expect(results.map((result) => result.key)).toEqual(["action:view:tasks", "action:view:city"]);
+    expect(results.map((result) => result.key)).toEqual([
+      "action:view:tasks",
+      "action:view:city",
+      "action:create-task",
+    ]);
+  });
+
+  it("keeps a disabled Create task in the empty-query defaults", () => {
+    const disabledCreateTask = { ...action("create-task", "Create task"), disabled: true };
+    const actionsWithoutCreate = actions.filter((item) => item.id !== "create-task");
+    const results = buildPaletteResults(sessions, tasks, projects, [...actionsWithoutCreate, disabledCreateTask], "");
+
+    expect(results.map((result) => result.key)).toEqual([
+      "action:view:tasks",
+      "action:view:city",
+      "action:create-task",
+    ]);
+    const createTask = results.find((result) => result.key === "action:create-task");
+    expect(createTask?.kind).toBe("action");
+    if (createTask?.kind === "action") expect(createTask.action.disabled).toBe(true);
   });
 
   it("ranks actions, agents, and tasks together by match quality", () => {

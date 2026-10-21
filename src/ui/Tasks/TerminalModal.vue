@@ -177,7 +177,7 @@ watch(termStatus, (status) => terminalRail.publishTaskStatus(props.task.id, "ter
     class="terminal-dialog"
     aria-labelledby="terminal-dialog-title"
     aria-describedby="terminal-dialog-shortcuts"
-    aria-keyshortcuts="Control+Shift+W"
+    aria-keyshortcuts="Escape Control+Escape"
     @close="handleNativeClose"
     @cancel="handleCancel"
     @keydown.capture="handleDialogKeydown"
@@ -249,7 +249,7 @@ watch(termStatus, (status) => terminalRail.publishTaskStatus(props.task.id, "ter
 
     <footer class="terminal-footer">
       <span>Task workspace</span>
-      <span id="terminal-dialog-shortcuts">Ctrl+Shift+W closes · Escape goes to terminal when focused</span>
+      <span id="terminal-dialog-shortcuts">Ctrl+Esc closes · Escape goes to terminal when focused</span>
     </footer>
   </dialog>
 </template>
