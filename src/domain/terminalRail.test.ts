@@ -3,6 +3,7 @@ import type { Task, TaskAgentResume, TerminalInventoryEntry } from "./types";
 import {
   aggregateTerminalRailEntries,
   filterInProgressTerminalRailEntries,
+  resolveTerminalRailFocusChord,
   terminalRailNavigationDirection,
   terminalRailEntryLabel,
   terminalRailStateLabel,
@@ -218,5 +219,149 @@ describe("terminalRailNavigationDirection", () => {
     expect(terminalRailNavigationDirection(keyEvent("j", { isComposing: true }), true)).toBeNull();
     expect(terminalRailNavigationDirection(keyEvent("k", { defaultPrevented: true }), true)).toBeNull();
     expect(terminalRailNavigationDirection(keyEvent("j", { repeat: true }), true)).toBeNull();
+  });
+});
+
+describe("resolveTerminalRailFocusChord", () => {
+  const keyEvent = (key: string, overrides: Partial<{
+    metaKey: boolean;
+    ctrlKey: boolean;
+    altKey: boolean;
+    shiftKey: boolean;
+    repeat: boolean;
+    isComposing: boolean;
+    defaultPrevented: boolean;
+  }> = {}) => ({
+    key,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    repeat: false,
+    isComposing: false,
+    defaultPrevented: false,
+    ...overrides,
+  });
+
+  const target = (
+    tagName: string,
+    options: { isContentEditable?: boolean; matches?: string } = {},
+  ) => ({
+    tagName,
+    isContentEditable: options.isContentEditable ?? false,
+    closest: (selector: string) => (selector === options.matches ? {} : null),
+  });
+
+  it("resolves g then r within the shared 500 ms window", () => {
+    const first = resolveTerminalRailFocusChord(keyEvent("g"), target("body"), false, null, 100);
+
+    expect(first).toEqual({ focusFirstLauncher: false, pendingGAtMs: 100 });
+    expect(resolveTerminalRailFocusChord(keyEvent("r"), target("body"), false, first.pendingGAtMs, 600)).toEqual({
+      focusFirstLauncher: true,
+      pendingGAtMs: null,
+    });
+  });
+
+  it("does not focus the rail for r alone or an expired g", () => {
+    expect(resolveTerminalRailFocusChord(keyEvent("r"), target("body"), false, null, 100)).toEqual({
+      focusFirstLauncher: false,
+      pendingGAtMs: null,
+    });
+    expect(resolveTerminalRailFocusChord(keyEvent("r"), target("body"), false, 100, 601)).toEqual({
+      focusFirstLauncher: false,
+      pendingGAtMs: null,
+    });
+  });
+
+  it("clears a pending g when another key interrupts the sequence", () => {
+    expect(resolveTerminalRailFocusChord(keyEvent("j"), target("body"), false, 100, 150)).toEqual({
+      focusFirstLauncher: false,
+      pendingGAtMs: null,
+    });
+  });
+
+  it("keeps view chords and the rail chord apart", () => {
+    const pending = resolveTerminalRailFocusChord(keyEvent("g"), target("body"), false, null, 100).pendingGAtMs;
+
+    expect(resolveTerminalRailFocusChord(keyEvent("d"), target("body"), false, pending, 150)).toEqual({
+      focusFirstLauncher: false,
+      pendingGAtMs: null,
+    });
+    expect(resolveTerminalRailFocusChord(keyEvent("t"), target("body"), false, pending, 150)).toEqual({
+      focusFirstLauncher: false,
+      pendingGAtMs: null,
+    });
+  });
+
+  it.each([
+    ["Meta", { metaKey: true }],
+    ["Control", { ctrlKey: true }],
+    ["Alt", { altKey: true }],
+    ["Shift", { shiftKey: true }],
+    ["repeated", { repeat: true }],
+    ["composing", { isComposing: true }],
+    ["already handled", { defaultPrevented: true }],
+  ] as const)("does not start the chord with %s", (_label, modifiers) => {
+    expect(resolveTerminalRailFocusChord(keyEvent("g", modifiers), target("body"), false, null, 100)).toEqual({
+      focusFirstLauncher: false,
+      pendingGAtMs: null,
+    });
+  });
+
+  it.each([
+    ["Meta", { metaKey: true }],
+    ["Control", { ctrlKey: true }],
+    ["Alt", { altKey: true }],
+    ["Shift", { shiftKey: true }],
+    ["repeated", { repeat: true }],
+    ["composing", { isComposing: true }],
+    ["already handled", { defaultPrevented: true }],
+  ] as const)("does not complete the chord with %s", (_label, modifiers) => {
+    expect(resolveTerminalRailFocusChord(keyEvent("r", modifiers), target("body"), false, 100, 150)).toEqual({
+      focusFirstLauncher: false,
+      pendingGAtMs: null,
+    });
+  });
+
+  it.each(["input", "textarea", "select"])("does not take the chord from %s", (tagName) => {
+    expect(resolveTerminalRailFocusChord(keyEvent("g"), target(tagName), false, null, 100)).toEqual({
+      focusFirstLauncher: false,
+      pendingGAtMs: null,
+    });
+    expect(resolveTerminalRailFocusChord(keyEvent("r"), target(tagName), false, 100, 150)).toEqual({
+      focusFirstLauncher: false,
+      pendingGAtMs: null,
+    });
+  });
+
+  it("does not take the chord from contenteditable or terminal input", () => {
+    expect(
+      resolveTerminalRailFocusChord(keyEvent("g"), target("div", { isContentEditable: true }), false, null, 100),
+    ).toEqual({ focusFirstLauncher: false, pendingGAtMs: null });
+    expect(
+      resolveTerminalRailFocusChord(keyEvent("r"), target("div", { matches: ".xterm-helper-textarea" }), false, 100, 150),
+    ).toEqual({ focusFirstLauncher: false, pendingGAtMs: null });
+  });
+
+  it("clears a pending sequence while a dialog is open", () => {
+    expect(resolveTerminalRailFocusChord(keyEvent("g"), target("body"), true, null, 100)).toEqual({
+      focusFirstLauncher: false,
+      pendingGAtMs: null,
+    });
+    expect(resolveTerminalRailFocusChord(keyEvent("r"), target("body"), true, 100, 150)).toEqual({
+      focusFirstLauncher: false,
+      pendingGAtMs: null,
+    });
+  });
+
+  it("allows the chord from non-editable page controls", () => {
+    expect(resolveTerminalRailFocusChord(keyEvent("g"), target("button"), false, null, 100)).toEqual({
+      focusFirstLauncher: false,
+      pendingGAtMs: 100,
+    });
+    expect(resolveTerminalRailFocusChord(keyEvent("r"), target("button"), false, 100, 150)).toEqual({
+      focusFirstLauncher: true,
+      pendingGAtMs: null,
+    });
   });
 });

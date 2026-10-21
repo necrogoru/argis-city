@@ -28,8 +28,27 @@ Each Dashboard terminal launcher SHALL show the first 10 characters of the task 
 - **WHEN** a user activates a launcher
 - **THEN** Argis opens the corresponding task’s terminal modal with the Agent tab selected
 
+### Requirement: Expand only the active launcher
+A launcher SHALL expand only while it is the active launcher (pointer-hovered or keyboard-focused), and expanding it SHALL NOT move, resize, or expand any other launcher on the rail.
+
+#### Scenario: Expand a launcher without moving its neighbours
+- **WHEN** the pointer hovers a launcher or keyboard focus moves onto it
+- **THEN** only that launcher expands leftwards and every other launcher keeps its compact size and position
+
+#### Scenario: One active launcher at a time
+- **WHEN** hover and keyboard focus would otherwise land on different launchers
+- **THEN** only the tracked active launcher is expanded — the hovered one while the pointer is inside the rail, otherwise the focused one — never two at once
+
 ### Requirement: Navigate Dashboard rail tasks with the keyboard
-When focus is within the Dashboard task rail, Argis SHALL move focus through the visible launchers in display order with ArrowDown or `j` for the next task and ArrowUp or `k` for the previous task, wrapping at either end. Enter SHALL activate the focused launcher using the existing terminal-navigation behavior without changing the active view or starting a terminal process by itself.
+From Dashboard, an unmodified `g` then `r` within 500 ms SHALL move keyboard focus to the first visible launcher without changing the active view or opening a terminal. When focus is within the Dashboard task rail, Argis SHALL move focus through the visible launchers in display order with ArrowDown or `j` for the next task and ArrowUp or `k` for the previous task, wrapping at either end. Enter SHALL activate the focused launcher using the existing terminal-navigation behavior without changing the active view or starting a terminal process by itself.
+
+#### Scenario: Jump into the rail from Dashboard
+- **WHEN** a user presses `g` then `r` within 500 ms on Dashboard with no modal dialog open and focus outside editable controls
+- **THEN** keyboard focus moves to the first visible In progress launcher and the active view stays Dashboard
+
+#### Scenario: Ignore the rail chord elsewhere or while typing
+- **WHEN** the user presses `g` then `r` with a modal dialog open, in an editable control, or in terminal input
+- **THEN** Argis neither starts the chord nor moves focus into the rail
 
 #### Scenario: Move focus through visible tasks
 - **WHEN** a user presses ArrowDown/`j` or ArrowUp/`k` while a rail launcher is focused

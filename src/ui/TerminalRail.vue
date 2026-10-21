@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, onUnmounted, ref, useTemplateRef, watch } from "vue";
+import { onKeyStroke } from "@vueuse/core";
 import { storeToRefs } from "pinia";
 import { nextVisibleTaskId } from "../domain/taskFocus";
 import {
   filterInProgressTerminalRailEntries,
+  resolveTerminalRailFocusChord,
   terminalRailNavigationDirection,
   terminalRailEntryLabel,
   terminalRailTitlePreview,
@@ -18,7 +20,12 @@ const taskStore = useTaskStore();
 const terminalNavigation = useTerminalNavigationStore();
 const terminalRail = useTerminalRailStore();
 const { entries } = storeToRefs(terminalRail);
-const expandedTaskId = ref<number | null>(null);
+const hoveredTaskId = ref<number | null>(null);
+const focusedTaskId = ref<number | null>(null);
+// One active launcher: the hovered one takes precedence, otherwise the focused one.
+const expandedTaskId = computed(() => hoveredTaskId.value ?? focusedTaskId.value);
+const railElement = useTemplateRef<HTMLElement>("rail");
+let pendingGAtMs: number | null = null;
 let intervalId: number | null = null;
 
 const visibleEntries = computed(() => filterInProgressTerminalRailEntries(entries.value, taskStore.tasks));
@@ -38,13 +45,30 @@ function openAgentTab(taskId: number): void {
   terminalNavigation.openTaskTerminal(taskId);
 }
 
-function setExpanded(taskId: number | null): void {
-  expandedTaskId.value = taskId;
+function setHovered(taskId: number | null): void {
+  hoveredTaskId.value = taskId;
 }
 
-function clearExpanded(taskId: number): void {
-  if (expandedTaskId.value === taskId) expandedTaskId.value = null;
+function setFocused(taskId: number | null): void {
+  focusedTaskId.value = taskId;
 }
+
+// From Dashboard, `g r` moves focus into the rail without changing the view.
+onKeyStroke((event) => {
+  if (!props.dashboardVisible) return;
+
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  const hasOpenDialog = document.querySelector("dialog[open]") !== null;
+  const resolution = resolveTerminalRailFocusChord(event, target, hasOpenDialog, pendingGAtMs, Date.now());
+  pendingGAtMs = resolution.pendingGAtMs;
+  if (!resolution.focusFirstLauncher) return;
+
+  const firstLauncher = railElement.value?.querySelector<HTMLButtonElement>(".rail-button");
+  if (!firstLauncher) return;
+
+  event.preventDefault();
+  firstLauncher.focus();
+});
 
 function handleRailKeydown(event: KeyboardEvent): void {
   const rail = event.currentTarget;
@@ -105,7 +129,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <nav v-if="visibleEntries.length > 0" class="rail" aria-label="In progress task terminals" @keydown="handleRailKeydown">
+  <nav v-if="visibleEntries.length > 0" ref="rail" class="rail" aria-label="In progress task terminals" @keydown="handleRailKeydown">
     <ol class="rail-list">
       <li v-for="entry in visibleEntries" :key="entry.taskId">
         <button
@@ -116,10 +140,10 @@ onUnmounted(() => {
           :style="{ '--rail-tint': railTint(entry.state) }"
           :aria-label="`Task ${entry.index}: ${entry.title}. In progress. Terminal: ${terminalRailEntryLabel(entry)}. Press Enter to open; use arrow keys or j/k to move.`"
           @click="openAgentTab(entry.taskId)"
-          @pointerenter="setExpanded(entry.taskId)"
-          @pointerleave="clearExpanded(entry.taskId)"
-          @focus="setExpanded(entry.taskId)"
-          @blur="clearExpanded(entry.taskId)"
+          @pointerenter="setHovered(entry.taskId)"
+          @pointerleave="setHovered(null)"
+          @focus="setFocused(entry.taskId)"
+          @blur="setFocused(null)"
         >
           <span class="rail-index" aria-hidden="true">{{ entry.index }}</span>
           <span class="rail-dot" aria-hidden="true" />
@@ -139,7 +163,10 @@ onUnmounted(() => {
   position: absolute;
   top: var(--content-top);
   right: calc(var(--gutter) + var(--panel-w) + 16px);
-  pointer-events: auto;
+  /* Fixed footprint of the widest launcher: expanding one never resizes the rail. */
+  width: 220px;
+  /* Only launchers take pointer input; the rail's box never steals canvas clicks. */
+  pointer-events: none;
 }
 
 .rail-list {
@@ -148,6 +175,7 @@ onUnmounted(() => {
   list-style: none;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 8px;
 }
 
@@ -169,22 +197,20 @@ onUnmounted(() => {
   backdrop-filter: blur(var(--blur));
   overflow: hidden;
   color: var(--text);
+  pointer-events: auto;
   transition:
     width 180ms var(--ease-out),
     background-color 140ms var(--ease-out),
     border-color 140ms var(--ease-out);
 }
 
-.rail-button:hover,
-.rail-button:focus-visible,
+/* `data-expanded` is the single active launcher; CSS hover/focus must not add a second one. */
 .rail-button[data-expanded="true"] {
   width: 220px;
   background: color-mix(in srgb, var(--rail-tint) 8%, var(--surface));
   border-color: color-mix(in srgb, var(--rail-tint) 24%, var(--border-strong));
 }
 
-.rail-button:hover .rail-preview,
-.rail-button:focus-visible .rail-preview,
 .rail-button[data-expanded="true"] .rail-preview {
   display: none;
 }
@@ -229,8 +255,6 @@ onUnmounted(() => {
     transform 140ms var(--ease-out);
 }
 
-.rail-button:hover .rail-details,
-.rail-button:focus-visible .rail-details,
 .rail-button[data-expanded="true"] .rail-details {
   opacity: 1;
   transform: none;

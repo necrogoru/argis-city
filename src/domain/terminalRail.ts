@@ -1,5 +1,6 @@
 import type { ProviderId, Task, TaskAgentResume, TerminalInventoryEntry, TerminalInventoryState, TerminalTab } from "./types";
 import type { TerminalStatus } from "../ui/Tasks/useTerminalSession";
+import { APP_VIEW_CHORD_WINDOW_MS, isViewShortcutBlocked, type ShortcutTargetLike } from "./appViewShortcuts";
 import { taskFocusDirectionForKey } from "./taskFocus";
 import { PROVIDERS } from "./providers";
 
@@ -116,6 +117,50 @@ export function terminalRailNavigationDirection(
 
   const direction = taskFocusDirectionForKey(event);
   return direction === "down" || direction === "up" ? direction : null;
+}
+
+export interface TerminalRailFocusResolution {
+  focusFirstLauncher: boolean;
+  pendingGAtMs: number | null;
+}
+
+/**
+ * Resolves the Dashboard `g r` chord that moves focus from the city into the
+ * rail. Uses the same window and guards as the app view chords so it never
+ * fights `g d` / `g t`, dialogs, text entry, or terminal input.
+ */
+export function resolveTerminalRailFocusChord(
+  event: TerminalRailKeyEvent,
+  target: ShortcutTargetLike | null,
+  hasOpenDialog: boolean,
+  pendingGAtMs: number | null,
+  nowMs: number,
+): TerminalRailFocusResolution {
+  const clearSequence = { focusFirstLauncher: false, pendingGAtMs: null };
+
+  if (
+    event.defaultPrevented ||
+    event.repeat ||
+    event.isComposing ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.altKey ||
+    event.shiftKey ||
+    isViewShortcutBlocked(target, hasOpenDialog)
+  ) {
+    return clearSequence;
+  }
+
+  if (event.key === "g") return { focusFirstLauncher: false, pendingGAtMs: nowMs };
+  if (event.key !== "r") return clearSequence;
+
+  const isChord =
+    pendingGAtMs !== null &&
+    nowMs >= pendingGAtMs &&
+    nowMs - pendingGAtMs <= APP_VIEW_CHORD_WINDOW_MS;
+  if (!isChord) return clearSequence;
+
+  return { focusFirstLauncher: true, pendingGAtMs: null };
 }
 
 export function terminalRailStateLabel(state: TerminalRailState): string {

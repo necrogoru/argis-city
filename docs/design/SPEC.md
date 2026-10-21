@@ -91,7 +91,12 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   launcher is focused, ArrowDown/`j` and ArrowUp/`k` move through visible tasks
   in display order and wrap at either end. Enter opens that task's terminal
   modal with Agent selected without changing the active view or starting a
-  process by itself. Handle these keys only within the focused rail so text
+  process by itself. From Dashboard, unmodified `g` then `r` within 500 ms moves
+  focus to the first visible launcher and leaves the view unchanged. Expand only
+  the active launcher: launchers are right-pinned inside a fixed-width rail, so
+  the active one grows leftwards over the city while the others keep their
+  position and size, and hover/focus never expands a second launcher beside the
+  tracked active one. Handle these keys only within the focused rail so text
   entry and terminal input keep their existing behavior. Aggregate the Agent
   and `term` tabs in this order: Running when either tab runs; Pending when a tab
   is starting and neither runs; Unavailable when startup failed and neither tab
