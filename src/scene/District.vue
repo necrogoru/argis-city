@@ -7,7 +7,12 @@ import ConnectionLines from "./ConnectionLines.vue";
 import House from "./house/House.vue";
 import Tower from "./Tower.vue";
 
-const props = defineProps<{ district: DistrictModel; highlighted: boolean; selectedId: string | null }>();
+const props = defineProps<{
+  district: DistrictModel;
+  highlighted: boolean;
+  selectedId: string | null;
+  keyboardCursorId: string | null;
+}>();
 const emit = defineEmits<{ selectHouse: [id: string]; focus: [meta: ProviderMeta] }>();
 // Template refs to three.js objects are plain shallowRefs: in dev builds useTemplateRef
 // returns a readonly view that silently drops every mutation to a three.js object.
@@ -43,6 +48,7 @@ const lines = computed(() => props.district.houses.map((h) => ({ x: h.x, z: h.z,
       :x="house.x"
       :z="house.z"
       :selected="house.session.id === selectedId"
+      :keyboard-focused="house.session.id === keyboardCursorId"
       :occluders="occluders"
       @select="emit('selectHouse', $event)"
     />

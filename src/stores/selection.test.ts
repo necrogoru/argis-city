@@ -5,6 +5,7 @@ import type { Snapshot } from "../domain/types";
 import { session, snapshot } from "../domain/testFixtures";
 import type { AgentSource } from "../services/agentSource";
 import { agentSourceKey } from "../composables/useAgentSource";
+import { useAppViewStore } from "./appView";
 import { useSelectionStore } from "./selection";
 
 function setup() {
@@ -61,11 +62,12 @@ function setup() {
   const pinia = createPinia();
   app.use(pinia).provide(agentSourceKey, source);
   setActivePinia(pinia);
+  const appView = app.runWithContext(() => useAppViewStore());
   const store = app.runWithContext(() => useSelectionStore());
   let tick = 0;
   /** Push a snapshot with a strictly newer generatedAt each time. */
   const show = (...ids: string[]) => push({ ...snapshot(ids.map((id) => session({ id }))), generatedAt: (tick += 1) });
-  return { store, show };
+  return { appView, store, show };
 }
 
 describe("useSelectionStore", () => {
@@ -75,6 +77,49 @@ describe("useSelectionStore", () => {
     store.selectSession("claude:b");
     expect(store.selection.sessionId).toBe("claude:b");
     expect(store.selectedSession?.houseNumber).toBe(2);
+  });
+
+  it("keeps the temporary house cursor separate and clears it on commit", () => {
+    const { store, show } = setup();
+    show("claude:a", "claude:b");
+    store.setHouseCursor("claude:b");
+    expect(store.houseCursorId).toBe("claude:b");
+    expect(store.selection.sessionId).toBeNull();
+
+    store.selectSession("claude:b");
+    expect(store.houseCursorId).toBeNull();
+    expect(store.selection.sessionId).toBe("claude:b");
+  });
+
+  it("clears a vanished cursor house and does not restore it if it returns", () => {
+    const { store, show } = setup();
+    show("claude:a");
+    store.setHouseCursor("claude:a");
+    show();
+    expect(store.houseCursorId).toBeNull();
+
+    show("claude:a");
+    expect(store.houseCursorId).toBeNull();
+  });
+
+  it("clears the temporary house cursor when leaving Dashboard", () => {
+    const { appView, store, show } = setup();
+    show("claude:a");
+    store.setHouseCursor("claude:a");
+    appView.showTasks();
+    expect(store.houseCursorId).toBeNull();
+
+    appView.showCity();
+    expect(store.houseCursorId).toBeNull();
+  });
+
+  it("clears the temporary house cursor on Escape", () => {
+    const { store, show } = setup();
+    show("claude:a");
+    store.setHouseCursor("claude:a");
+    store.escape();
+    expect(store.houseCursorId).toBeNull();
+    expect(store.selection.sessionId).toBeNull();
   });
 
   it("drops a vanished session and never resurrects it when it returns", () => {

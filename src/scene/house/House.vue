@@ -33,6 +33,7 @@ const props = defineProps<{
   x: number;
   z: number;
   selected: boolean;
+  keyboardFocused: boolean;
   /** Meshes (the district tower) that can hide this house's label. */
   occluders: () => readonly (Object3D | null)[];
 }>();
@@ -90,6 +91,7 @@ function onPointerover(event: { stopPropagation(): void }) {
       :status="status"
       :opacity="visual.labelOpacity"
       :hovered="hovered"
+      :keyboard-focused="keyboardFocused"
       :lift="labelLift(index, ring)"
       :occluders="occluders"
       @select="select"

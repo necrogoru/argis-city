@@ -18,6 +18,7 @@ const props = defineProps<{
   /** Resting opacity (dimmer for idle / done). */
   opacity: number;
   hovered: boolean;
+  keyboardFocused: boolean;
   /** Extra px lift to de-collide mirror-image neighbours. */
   lift: number;
   /** Meshes (the district tower) that fade this label while in front of it. */
@@ -37,8 +38,8 @@ const style = computed(() => ({
 </script>
 
 <!--
-  Always-visible name pill above a house. Pointer convenience only (the agent
-  list is the keyboard path), so it is hidden from assistive tech.
+  Always-visible name pill above a house. The projected label remains hidden
+  from assistive tech; the overlay announces the keyboard cursor separately.
 -->
 <template>
   <TresGroup ref="anchor" :position="[0, LABEL_Y, 0]">
@@ -48,6 +49,7 @@ const style = computed(() => ({
         :style="style"
         :data-status="status"
         :data-hovered="hovered"
+        :data-keyboard-focused="keyboardFocused"
         :data-occluded="occluded"
         :title="title"
         aria-hidden="true"
@@ -92,7 +94,8 @@ const style = computed(() => ({
   opacity: calc(var(--rest-opacity) * 0.3);
 }
 
-.label[data-hovered="true"] {
+.label[data-hovered="true"],
+.label[data-keyboard-focused="true"] {
   opacity: 1;
   background: rgba(24, 27, 29, 0.92);
   border-color: color-mix(in srgb, var(--dot) 55%, transparent);
