@@ -6,7 +6,8 @@ import IconButton from "./common/IconButton.vue";
 
 const rig = useCameraRigStore();
 
-// ⌘+ / ⌘− / ⌘0 anywhere in the window; holding repeats, like browser zoom.
+// ⇧⌘+ / ⇧⌘− / ⇧⌘0 anywhere in the window; holding repeats. The unshifted
+// chords belong to app zoom.
 onKeyStroke((event) => {
   const command = cameraCommandFor(event);
   if (!command) return;

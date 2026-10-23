@@ -60,13 +60,18 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   command palette) is open or focus is in an input, textarea, select,
   contenteditable element, or xterm input. A completed chord consumes only its
   second key, so `g t` on Tasks does not also open the focused task's terminal.
+- **App zoom**: ⌘= zooms the whole app in, ⌘− zooms out and ⌘0 returns to
+  100% (Ctrl off macOS). It uses the webview's page zoom at Chrome-style
+  steps from 50% to 200%, works in every view (including while an input has
+  focus), repeats while held, and the level persists across launches.
 - **Hero** (x 40, y 124, w 300): "Agent\nInfrastructure" 36/400, lh 1.08,
   tracking −1; 14px text-2 description; "DISTRICTS" list: rows with 10px
   rounded swatch, provider name, "N houses" right (text-3); selected row has
   `#FFFFFF0D` fill. Rows filter/focus the camera on that tower.
 - **Camera controls** (x 40, bottom-left above the strip): 44px round glass
   buttons: zoom in, zoom out, reset/rotate, fit. Keys (Ctrl off macOS):
-  ⌘+ or ⌘= zooms in, ⌘− zooms out, ⌘0 fits; holding repeats.
+  ⇧⌘+ or ⇧⌘= zooms in, ⇧⌘− zooms out, ⇧⌘0 fits; holding repeats. Unshifted
+  ⌘= / ⌘− / ⌘0 scale the whole app instead.
 - **Tower labels** (in-scene HTML): glass pill (swatch + name + count chip),
   thin gradient line down to a glowing anchor dot on the tower top. The
   selected tower's pill has a 1px provider-colour stroke.

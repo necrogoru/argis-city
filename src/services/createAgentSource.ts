@@ -1,10 +1,7 @@
 import type { AgentSource } from "./agentSource";
+import { isTauri } from "./isTauri";
 import { createTauriAgentSource } from "./tauriAgentSource";
 import { MockAgentSource } from "./mock/mockAgentSource";
-
-function isTauri(): boolean {
-  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-}
 
 /**
  * Tauri backend inside the desktop app; realistic mock data in a plain browser

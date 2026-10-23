@@ -18,6 +18,7 @@ import { useTerminalNavigationStore } from "./stores/terminalNavigation";
 import { useSnapshotStore } from "./stores/snapshot";
 import { useSessionAlertCoordinator } from "./stores/sessionAlerts";
 import { useAppViewShortcuts } from "./composables/useAppViewShortcuts";
+import { useAppZoom } from "./composables/useAppZoom";
 import { useAgentSource } from "./composables/useAgentSource";
 import { createNoopAlertDelivery } from "./services/alertDelivery";
 import { createTauriAlertDelivery } from "./services/tauriAlertDelivery";
@@ -40,6 +41,7 @@ const terminalTask = computed(
 );
 
 useAppViewShortcuts();
+useAppZoom();
 useModKey(
   "k",
   () => (paletteOpen.value = !paletteOpen.value),
