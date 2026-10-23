@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, useTemplateRef, watch } from "vue";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
+import { osc52ClipboardText } from "../../domain/terminalClipboard";
 import { fullTerminalRefreshRange } from "../../domain/terminalDisplay";
+import { shouldOpenTerminalLink } from "../../domain/terminalLinks";
 import { normalizeAlternateBufferWheelDelta } from "../../domain/terminalWheel";
+import { writeClipboardText } from "../../services/clipboard";
+import { openExternalUrl } from "../../services/links";
 
 const props = defineProps<{
   label: string;
@@ -23,6 +28,9 @@ let fitAddon: FitAddon | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let dataSubscription: { dispose(): void } | null = null;
 let resizeSubscription: { dispose(): void } | null = null;
+let selectionSubscription: { dispose(): void } | null = null;
+let clipboardSubscription: { dispose(): void } | null = null;
+let pendingSelection = "";
 let initialized = false;
 let dispatchingNormalizedWheel = false;
 
@@ -55,6 +63,20 @@ function currentSize(): { cols: number; rows: number } | null {
   return terminal ? { cols: terminal.cols, rows: terminal.rows } : null;
 }
 
+async function copy(text: string): Promise<void> {
+  try {
+    await writeClipboardText(text);
+  } catch (error) {
+    console.error("[argis] could not copy terminal text", error);
+  }
+}
+
+function commitSelection(): void {
+  const text = pendingSelection;
+  pendingSelection = "";
+  if (text) void copy(text);
+}
+
 defineExpose({ fit, write, focus, refresh, currentSize });
 
 function initialize(): void {
@@ -78,6 +100,11 @@ function initialize(): void {
   });
   fitAddon = new FitAddon();
   terminal.loadAddon(fitAddon);
+  terminal.loadAddon(
+    new WebLinksAddon((event, uri) => {
+      if (shouldOpenTerminalLink(event)) openExternalUrl(uri);
+    }),
+  );
   terminal.open(element);
   terminal.attachCustomWheelEventHandler((event) => {
     if (dispatchingNormalizedWheel || !event.target) return true;
@@ -118,6 +145,14 @@ function initialize(): void {
   resizeSubscription = terminal.onResize(({ cols, rows }) => {
     if (props.connected) emit("resize", { cols, rows });
   });
+  selectionSubscription = terminal.onSelectionChange(() => {
+    pendingSelection = terminal?.getSelection() ?? "";
+  });
+  clipboardSubscription = terminal.parser.registerOscHandler(52, (payload) => {
+    const text = osc52ClipboardText(payload);
+    if (text) void copy(text);
+    return true;
+  });
 
   resizeObserver = new ResizeObserver(() => {
     fit();
@@ -127,6 +162,7 @@ function initialize(): void {
 }
 
 onMounted(() => {
+  document.addEventListener("mouseup", commitSelection);
   initialize();
 });
 
@@ -153,9 +189,13 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  document.removeEventListener("mouseup", commitSelection);
   resizeObserver?.disconnect();
   dataSubscription?.dispose();
   resizeSubscription?.dispose();
+  selectionSubscription?.dispose();
+  clipboardSubscription?.dispose();
+  pendingSelection = "";
   terminal?.dispose();
   terminal = null;
   fitAddon = null;

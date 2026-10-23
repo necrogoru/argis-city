@@ -131,6 +131,11 @@ creates and records both resources only for an eligible task.
   Reattachment replays that ordered output before forwarding new chunks, so a
   newly mounted xterm can restore recent terminal contents. An xterm instance
   also remains mounted while its modal is closed but the task board stays open.
+- Terminal clipboard behaviour lives in the webview, not the pty. OSC 52 writes
+  from the running CLI are honoured through `tauri-plugin-clipboard-manager`
+  (read requests are dropped), a completed xterm selection is copied on mouseup,
+  and Cmd+Shift+click opens http(s) links through the opener plugin. Plain clicks
+  stay with the CLI, which tracks the mouse.
 - `terminal_input` accepts UTF-8 text up to 64 KiB. `resize_terminal_session`
   accepts positive `cols` and `rows` up to 1,000; pixel dimensions default to
   zero when omitted. Closing only the modal keeps its Channels and xterm buffers
