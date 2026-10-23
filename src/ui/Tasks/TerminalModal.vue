@@ -16,6 +16,7 @@ interface TerminalPaneHandle {
   detach: () => Promise<void>;
   fit: () => void;
   focus: () => void;
+  refresh: () => void;
   start: () => Promise<void>;
 }
 
@@ -57,6 +58,7 @@ async function focusTab(tab: TerminalTab): Promise<void> {
   if (!open.value || activeTab.value !== tab) return;
   const pane = tab === "agent" ? agentPane.value : termPane.value;
   pane?.fit();
+  pane?.refresh();
   pane?.focus();
 }
 
@@ -78,8 +80,6 @@ function show(): void {
         await focusTab("agent");
       }
     } else {
-      agentPane.value?.fit();
-      termPane.value?.fit();
       await focusTab("agent");
     }
   });

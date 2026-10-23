@@ -23,6 +23,7 @@ interface TerminalRenderer {
   fit: () => TerminalSize | null;
   write: (data: string | Uint8Array) => void;
   focus: () => void;
+  refresh: () => void;
 }
 
 const source = useAgentSource();
@@ -75,10 +76,14 @@ function focus(): void {
   surface.value?.focus();
 }
 
+function refresh(): void {
+  surface.value?.refresh();
+}
+
 watch(session.status, (status) => emit("statusChange", status), { immediate: true });
 onBeforeUnmount(() => void session.dispose());
 
-defineExpose({ reattach, detach: session.detach, fit, focus, start });
+defineExpose({ reattach, detach: session.detach, fit, focus, refresh, start });
 </script>
 
 <template>

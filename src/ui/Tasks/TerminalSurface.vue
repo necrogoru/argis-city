@@ -3,6 +3,8 @@ import { nextTick, onBeforeUnmount, onMounted, useTemplateRef, watch } from "vue
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
+import { fullTerminalRefreshRange } from "../../domain/terminalDisplay";
+import { normalizeAlternateBufferWheelDelta } from "../../domain/terminalWheel";
 
 const props = defineProps<{
   label: string;
@@ -22,6 +24,7 @@ let resizeObserver: ResizeObserver | null = null;
 let dataSubscription: { dispose(): void } | null = null;
 let resizeSubscription: { dispose(): void } | null = null;
 let initialized = false;
+let dispatchingNormalizedWheel = false;
 
 function token(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -42,11 +45,17 @@ function focus(): void {
   terminal?.focus();
 }
 
+function refresh(): void {
+  if (!terminal) return;
+  const range = fullTerminalRefreshRange(terminal.rows);
+  if (range) terminal.refresh(...range);
+}
+
 function currentSize(): { cols: number; rows: number } | null {
   return terminal ? { cols: terminal.cols, rows: terminal.rows } : null;
 }
 
-defineExpose({ fit, write, focus, currentSize });
+defineExpose({ fit, write, focus, refresh, currentSize });
 
 function initialize(): void {
   if (initialized) return;
@@ -70,6 +79,38 @@ function initialize(): void {
   fitAddon = new FitAddon();
   terminal.loadAddon(fitAddon);
   terminal.open(element);
+  terminal.attachCustomWheelEventHandler((event) => {
+    if (dispatchingNormalizedWheel || !event.target) return true;
+
+    const deltaY = normalizeAlternateBufferWheelDelta(
+      event.deltaY,
+      event.deltaMode,
+      terminal?.buffer.active.type ?? "normal",
+    );
+    if (deltaY === null) return true;
+
+    dispatchingNormalizedWheel = true;
+    try {
+      event.target.dispatchEvent(
+        new WheelEvent(event.type, {
+          bubbles: event.bubbles,
+          cancelable: event.cancelable,
+          composed: event.composed,
+          ctrlKey: event.ctrlKey,
+          shiftKey: event.shiftKey,
+          altKey: event.altKey,
+          metaKey: event.metaKey,
+          deltaX: event.deltaX,
+          deltaY,
+          deltaZ: event.deltaZ,
+          deltaMode: event.deltaMode,
+        }),
+      );
+    } finally {
+      dispatchingNormalizedWheel = false;
+    }
+    return false;
+  });
 
   dataSubscription = terminal.onData((value) => {
     if (props.connected && props.active) emit("data", value);
