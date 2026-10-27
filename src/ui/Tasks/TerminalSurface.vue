@@ -22,6 +22,9 @@ const emit = defineEmits<{
   resize: [size: { cols: number; rows: number }];
 }>();
 
+// The element handed to xterm. FitAddon measures its parent with getComputedStyle().height, which is
+// the *border* box, while `.xterm { height: 100% }` resolves against the *content* box: any padding on
+// the measured element makes it report rows and columns that don't fit and clip the last line.
 const host = useTemplateRef<HTMLDivElement>("host");
 let terminal: Terminal | null = null;
 let fitAddon: FitAddon | null = null;
@@ -203,7 +206,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="host" class="terminal-surface" role="region" :aria-label="props.label" />
+  <div class="terminal-surface">
+    <div ref="host" class="terminal-host" role="region" :aria-label="props.label" />
+  </div>
 </template>
 
 <style scoped>
@@ -219,7 +224,18 @@ onBeforeUnmount(() => {
   color: var(--text);
 }
 
-.terminal-surface :deep(.xterm) {
+/* Padding-free on purpose (see `host` above): FitAddon measures this box, so padding belongs on
+   `.terminal-surface` — otherwise the terminal is sized for a box taller and wider than it gets. */
+.terminal-host {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.terminal-host :deep(.xterm) {
   height: 100%;
 }
 </style>
