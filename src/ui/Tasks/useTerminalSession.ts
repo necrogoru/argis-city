@@ -150,6 +150,7 @@ export function useTerminalSession(options: TerminalSessionOptions) {
       const result = await options.source.reattachTerminalSession(
         options.taskId,
         options.tab,
+        options.getSize(),
         (event) => receive(operation, event),
       );
       if (!isCurrent(operation)) {

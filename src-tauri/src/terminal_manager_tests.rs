@@ -115,7 +115,7 @@ fn detached_terminal_replays_output_produced_before_reattachment() {
     manager.input(session.id, b"printed-while-detached\n").unwrap();
     let (reattached_sender, reattached_events) = mpsc::channel();
     let reattached =
-        manager.reattach_if_present_with_attachment(key(47, TerminalTab::Term), sink(reattached_sender)).unwrap();
+        manager.reattach_if_present_with_attachment(key(47, TerminalTab::Term), None, sink(reattached_sender)).unwrap();
 
     assert_eq!(reattached.session.id, session.id);
     assert!(reattached.session.running);
@@ -143,7 +143,7 @@ fn terminal_output_replay_is_bounded_to_the_most_recent_megabyte() {
     wait_for_exit(&events, session.id);
 
     let (reattached_sender, reattached_events) = mpsc::channel();
-    manager.reattach(key(53, TerminalTab::Term), sink(reattached_sender)).unwrap();
+    manager.reattach(key(53, TerminalTab::Term), None, sink(reattached_sender)).unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut replayed_bytes = 0;
     loop {
@@ -164,8 +164,34 @@ fn reattach_if_present_returns_none_without_creating_a_process() {
     let manager = TerminalManager::default();
     let (sender, _events) = mpsc::channel();
 
-    assert!(manager.reattach_if_present(key(48, TerminalTab::Agent), sink(sender)).is_none());
+    assert!(manager.reattach_if_present(key(48, TerminalTab::Agent), None, sink(sender)).is_none());
     assert_eq!(manager.active_session_count(), 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn reattaching_applies_the_viewport_size_to_the_live_pty() {
+    let manager = TerminalManager::default();
+    let (sender, events) = mpsc::channel();
+    let mut command =
+        spec(49, TerminalTab::Term, "/bin/sh", &["-c", "stty size; while IFS= read -r line; do stty size; done"]);
+    command.size = TerminalSize { cols: 81, rows: 25, pixel_width: 0, pixel_height: 0 };
+    let session = manager.start(command, sink(sender)).unwrap();
+    assert!(output_until(&events, "25 81").contains("25 81"));
+
+    let (reattached_sender, reattached_events) = mpsc::channel();
+    let reattached = manager
+        .reattach_if_present_with_attachment(
+            key(49, TerminalTab::Term),
+            Some(TerminalSize { cols: 100, rows: 40, pixel_width: 0, pixel_height: 0 }),
+            sink(reattached_sender),
+        )
+        .expect("the live session is reattached, not restarted");
+
+    assert_eq!(reattached.session.id, session.id);
+    manager.input(session.id, b"\n").unwrap();
+    assert!(output_until(&reattached_events, "40 100").contains("40 100"));
+    manager.stop(session.id).unwrap();
 }
 
 #[test]
@@ -269,7 +295,7 @@ fn terminal_manager_supports_interactive_io_resize_reattach_and_stop() {
     manager.resize(session.id, TerminalSize { cols: 110, rows: 36, pixel_width: 1100, pixel_height: 720 }).unwrap();
 
     let (reattached_sender, reattached_events) = mpsc::channel();
-    let reattached = manager.reattach(key(41, TerminalTab::Term), sink(reattached_sender)).unwrap();
+    let reattached = manager.reattach(key(41, TerminalTab::Term), None, sink(reattached_sender)).unwrap();
     assert_eq!(reattached.id, session.id);
     manager.input(session.id, b"keep-going\n").unwrap();
     assert!(output_until(&reattached_events, "RECEIVED:keep-going").contains("RECEIVED:keep-going"));
@@ -466,7 +492,7 @@ fn terminal_manager_reattaches_to_a_completed_session_and_replays_exit_status() 
     assert_eq!(manager.active_session_count(), 0);
 
     let (reattached_sender, reattached_events) = mpsc::channel();
-    let completed = manager.reattach(key(46, TerminalTab::Agent), sink(reattached_sender)).unwrap();
+    let completed = manager.reattach(key(46, TerminalTab::Agent), None, sink(reattached_sender)).unwrap();
 
     assert_eq!(completed.id, session.id);
     assert!(!completed.running);

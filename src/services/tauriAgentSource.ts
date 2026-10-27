@@ -129,7 +129,7 @@ export function createTauriAgentSource(): AgentSource {
         return attachment;
       });
     },
-    reattachTerminalSession(taskId, tab, onEvent) {
+    reattachTerminalSession(taskId, tab, size, onEvent) {
       const key = terminalChannelKey(taskId, tab);
       const entry = makeTerminalChannel(key, onEvent);
       return keepTerminalAttachment(
@@ -137,7 +137,7 @@ export function createTauriAgentSource(): AgentSource {
         tab,
         key,
         entry,
-        invoke<TerminalAttachment | null>("reattach_terminal_session", { taskId, tab, onEvent: entry.channel }),
+        invoke<TerminalAttachment | null>("reattach_terminal_session", { taskId, tab, size, onEvent: entry.channel }),
       );
     },
     sendTerminalInput: (sessionId, data) => invoke<void>("terminal_input", { sessionId, data }),

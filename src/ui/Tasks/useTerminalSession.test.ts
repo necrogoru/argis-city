@@ -43,14 +43,18 @@ function createSource(): TerminalSessionService & {
   };
 }
 
-function setup(tab: TerminalTab = "agent", agentCli: TerminalAgent | null = "claude") {
+function setup(
+  tab: TerminalTab = "agent",
+  agentCli: TerminalAgent | null = "claude",
+  getSize: () => TerminalSize | null = () => size,
+) {
   const source = createSource();
   const writes: Uint8Array[] = [];
   const session = useTerminalSession({
     source,
     taskId: 12,
     tab,
-    getSize: () => size,
+    getSize,
     write: (bytes) => writes.push(bytes),
   });
   return { source, writes, session, agentCli };
@@ -110,10 +114,20 @@ describe("useTerminalSession", () => {
     await session.sendInput("pwd\n");
     await session.resize(size);
 
-    expect(source.reattachTerminalSession).toHaveBeenCalledWith(12, "term", expect.any(Function));
+    expect(source.reattachTerminalSession).toHaveBeenCalledWith(12, "term", size, expect.any(Function));
     expect(session.status.value).toBe("running");
     expect(source.sendTerminalInput).toHaveBeenCalledWith(shellAttachment.session.id, "pwd\n");
     expect(source.resizeTerminalSession).toHaveBeenCalledWith(shellAttachment.session.id, size);
+  });
+
+  it("reattaches without a size when the viewport has not been laid out", async () => {
+    const { source, session } = setup("term", null, () => null);
+    source.reattachTerminalSession.mockResolvedValue(attachment);
+
+    await session.reattach();
+
+    expect(source.reattachTerminalSession).toHaveBeenCalledWith(12, "term", null, expect.any(Function));
+    expect(session.status.value).toBe("running");
   });
 
   it("returns to not-started when no session exists to reattach", async () => {
@@ -168,7 +182,7 @@ describe("useTerminalSession", () => {
       lastObservedAtMs: 100,
     });
     await session.reattach();
-    const onEvent = source.reattachTerminalSession.mock.calls[0][2];
+    const onEvent = source.reattachTerminalSession.mock.calls[0][3];
 
     onEvent({ type: "exited", sessionId: attachment.session.id, exitCode: 0, signal: null });
     await vi.waitFor(() => expect(session.resumeReference.value?.provider).toBe("claude"));
@@ -258,7 +272,7 @@ describe("useTerminalSession", () => {
     const { source, session, writes } = setup();
     source.reattachTerminalSession.mockResolvedValue(attachment);
     await session.reattach();
-    const onEvent = source.reattachTerminalSession.mock.calls[0][2];
+    const onEvent = source.reattachTerminalSession.mock.calls[0][3];
 
     await session.detach();
     onEvent({ type: "output", sessionId: attachment.session.id, bytes: [88] } satisfies TerminalEvent);

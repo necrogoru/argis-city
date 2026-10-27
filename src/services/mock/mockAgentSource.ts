@@ -204,6 +204,7 @@ export class MockAgentSource implements AgentSource {
   async reattachTerminalSession(
     _taskId: number,
     _tab: TerminalTab,
+    _size: TerminalSize | null,
     _onEvent: (event: TerminalEvent) => void,
   ): Promise<TerminalAttachment | null> {
     return null;

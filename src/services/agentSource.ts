@@ -62,6 +62,7 @@ export interface AgentSource {
   reattachTerminalSession(
     taskId: number,
     tab: TerminalTab,
+    size: TerminalSize | null,
     onEvent: (event: TerminalEvent) => void,
   ): Promise<TerminalAttachment | null>;
   sendTerminalInput(sessionId: number, data: string): Promise<void>;

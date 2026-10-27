@@ -242,7 +242,9 @@ describe("TauriAgentSource project and task operations", () => {
     invoke.mockResolvedValueOnce(attachment).mockResolvedValueOnce(true);
     const source = createTauriAgentSource();
 
-    await expect(source.reattachTerminalSession(task.id, "term", output)).resolves.toEqual(attachment);
+    await expect(source.reattachTerminalSession(task.id, "term", { cols: 100, rows: 30 }, output)).resolves.toEqual(
+      attachment,
+    );
     channelHandlers[0]({ type: "output", sessionId: attachment.session.id, bytes: [65] } satisfies TerminalEvent);
     await source.detachTerminalSession(task.id, "term", attachment.attachmentId);
     channelHandlers[0]({ type: "output", sessionId: attachment.session.id, bytes: [66] } satisfies TerminalEvent);
@@ -251,6 +253,7 @@ describe("TauriAgentSource project and task operations", () => {
     expect(invoke).toHaveBeenNthCalledWith(1, "reattach_terminal_session", {
       taskId: task.id,
       tab: "term",
+      size: { cols: 100, rows: 30 },
       onEvent: expect.any(Object),
     });
     expect(invoke).toHaveBeenNthCalledWith(2, "detach_terminal_session", {

@@ -91,6 +91,10 @@ Argis SHALL keep task terminal processes running when users close the terminal m
 - **WHEN** a user closes the terminal modal or switches back to the city and later reopens the task terminal
 - **THEN** Argis reconnects the tabs to their still-running processes, restores retained terminal output before live output, and shows the current terminal contents
 
+#### Scenario: Reopen in a different window size
+- **WHEN** a user reopens the task terminal after resizing the Argis window or moving it to another display
+- **THEN** Argis resizes the reconnected PTY to the current terminal viewport so the agent CLI redraws for the rows and columns the user can see
+
 #### Scenario: Exit Argis
 - **WHEN** Argis exits
 - **THEN** Argis terminates the terminal processes it manages

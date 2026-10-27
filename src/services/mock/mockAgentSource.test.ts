@@ -106,7 +106,7 @@ describe("mock project and task operations", () => {
 
     await expect(source.listTerminalInventory()).resolves.toEqual([]);
     await expect(source.playAlertSound()).resolves.toBeUndefined();
-    await expect(source.reattachTerminalSession(1, "agent", () => {})).resolves.toBeNull();
+    await expect(source.reattachTerminalSession(1, "agent", null, () => {})).resolves.toBeNull();
     await expect(source.startTerminalSession(1, "agent", "claude", { cols: 80, rows: 24 }, () => {}))
       .rejects.toThrow("only available in the Argis desktop app");
     await expect(source.sendTerminalInput(1, "pwd\n")).rejects.toThrow("only available in the Argis desktop app");

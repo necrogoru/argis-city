@@ -102,6 +102,8 @@ struct ManagedSession {
     cwd: PathBuf,
     lifecycle_sink: Option<TerminalLifecycleSink>,
     master: Mutex<Option<Box<dyn MasterPty + Send>>>,
+    /// Last size applied to the PTY, so a reattachment does not repaint the CLI for nothing.
+    size: Mutex<TerminalSize>,
     writer: Mutex<Box<dyn Write + Send>>,
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     child: Mutex<Option<Box<dyn Child + Send + Sync>>>,
@@ -206,6 +208,9 @@ impl TerminalManager {
                     if session.info.agent_cli != spec.agent_cli {
                         bail!("task tab already has a running process for a different agent CLI");
                     }
+                    // The tab kept a PTY from another viewport, so the CLI must learn the size the
+                    // user is looking at now before it draws again.
+                    session.apply_size(spec.size)?;
                     let attachment_id = session.attach(sink);
                     return Ok(TerminalAttachment { session: session.info(), attachment_id });
                 }
@@ -262,6 +267,7 @@ impl TerminalManager {
             cwd,
             lifecycle_sink: self.lifecycle_sink.clone(),
             master: Mutex::new(Some(pair.master)),
+            size: Mutex::new(spec.size),
             writer: Mutex::new(writer),
             killer: Mutex::new(killer),
             child: Mutex::new(Some(child)),
@@ -296,29 +302,41 @@ impl TerminalManager {
     }
 
     /// Replaces the PTY event sink for a live session without starting a new process.
-    pub fn reattach(&self, key: TerminalSessionKey, sink: TerminalEventSink) -> anyhow::Result<TerminalSessionInfo> {
-        self.reattach_with_attachment(key, sink).map(|attachment| attachment.session)
+    pub fn reattach(
+        &self,
+        key: TerminalSessionKey,
+        size: Option<TerminalSize>,
+        sink: TerminalEventSink,
+    ) -> anyhow::Result<TerminalSessionInfo> {
+        self.reattach_with_attachment(key, size, sink).map(|attachment| attachment.session)
     }
 
     /// Replaces an output sink and returns an attachment token for safe later detachment.
     pub fn reattach_with_attachment(
         &self,
         key: TerminalSessionKey,
+        size: Option<TerminalSize>,
         sink: TerminalEventSink,
     ) -> anyhow::Result<TerminalAttachment> {
-        self.reattach_if_present_with_attachment(key, sink)
+        self.reattach_if_present_with_attachment(key, size, sink)
             .ok_or_else(|| anyhow!("no terminal session exists for this task tab"))
     }
 
     /// Reattaches when a process record exists; a missing task tab is not an error.
-    pub fn reattach_if_present(&self, key: TerminalSessionKey, sink: TerminalEventSink) -> Option<TerminalSessionInfo> {
-        self.reattach_if_present_with_attachment(key, sink).map(|attachment| attachment.session)
+    pub fn reattach_if_present(
+        &self,
+        key: TerminalSessionKey,
+        size: Option<TerminalSize>,
+        sink: TerminalEventSink,
+    ) -> Option<TerminalSessionInfo> {
+        self.reattach_if_present_with_attachment(key, size, sink).map(|attachment| attachment.session)
     }
 
     /// Reattaches when present and returns a token that prevents stale detach calls from affecting newer channels.
     pub fn reattach_if_present_with_attachment(
         &self,
         key: TerminalSessionKey,
+        size: Option<TerminalSize>,
         sink: TerminalEventSink,
     ) -> Option<TerminalAttachment> {
         let manager = self.state.lock();
@@ -327,6 +345,15 @@ impl TerminalManager {
         }
         let id = manager.by_key.get(&key)?;
         let session = manager.by_id.get(id)?;
+        if let Some(size) = size {
+            // A dialog reopened in a different window shape must not keep the PTY sized for the old
+            // one, or the CLI draws more rows than the viewport can show. The resize stays
+            // best-effort: a PTY that closed while we looked it up must not cost the attachment,
+            // which still replays the final output.
+            if session.running.load(Ordering::Acquire) {
+                let _ = session.apply_size(size);
+            }
+        }
         let attachment_id = session.attach(sink);
         Some(TerminalAttachment { session: session.info(), attachment_id })
     }
@@ -360,15 +387,9 @@ impl TerminalManager {
 
     /// Resizes an active PTY after validating its character-cell dimensions.
     pub fn resize(&self, id: u64, size: TerminalSize) -> anyhow::Result<()> {
-        let size = size.validate()?;
         let session = self.session(id)?;
         session.ensure_running()?;
-        let master = session.master.lock();
-        master
-            .as_ref()
-            .ok_or_else(|| anyhow!("terminal PTY is closed"))?
-            .resize(size.into_pty_size())
-            .context("resizing PTY")
+        session.apply_size(size)
     }
 
     /// Stops, waits for, and removes a PTY process. Calling it more than once is safe.
@@ -535,6 +556,25 @@ impl ManagedSession {
         } else {
             bail!("terminal session has exited");
         }
+    }
+
+    /// Applies a size to the PTY, skipping the SIGWINCH that would make a CLI repaint for nothing.
+    fn apply_size(&self, size: TerminalSize) -> anyhow::Result<()> {
+        let size = size.validate()?;
+        let mut applied = self.size.lock();
+        if *applied == size {
+            return Ok(());
+        }
+        {
+            let master = self.master.lock();
+            master
+                .as_ref()
+                .ok_or_else(|| anyhow!("terminal PTY is closed"))?
+                .resize(size.into_pty_size())
+                .context("resizing PTY")?;
+        }
+        *applied = size;
+        Ok(())
     }
 
     fn inventory_entry(&self) -> TerminalInventoryEntry {

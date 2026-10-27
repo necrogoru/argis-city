@@ -24,7 +24,7 @@ one tower per tool (provider), one house per live session, subagents as cards.
 | command | `create_task_worktree`    | `{ taskId }` → `TaskWorktree`                     |
 | command | `start_terminal_session`  | `{ taskId, tab, agentCli, size, onEvent }` → `TerminalAttachment` |
 | command | `resume_task_agent`       | `{ taskId, size, onEvent }` → `TerminalAttachment` |
-| command | `reattach_terminal_session` | `{ taskId, tab, onEvent }` → `TerminalAttachment \| null` |
+| command | `reattach_terminal_session` | `{ taskId, tab, size, onEvent }` → `TerminalAttachment \| null` |
 | command | `terminal_input`          | `{ sessionId, data }` → `()`                     |
 | command | `resize_terminal_session` | `{ sessionId, size }` → `()`                     |
 | command | `detach_terminal_session` | `{ taskId, tab, attachmentId }` → `boolean`      |
@@ -107,6 +107,13 @@ creates and records both resources only for an eligible task.
   `reattach_terminal_session` returns `null` when that tab has no managed
   process. A completed process is reattached with `running: false` and its exit
   event is replayed.
+- `reattach_terminal_session` takes the current viewport `size` (nullable) and
+  applies it to the live PTY before its output resumes, so a dialog reopened in
+  a differently sized window never leaves the CLI drawing for the window it was
+  started in. A PTY that already exited is attached without being resized, and
+  the same size is applied when `start_terminal_session` reuses a running tab.
+  Sizes that did not change are skipped, so a reattachment does not send a
+  redundant `SIGWINCH` that makes the CLI repaint.
 - `TerminalAttachment` contains `session` and an opaque `attachmentId`. Detach
   only removes the matching output-channel attachment; it does not stop the
   process. A stale attachment ID cannot detach a newer reattachment.
