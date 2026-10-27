@@ -7,7 +7,7 @@ describe("statusMeta", () => {
     expect(statusMeta("running")).toMatchObject({ label: "Running", color: "teal", icon: "loader" });
     expect(statusMeta("awaitingApproval")).toMatchObject({ label: "Needs approval", color: "amber", icon: "hand" });
     expect(statusMeta("idle")).toMatchObject({ label: "Idle", color: "grey", icon: "moon" });
-    expect(statusMeta("done")).toMatchObject({ label: "Done", color: "blue", icon: "check" });
+    expect(statusMeta("done")).toMatchObject({ label: "Done", color: "green", icon: "check" });
     expect(statusMeta("error")).toMatchObject({ label: "Error", color: "red", icon: "alert" });
   });
 
@@ -22,7 +22,7 @@ describe("shared status colours", () => {
     expect(statusHex("running")).toBe(PALETTE.teal);
     expect(statusHex("awaitingApproval")).toBe("#FFB662");
     expect(statusHex("idle")).toBe("#8E9794");
-    expect(statusHex("done")).toBe("#67A2FD");
+    expect(statusHex("done")).toBe("#4ADE80");
     expect(statusHex("error")).toBe("#FF6B6B");
   });
 });

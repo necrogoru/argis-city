@@ -22,7 +22,7 @@ export function glowMaterial(hex: string, boost: number, transparent = false): M
 
 export const selectionRingMaterial = glowMaterial(PALETTE.teal, 1, true);
 export const beaconMaterial = glowMaterial(PALETTE.amber, 2.6);
-export const haloMaterial = glowMaterial(PALETTE.blue, 1.7, true);
+export const haloMaterial = glowMaterial(PALETTE.green, 1.7, true);
 
 /** Near-black base for emissive parts so only the emissive term shows. */
 export const GLOW_BASE_COLOR = "#050606";

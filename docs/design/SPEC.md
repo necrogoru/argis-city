@@ -10,7 +10,8 @@
 | text-2    | `#8E9794`   | secondary                             |
 | text-3    | `#7A8380`   | labels, captions (4.8:1 on panels)    |
 | teal      | `#32F3E2`   | Claude Code, running, primary action  |
-| blue      | `#67A2FD`   | Codex, done                           |
+| blue      | `#67A2FD`   | Codex                                 |
+| green     | `#4ADE80`   | done                                  |
 | amber     | `#FFB662`   | OpenCode, awaiting approval           |
 | violet    | `#B98CFF`   | Pi                                    |
 | idle grey | `#8E9794`   | idle                                  |
@@ -300,7 +301,7 @@ number.
 | running          | Running          | teal    | loader   |
 | awaitingApproval | Needs approval   | amber   | hand     |
 | idle             | Idle             | grey    | moon     |
-| done             | Done             | blue    | check    |
+| done             | Done             | green   | check    |
 | error            | Error            | #FF6B6B | alert    |
 
 Lists (agents, ⌘K palette) sort Needs you → Error → Running → Idle → Done,
@@ -313,7 +314,7 @@ oldest first within a status.
   colour; height grows mildly with live session count.
 - Houses ring the tower (radius grows; second ring after 8): box + 4-sided
   pyramid roof, emissive windows/roof panels coloured by **status**
-  (running pulses softly; awaiting blinks amber; idle dim; done blue).
+  (running pulses softly; awaiting blinks amber; idle dim; done green).
   Thin glowing lines connect each house lot to its tower.
 - Bloom post-processing for the neon glow. Hover = pointer + lift/brighten;
   click = select (opens panel, shows marker). Click empty ground = deselect.

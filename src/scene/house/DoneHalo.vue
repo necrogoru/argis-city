@@ -14,7 +14,7 @@ useLoop().onBeforeRender(({ delta }) => {
 });
 </script>
 
-<!-- "Done": a flat, segmented blue halo slowly turning above the roof. -->
+<!-- "Done": a flat, segmented green halo slowly turning above the roof. -->
 <template>
   <TresMesh ref="halo" :geometry="haloGeometry" :material="haloMaterial" :position-y="HOUSE_TOP + 0.24" />
 </template>

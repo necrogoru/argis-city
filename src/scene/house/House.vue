@@ -80,7 +80,7 @@ function onPointerover(event: { stopPropagation(): void }) {
     <HouseShell :visual="visual" :phase="phase" :hovered="hovered" />
     <HouseBeacon :visual="visual" :phase="phase" />
     <GroundPulse v-if="visual.groundPulse" :hex="visual.hex" loop />
-    <GroundPulse v-if="ripples > 0" :key="ripples" :hex="PALETTE.blue" />
+    <GroundPulse v-if="ripples > 0" :key="ripples" :hex="PALETTE.green" />
     <template v-if="selected">
       <TresMesh :geometry="selectionRingGeometry" :material="selectionRingMaterial" :position-y="0.06" />
       <HouseMarker :position="[0, HOUSE_TOP + 0.05, 0]" :title="title" :progress="progress" />

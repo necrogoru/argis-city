@@ -17,7 +17,7 @@ export const STATUS_META: Readonly<Record<AgentStatus, StatusMeta>> = {
   running: { label: "Running", chipLabel: "Running", color: "teal", icon: "loader" },
   awaitingApproval: { label: "Needs approval", chipLabel: "Needs you", color: "amber", icon: "hand" },
   idle: { label: "Idle", chipLabel: "Idle", color: "grey", icon: "moon" },
-  done: { label: "Done", chipLabel: "Done", color: "blue", icon: "check" },
+  done: { label: "Done", chipLabel: "Done", color: "green", icon: "check" },
   error: { label: "Error", chipLabel: "Error", color: "red", icon: "alert" },
 };
 

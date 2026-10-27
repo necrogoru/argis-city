@@ -36,8 +36,8 @@ describe("houseVisual", () => {
     expect(v.labelOpacity).toBeLessThan(1);
   });
 
-  it("done is steady blue with a halo; error is red, flickers and darkens the body", () => {
-    expect(houseVisual("done", "opencode")).toMatchObject({ hex: "#67A2FD", animation: "steady", beacon: "halo" });
+  it("done is steady green with a halo; error is red, flickers and darkens the body", () => {
+    expect(houseVisual("done", "opencode")).toMatchObject({ hex: "#4ADE80", animation: "steady", beacon: "halo" });
     const error = houseVisual("error", "opencode");
     expect(error).toMatchObject({ hex: "#FF6B6B", animation: "flicker" });
     expect(error.bodyHex).not.toBe(houseVisual("running", "opencode").bodyHex);
