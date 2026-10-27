@@ -29,7 +29,7 @@ one tower per tool (provider), one house per live session, subagents as cards.
 | command | `resize_terminal_session` | `{ sessionId, size }` → `()`                     |
 | command | `detach_terminal_session` | `{ taskId, tab, attachmentId }` → `boolean`      |
 | command | `list_terminal_inventory` | → `TerminalInventoryEntry[]`                     |
-| command | `play_alert_sound`        | → `()` (macOS system-sound fallback)              |
+| command | `play_alert_sound`        | → `()` (plays the bundled alert sound)            |
 | event   | `agents://snapshot`       | `Snapshot`, emitted every poll (2 s)              |
 | event   | `terminal://exited`       | `TerminalLifecycleEvent`, emitted once per managed process exit |
 
@@ -131,9 +131,9 @@ creates and records both resources only for an eligible task.
   (`agentCli` is `null` for the shell tab). It is emitted once when the managed process exits
   and is not replayed when a terminal is reattached.
 - Native alert delivery checks notification permission and asks the user only
-  until the first denial. Notifications request macOS's built-in `Ping` sound;
-  when permission or notification delivery is unavailable, `play_alert_sound`
-  plays that system sound independently of notification permission.
+  until the first denial. Notifications are silent; `play_alert_sound` plays
+  the bundled `resources/preview.m4a` on every alert, independently of
+  notification permission.
 - `TerminalManager` retains a bounded 1 MiB tail of PTY output per session.
   Reattachment replays that ordered output before forwarding new chunks, so a
   newly mounted xterm can restore recent terminal contents. An xterm instance

@@ -41,7 +41,8 @@ function sessionNotification(alert: SessionAlert): CoordinatedAlert {
     sessionId: alert.sessionId,
     provider: alert.provider,
     kind: alert.kind,
-    title: alert.kind === "approval" ? "Approval needed" : "Run complete",
+    title:
+      alert.kind === "approval" ? "Approval needed" : alert.kind === "failure" ? "Run failed" : "Run complete",
     body: conciseBody(`${provider} · ${sessionName}`),
   };
 }

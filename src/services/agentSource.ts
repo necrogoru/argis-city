@@ -30,7 +30,7 @@ export interface AgentSource {
   subscribe(callback: (snapshot: Snapshot) => void): () => void;
   /** Called once for each Argis-managed terminal process exit; independent of terminal attachments. */
   subscribeTerminalExit(callback: (event: TerminalLifecycleEvent) => void): () => void;
-  /** Play Argis's short system sound as a fallback when a desktop notification cannot be delivered. */
+  /** Play Argis's bundled alert sound when an alert is delivered. */
   playAlertSound(): Promise<void>;
   /** Reveal a directory in the OS file manager. */
   openPath(path: string): Promise<void>;

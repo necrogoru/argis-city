@@ -19,7 +19,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 use tauri::ipc::Channel;
-use tauri::{AppHandle, State};
+use tauri::path::BaseDirectory;
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 /// Latest cached snapshot (collects once if none exists yet).
@@ -268,18 +269,22 @@ pub fn list_terminal_inventory(terminal_state: State<'_, Arc<TerminalManager>>) 
     terminal_state.inventory()
 }
 
-/// Plays macOS's built-in Ping sound as a fallback when a desktop notification cannot be delivered.
+/// Plays Argis's bundled alert sound.
 #[tauri::command]
-pub async fn play_alert_sound() -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(|| {
+pub async fn play_alert_sound(app: AppHandle) -> Result<(), String> {
+    let sound = app
+        .path()
+        .resolve("resources/preview.m4a", BaseDirectory::Resource)
+        .map_err(|error| format!("could not resolve alert sound: {error}"))?;
+    tauri::async_runtime::spawn_blocking(move || {
         let status = Command::new("/usr/bin/afplay")
-            .arg("/System/Library/Sounds/Ping.aiff")
+            .arg(&sound)
             .status()
-            .map_err(|error| format!("could not start macOS alert sound: {error}"))?;
+            .map_err(|error| format!("could not start alert sound: {error}"))?;
         if status.success() {
             Ok(())
         } else {
-            Err(format!("macOS alert sound exited with {status}"))
+            Err(format!("alert sound exited with {status}"))
         }
     })
     .await

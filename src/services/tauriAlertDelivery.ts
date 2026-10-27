@@ -6,7 +6,7 @@ import {
 import type { AgentSource } from "./agentSource";
 import { createAlertDelivery } from "./alertDelivery";
 
-/** Builds the live delivery service from Tauri's notification API and AgentSource sound fallback. */
+/** Builds the live delivery service from Tauri's notification API and the bundled alert sound. */
 export function createTauriAlertDelivery(source: Pick<AgentSource, "playAlertSound">) {
   return createAlertDelivery({
     notifications: {

@@ -26,7 +26,7 @@ describe("createAlertDelivery", () => {
     adapters = ports();
   });
 
-  it("sends a native Ping notification when permission is already granted", async () => {
+  it("sends a silent notification and plays the alert sound when permission is already granted", async () => {
     adapters.notifications.isPermissionGranted.mockResolvedValue(true);
     const delivery = createAlertDelivery(adapters);
 
@@ -36,9 +36,8 @@ describe("createAlertDelivery", () => {
     expect(adapters.notifications.sendNotification).toHaveBeenCalledWith({
       title: alert.title,
       body: alert.body,
-      sound: "Ping",
     });
-    expect(adapters.playAlertSound).not.toHaveBeenCalled();
+    expect(adapters.playAlertSound).toHaveBeenCalledWith("approval");
   });
 
   it("requests permission only when needed and sends after it is granted", async () => {
@@ -50,7 +49,7 @@ describe("createAlertDelivery", () => {
 
     expect(adapters.notifications.requestPermission).toHaveBeenCalledOnce();
     expect(adapters.notifications.sendNotification).toHaveBeenCalledOnce();
-    expect(adapters.playAlertSound).not.toHaveBeenCalled();
+    expect(adapters.playAlertSound).toHaveBeenCalledOnce();
   });
 
   it("shares a single in-flight permission request across concurrent alerts", async () => {
@@ -62,9 +61,10 @@ describe("createAlertDelivery", () => {
 
     expect(adapters.notifications.requestPermission).toHaveBeenCalledOnce();
     expect(adapters.notifications.sendNotification).toHaveBeenCalledTimes(2);
+    expect(adapters.playAlertSound).toHaveBeenCalledTimes(2);
   });
 
-  it("plays the independent fallback after denial and does not prompt again", async () => {
+  it("plays the sound after denial and does not prompt again", async () => {
     adapters.notifications.isPermissionGranted.mockResolvedValue(false);
     adapters.notifications.requestPermission.mockResolvedValue("denied");
     adapters.playAlertSound.mockResolvedValue();
@@ -79,7 +79,7 @@ describe("createAlertDelivery", () => {
     expect(adapters.playAlertSound).toHaveBeenCalledTimes(2);
   });
 
-  it("falls back to sound when notification permission is unavailable", async () => {
+  it("plays the sound when notification permission is unavailable", async () => {
     adapters.notifications.isPermissionGranted.mockRejectedValue(new Error("plugin unavailable"));
     adapters.playAlertSound.mockResolvedValue();
     const delivery = createAlertDelivery(adapters);

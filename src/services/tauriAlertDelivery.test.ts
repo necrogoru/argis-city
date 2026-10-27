@@ -18,9 +18,9 @@ describe("createTauriAlertDelivery", () => {
     plugin.sendNotification.mockReset();
   });
 
-  it("uses the macOS Ping notification sound and the AgentSource fallback", async () => {
+  it("sends a silent notification and plays the bundled AgentSource sound", async () => {
     plugin.isPermissionGranted.mockResolvedValue(true);
-    const source = { playAlertSound: vi.fn<() => Promise<void>>() };
+    const source = { playAlertSound: vi.fn<() => Promise<void>>().mockResolvedValue() };
     const delivery = createTauriAlertDelivery(source);
 
     await delivery.deliver({ kind: "completion", title: "Run complete", body: "Codex · argis" });
@@ -28,12 +28,11 @@ describe("createTauriAlertDelivery", () => {
     expect(plugin.sendNotification).toHaveBeenCalledWith({
       title: "Run complete",
       body: "Codex · argis",
-      sound: "Ping",
     });
-    expect(source.playAlertSound).not.toHaveBeenCalled();
+    expect(source.playAlertSound).toHaveBeenCalledOnce();
   });
 
-  it("uses AgentSource's system sound when macOS notification permission is denied", async () => {
+  it("still plays AgentSource's sound when notification permission is denied", async () => {
     plugin.isPermissionGranted.mockResolvedValue(false);
     plugin.requestPermission.mockResolvedValue("denied");
     const source = { playAlertSound: vi.fn<() => Promise<void>>().mockResolvedValue() };

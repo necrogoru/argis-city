@@ -1,6 +1,6 @@
 import type { AgentStatus, ProviderId, Snapshot } from "./types";
 
-export type SessionAlertKind = "approval" | "completion";
+export type SessionAlertKind = "approval" | "completion" | "failure";
 
 export interface SessionAlert {
   kind: SessionAlertKind;
@@ -74,12 +74,8 @@ export function advanceSessionAlerts(
       const previous = state.statuses[entity.entityId];
       if (state.initialized && entity.status === "awaitingApproval" && previous?.status !== "awaitingApproval") {
         alerts.push({ kind: "approval", ...entity });
-      } else if (
-        state.initialized &&
-        previous?.status === "running" &&
-        (entity.status === "idle" || entity.status === "done")
-      ) {
-        alerts.push({ kind: "completion", ...entity });
+      } else if (state.initialized && previous?.status === "running" && entity.status !== "running") {
+        alerts.push({ kind: entity.status === "error" ? "failure" : "completion", ...entity });
       }
       nextStatuses[entity.entityId] = { provider: entity.provider, status: entity.status };
     }

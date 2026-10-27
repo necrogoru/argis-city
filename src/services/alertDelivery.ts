@@ -1,4 +1,4 @@
-export type AlertKind = "approval" | "completion" | "terminalExit";
+export type AlertKind = "approval" | "completion" | "failure" | "terminalExit";
 
 export interface AlertDeliveryRequest {
   kind: AlertKind;
@@ -9,7 +9,6 @@ export interface AlertDeliveryRequest {
 export interface NotificationRequest {
   title: string;
   body: string;
-  sound: "Ping";
 }
 
 export interface AlertDeliveryAdapters {
@@ -32,7 +31,7 @@ export function createNoopAlertDelivery(): AlertDelivery {
 
 type PermissionState = "unknown" | "granted" | "denied" | "unavailable";
 
-/** Isolates native notifications from their independent audible fallback. */
+/** Delivers a silent native notification and the bundled alert sound independently. */
 export function createAlertDelivery(adapters: AlertDeliveryAdapters): AlertDelivery {
   let permissionState: PermissionState = "unknown";
   let permissionRequest: Promise<boolean> | null = null;
@@ -63,7 +62,7 @@ export function createAlertDelivery(adapters: AlertDeliveryAdapters): AlertDeliv
     return permissionRequest;
   }
 
-  async function playFallback(kind: AlertKind): Promise<void> {
+  async function playSound(kind: AlertKind): Promise<void> {
     try {
       await adapters.playAlertSound(kind);
     } catch (error) {
@@ -73,17 +72,18 @@ export function createAlertDelivery(adapters: AlertDeliveryAdapters): AlertDeliv
 
   return {
     async deliver(alert) {
-      if (!(await requestNotificationPermission())) {
-        await playFallback(alert.kind);
-        return;
+      // Start the sound before the permission prompt so it is never delayed by it.
+      const sound = playSound(alert.kind);
+
+      if (await requestNotificationPermission()) {
+        try {
+          await adapters.notifications.sendNotification({ title: alert.title, body: alert.body });
+        } catch (error) {
+          onError("notification", error);
+        }
       }
 
-      try {
-        await adapters.notifications.sendNotification({ title: alert.title, body: alert.body, sound: "Ping" });
-      } catch (error) {
-        onError("notification", error);
-        await playFallback(alert.kind);
-      }
+      await sound;
     },
   };
 }

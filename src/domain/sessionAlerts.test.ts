@@ -49,12 +49,17 @@ describe("advanceSessionAlerts", () => {
     expect(result.alerts).toMatchObject([{ kind: "approval", sessionId: "claude:abc", subagent: true }]);
   });
 
-  it("does not alert when a session errors or disappears", () => {
+  it("alerts when a running session fails", () => {
     const baseline = advanceSessionAlerts(createSessionAlertState(), snapshot([session()]));
-    const errored = advanceSessionAlerts(baseline.state, snapshot([session({ status: "error" })]));
-    const missing = advanceSessionAlerts(errored.state, snapshot([]));
+    const result = advanceSessionAlerts(baseline.state, snapshot([session({ status: "error" })]));
 
-    expect(errored.alerts).toEqual([]);
+    expect(result.alerts).toMatchObject([{ kind: "failure", sessionId: "claude:abc", subagent: false }]);
+  });
+
+  it("does not alert when a session disappears", () => {
+    const baseline = advanceSessionAlerts(createSessionAlertState(), snapshot([session()]));
+    const missing = advanceSessionAlerts(baseline.state, snapshot([]));
+
     expect(missing.alerts).toEqual([]);
   });
 
