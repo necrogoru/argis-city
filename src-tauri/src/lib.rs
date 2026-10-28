@@ -9,6 +9,7 @@ pub mod project_paths;
 pub mod providers;
 pub mod shared;
 pub mod system;
+mod task_images;
 mod task_resume;
 pub mod task_store;
 pub mod terminal_manager;
@@ -21,6 +22,9 @@ mod project_paths_tests;
 
 #[cfg(test)]
 mod task_store_tests;
+
+#[cfg(test)]
+mod task_images_tests;
 
 #[cfg(test)]
 mod terminal_manager_tests;

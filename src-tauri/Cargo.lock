@@ -73,6 +73,7 @@ name = "argis"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "dirs 6.0.0",
  "parking_lot",
  "portable-pty",
