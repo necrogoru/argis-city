@@ -24,6 +24,7 @@ import Kbd from "../common/Kbd.vue";
 import ProjectManagerDialog from "./ProjectManagerDialog.vue";
 import TaskCard from "./TaskCard.vue";
 import TaskEditorDialog from "./TaskEditorDialog.vue";
+import TaskSheet from "./TaskSheet.vue";
 import TaskStatusDialog from "./TaskStatusDialog.vue";
 import { useTerminalNavigationStore } from "../../stores/terminalNavigation";
 
@@ -61,6 +62,8 @@ const projectPaths = computed(() => new Map(store.projects.map((project) => [pro
 const projectsOpen = ref(false);
 const taskEditorOpen = ref(false);
 const editingTask = shallowRef<Task | null>(null);
+const sheetOpen = ref(false);
+const sheetTask = shallowRef<Task | null>(null);
 const statusDialogOpen = ref(false);
 const statusTask = shallowRef<Task | null>(null);
 const deletionNotice = ref<string | null>(null);
@@ -202,6 +205,17 @@ function editTask(task: Task): void {
   taskEditorOpen.value = true;
 }
 
+function openTaskSheet(task: Task): void {
+  sheetTask.value = task;
+  sheetOpen.value = true;
+}
+
+function editFromSheet(): void {
+  const task = sheetTask.value;
+  sheetOpen.value = false;
+  if (task) editTask(task);
+}
+
 async function updateStatus(task: Task, status: TaskStatus): Promise<void> {
   const updated = await store.updateTaskStatus(task.id, status);
   if (!updated) return;
@@ -307,6 +321,10 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
         <span class="task-shortcut-keys"><Kbd>gg</Kbd><span>/</span><Kbd>Shift+G</Kbd></span>
       </span>
       <span class="task-shortcut-group">
+        <span class="task-shortcut-label">Open task</span>
+        <span class="task-shortcut-keys"><Kbd>Enter</Kbd></span>
+      </span>
+      <span class="task-shortcut-group">
         <span class="task-shortcut-label">Task actions when available</span>
         <span class="task-shortcut-keys">
           <Kbd>c</Kbd><span>new</span><Kbd>b</Kbd><span>branch</span><Kbd>t</Kbd><span>terminal</span>
@@ -341,6 +359,7 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
               :can-open-terminal="task.worktreePath !== null"
               :status-feedback-version="statusFeedbackVersions[task.id] ?? 0"
               @edit="editTask(task)"
+              @view="openTaskSheet(task)"
               @move-status="updateStatus(task, $event)"
               @create-branch="createBranch(task)"
               @open-terminal="openTerminal(task)"
@@ -361,6 +380,13 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
     </span>
 
     <ProjectManagerDialog v-model:open="projectsOpen" :projects="store.projects" />
+    <TaskSheet
+      v-if="sheetTask"
+      v-model:open="sheetOpen"
+      :task="sheetTask"
+      :project-path="projectPaths.get(sheetTask.projectId) ?? 'Unknown project'"
+      @edit="editFromSheet"
+    />
     <TaskEditorDialog
       v-model:open="taskEditorOpen"
       :projects="store.projects"

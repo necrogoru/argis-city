@@ -196,7 +196,9 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   while other typed characters (including `c`, `b`, `s`, and `t`) remain search
   text.
 - Each task entry shows its generated ID, title, description, project name, and
-  exact status. Its action row has four icon buttons in this order: Create
+  exact status. When the task has images, its meta row also shows a count badge
+  (`Image` icon + number, labelled "N images attached"). Its action row has four
+  icon buttons in this order: Create
   branch/worktree, Open terminal, previous status, next status. Disable status
   movement at the ends of the fixed status order and explain unavailable Git
   or terminal actions without removing their place in the row.
@@ -214,6 +216,22 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   worktree remain. A failed safe Git cleanup leaves a notice with the remaining
   paths, while the task is still removed. Keep the approved palette, type,
   radii, and spacing tokens unchanged.
+- New task and edit task also carry an optional image set below Description:
+  drop images anywhere on the open editor, paste them, or use the dashed
+  "Drop, paste, or choose images" area to open the file picker. PNG, JPEG,
+  WebP, and GIF are accepted, up to 12 images per task, 10 MB per image, and
+  30 MB per task; the picker and drop zone mirror those limits in their helper
+  copy. Attached images render as 88×88 thumbnails with a remove control, and
+  unsupported or oversized files leave the dialog usable with one inline alert.
+  Images are staged with the rest of the form: Save applies text and the image
+  set in one transaction, and Cancel writes nothing.
+- Enter on a focused task card opens a read-only task sheet: generated ID,
+  project path, exact status pill, the full title with a Copy title action, the
+  description with preserved line breaks and a Copy description action (disabled
+  when empty), and every attached image with its file name, size, and a Copy
+  image action that writes PNG pixels to the clipboard. A footer offers Close
+  and Edit task; Escape closes the sheet and returns focus to the card. The
+  sheet is the only place copy actions live, and it never edits the task.
 - Opening a task terminal shows a full-height terminal modal over the current
   view, horizontally centered and 80% of the window width. Its header
   identifies the task and worktree, with Agent and `term` tabs above

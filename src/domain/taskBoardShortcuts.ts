@@ -121,3 +121,18 @@ export function canCreateTaskBranch(
 export function canOpenTaskTerminal(task: Pick<Task, "worktreePath">, enabled: boolean | undefined): boolean {
   return Boolean(enabled) && task.worktreePath !== null;
 }
+
+/** Opens the read-only task sheet for Enter on the card itself, never on its action buttons. */
+export function taskCardViewRequested(event: TaskBoardShortcutEvent, eventTargetIsCard: boolean): boolean {
+  return (
+    eventTargetIsCard &&
+    !event.defaultPrevented &&
+    !event.repeat &&
+    !event.isComposing &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.key === "Enter"
+  );
+}

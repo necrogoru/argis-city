@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { ChevronDown, ChevronUp, GitBranch, SquareTerminal } from "@lucide/vue";
+import { ChevronDown, ChevronUp, GitBranch, ImageIcon, SquareTerminal } from "@lucide/vue";
 import type { Task, TaskGitStatus, TaskStatus } from "../../domain/types";
 import { nextTaskStatus, previousTaskStatus, TASK_STATUS_LABELS } from "../../domain/tasks";
 import { taskFocusDirectionForEvent, type TaskFocusDirection } from "../../domain/taskFocus";
-import { canCreateTaskBranch, canOpenTaskTerminal } from "../../domain/taskBoardShortcuts";
+import { canCreateTaskBranch, canOpenTaskTerminal, taskCardViewRequested } from "../../domain/taskBoardShortcuts";
 
 const props = defineProps<{
   task: Task;
@@ -15,6 +15,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   edit: [];
+  view: [];
   moveStatus: [status: TaskStatus];
   createBranch: [];
   openTerminal: [];
@@ -42,6 +43,12 @@ const projectName = computed(() => props.projectPath.split(/[\\/]/).filter(Boole
 
 function handleKeydown(event: KeyboardEvent): void {
   const card = event.currentTarget as HTMLElement;
+  if (taskCardViewRequested(event, event.target === card)) {
+    event.preventDefault();
+    emit("view");
+    return;
+  }
+
   const isWithinCard = event.target === card || (event.target instanceof Node && card.contains(event.target));
   const direction = taskFocusDirectionForEvent(event, isWithinCard);
   if (direction === null) return;
@@ -71,7 +78,7 @@ defineExpose({ focus });
     :data-status="props.task.status"
     :aria-label="`Task #${props.task.id}: ${props.task.title}`"
     aria-describedby="task-board-navigation-hint"
-    aria-keyshortcuts="ArrowLeft ArrowDown ArrowUp ArrowRight h j k l Shift+G s"
+    aria-keyshortcuts="Enter ArrowLeft ArrowDown ArrowUp ArrowRight h j k l Shift+G s"
     tabindex="0"
     @focusin="emit('focusTask')"
     @focusout="handleFocusout"
@@ -86,7 +93,13 @@ defineExpose({ focus });
     <p class="task-description">{{ props.task.description || "No description" }}</p>
 
     <div class="task-card-meta">
-      <span class="project-name" :title="props.projectPath">{{ projectName }}</span>
+      <span class="meta-left">
+        <span class="project-name" :title="props.projectPath">{{ projectName }}</span>
+        <span v-if="props.task.images.length" class="image-badge" :aria-label="`${props.task.images.length} images attached`">
+          <ImageIcon :size="12" aria-hidden="true" />
+          {{ props.task.images.length }}
+        </span>
+      </span>
       <span
         :key="props.statusFeedbackVersion ?? 0"
         class="status-label"
@@ -209,6 +222,27 @@ defineExpose({ focus });
 .task-card-meta {
   justify-content: space-between;
   gap: 8px;
+}
+
+.meta-left {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.image-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--fill-subtle);
+  color: var(--text-3);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 .project-name {

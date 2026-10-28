@@ -7,6 +7,7 @@ import {
   resolveTaskBoardJumpShortcut,
   taskBoardActionForShortcut,
   taskBoardNavigationDirection,
+  taskCardViewRequested,
 } from "./taskBoardShortcuts";
 
 const key = (
@@ -222,5 +223,17 @@ describe("task board shortcut action eligibility", () => {
     expect(canOpenTaskTerminal({ worktreePath: "/tmp/argis-task-7" }, true)).toBe(true);
     expect(canOpenTaskTerminal({ worktreePath: "/tmp/argis-task-7" }, false)).toBe(false);
     expect(canOpenTaskTerminal({ worktreePath: null }, true)).toBe(false);
+  });
+});
+
+describe("taskCardViewRequested", () => {
+  it("opens only for an unmodified Enter on the card itself", () => {
+    expect(taskCardViewRequested(key("Enter"), true)).toBe(true);
+    expect(taskCardViewRequested(key("Enter"), false)).toBe(false);
+    expect(taskCardViewRequested(key("Enter", { shiftKey: true }), true)).toBe(false);
+    expect(taskCardViewRequested(key("Enter", { metaKey: true }), true)).toBe(false);
+    expect(taskCardViewRequested(key("Enter", { repeat: true }), true)).toBe(false);
+    expect(taskCardViewRequested(key("Enter", { isComposing: true }), true)).toBe(false);
+    expect(taskCardViewRequested(key(" "), true)).toBe(false);
   });
 });
