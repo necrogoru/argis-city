@@ -17,7 +17,7 @@ pub use provider::ProviderId;
 pub use session::{AgentSession, SubAgent};
 pub use snapshot::{ProviderSummary, Snapshot};
 pub use status::AgentStatus;
-pub use task::{Task, TaskAgentResume, TaskStatus};
+pub use task::{Task, TaskAgentResume, TaskImage, TaskImageFile, TaskImageInput, TaskImageMimeType, TaskStatus};
 pub use terminal::{
     TerminalAgent, TerminalAttachment, TerminalEvent, TerminalInventoryEntry, TerminalInventoryState,
     TerminalLifecycleEvent, TerminalSessionInfo, TerminalSessionKey, TerminalSize, TerminalTab,

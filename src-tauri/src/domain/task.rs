@@ -23,6 +23,71 @@ pub struct Task {
     pub status: TaskStatus,
     pub branch_name: Option<String>,
     pub worktree_path: Option<String>,
+    pub images: Vec<TaskImage>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskImage {
+    pub id: i64,
+    pub file_name: String,
+    pub mime_type: TaskImageMimeType,
+    pub byte_size: i64,
+}
+
+/// One entry of the desired image set sent with a task save.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskImageInput {
+    /// Existing image kept on the task; `None` for a newly added image.
+    pub image_id: Option<i64>,
+    pub file_name: String,
+    pub mime_type: TaskImageMimeType,
+    /// Present only when `image_id` is `None`.
+    pub data_base64: Option<String>,
+}
+
+/// A file read from disk for the drag-and-drop path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskImageFile {
+    pub file_name: String,
+    pub mime_type: TaskImageMimeType,
+    pub byte_size: i64,
+    pub data_base64: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TaskImageMimeType {
+    #[serde(rename = "image/png")]
+    Png,
+    #[serde(rename = "image/jpeg")]
+    Jpeg,
+    #[serde(rename = "image/webp")]
+    Webp,
+    #[serde(rename = "image/gif")]
+    Gif,
+}
+
+impl TaskImageMimeType {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Png => "image/png",
+            Self::Jpeg => "image/jpeg",
+            Self::Webp => "image/webp",
+            Self::Gif => "image/gif",
+        }
+    }
+
+    pub fn from_db_value(value: &str) -> Option<Self> {
+        match value {
+            "image/png" => Some(Self::Png),
+            "image/jpeg" => Some(Self::Jpeg),
+            "image/webp" => Some(Self::Webp),
+            "image/gif" => Some(Self::Gif),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

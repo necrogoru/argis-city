@@ -44,7 +44,80 @@ fn task_store_records_schema_version() {
     let connection = Connection::open(database_path).unwrap();
     let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0)).unwrap();
 
-    assert_eq!(version, 2);
+    assert_eq!(version, 3);
+}
+
+#[test]
+fn task_store_migrates_v2_and_keeps_existing_tasks() {
+    let dir = tempfile::tempdir().unwrap();
+    let database_path = dir.path().join("argis.sqlite");
+    let legacy = Connection::open(&database_path).unwrap();
+    legacy
+        .execute_batch(
+            "PRAGMA foreign_keys = ON;
+             CREATE TABLE projects (id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL UNIQUE);
+             CREATE TABLE tasks (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                 title TEXT NOT NULL,
+                 description TEXT NOT NULL,
+                 status TEXT NOT NULL CHECK (status IN ('pending', 'inProgress', 'stopped', 'canceled', 'completed')),
+                 branch_name TEXT,
+                 worktree_path TEXT
+             );
+             CREATE INDEX tasks_by_project ON tasks(project_id, id);
+             CREATE TABLE task_agent_resume (
+                 task_id INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+                 provider TEXT NOT NULL,
+                 native_reference TEXT NOT NULL,
+                 worktree_path TEXT NOT NULL,
+                 last_observed_at_ms INTEGER NOT NULL
+             );
+             INSERT INTO projects (id, path) VALUES (1, '/projects/argis');
+             INSERT INTO tasks (id, project_id, title, description, status, branch_name, worktree_path)
+             VALUES (7, 1, 'Legacy task', 'text', 'pending', NULL, NULL);
+             PRAGMA user_version = 2;",
+        )
+        .unwrap();
+    drop(legacy);
+
+    let store = TaskStore::open(&database_path).unwrap();
+    let task = store.get_task(7).unwrap();
+    assert_eq!(task.title, "Legacy task");
+    assert!(task.images.is_empty());
+
+    let connection = Connection::open(&database_path).unwrap();
+    let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0)).unwrap();
+    assert_eq!(version, 3);
+    let tables: i64 = connection
+        .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'task_images'", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(tables, 1);
+}
+
+#[test]
+fn task_store_reads_images_with_tasks_in_id_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let database_path = dir.path().join("argis.sqlite");
+    let store = TaskStore::open(&database_path).unwrap();
+    let project = store.create_project("/projects/argis").unwrap();
+    let task = store.create_task(project.id, "With images", "").unwrap();
+
+    let connection = Connection::open(&database_path).unwrap();
+    for (file_name, mime_type) in [("first.png", "image/png"), ("second.jpg", "image/jpeg")] {
+        connection
+            .execute(
+                "INSERT INTO task_images (task_id, file_name, mime_type, byte_size) VALUES (?1, ?2, ?3, 4)",
+                rusqlite::params![task.id, file_name, mime_type],
+            )
+            .unwrap();
+    }
+    drop(connection);
+
+    let listed = store.list_tasks(None).unwrap();
+    let names: Vec<&str> = listed[0].images.iter().map(|image| image.file_name.as_str()).collect();
+    assert_eq!(names, vec!["first.png", "second.jpg"]);
+    assert_eq!(store.get_task(task.id).unwrap().images.len(), 2);
 }
 
 #[test]
@@ -82,7 +155,7 @@ fn task_store_migrates_v1_and_persists_one_replaceable_resume_reference_per_task
 
     let connection = Connection::open(&database_path).unwrap();
     let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0)).unwrap();
-    assert_eq!(version, 2);
+    assert_eq!(version, 3);
 
     connection
         .execute(
@@ -164,7 +237,7 @@ fn task_store_rejects_a_newer_unknown_schema_version() {
     let dir = tempfile::tempdir().unwrap();
     let database_path = dir.path().join("argis.sqlite");
     let connection = Connection::open(&database_path).unwrap();
-    connection.pragma_update(None, "user_version", 3).unwrap();
+    connection.pragma_update(None, "user_version", 4).unwrap();
     drop(connection);
 
     let error = TaskStore::open(&database_path).err().expect("newer schema version should fail to open");
