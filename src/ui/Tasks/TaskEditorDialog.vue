@@ -76,9 +76,15 @@ function handleCancel(event: Event): void {
 
 function handlePaste(event: ClipboardEvent): void {
   const files = event.clipboardData?.files;
-  if (!files?.length) return;
-  event.preventDefault();
-  void attachments.addFiles(files, taskImages.value);
+  if (files?.length) {
+    event.preventDefault();
+    void attachments.addFiles(files, taskImages.value);
+    return;
+  }
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  if (target && !target.closest("input, textarea, [contenteditable='true']")) {
+    attachmentError.value = "Only PNG, JPEG, WebP, and GIF images can be attached.";
+  }
 }
 
 function handleDrop(event: DragEvent): void {
@@ -175,7 +181,7 @@ async function confirmDelete(): Promise<void> {
           @click="chooseFiles"
         >
           <span>{{ dragActive ? "Drop to attach to this task" : "Drop, paste, or choose images" }}</span>
-          <span class="drop-hint">PNG, JPEG, WebP, or GIF · up to 12 images, 10 MB each</span>
+          <span class="drop-hint">PNG, JPEG, WebP, or GIF · up to 12 images, 10 MB each, 30 MB total</span>
         </button>
         <input
           ref="file-input"

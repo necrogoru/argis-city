@@ -94,8 +94,13 @@ impl TaskStore {
             params![project_id, title, description, TaskStatus::Pending.as_db_value()],
         )?;
         let id = transaction.last_insert_rowid();
-        apply_task_images(&transaction, &self.image_root, id, images, true)?;
-        transaction.commit()?;
+        let (_removed, written) = apply_task_images(&transaction, &self.image_root, id, images, true)?;
+        if let Err(error) = transaction.commit() {
+            for path in written {
+                remove_image_file(&path);
+            }
+            return Err(error.into());
+        }
         task_by_id(&connection, id)
     }
 
@@ -203,8 +208,13 @@ impl TaskStore {
         if changed == 0 {
             bail!("task {id} does not exist");
         }
-        let removed = apply_task_images(&transaction, &self.image_root, id, images, false)?;
-        transaction.commit()?;
+        let (removed, written) = apply_task_images(&transaction, &self.image_root, id, images, false)?;
+        if let Err(error) = transaction.commit() {
+            for path in written {
+                remove_image_file(&path);
+            }
+            return Err(error.into());
+        }
         for path in removed {
             remove_image_file(&path);
         }
@@ -255,10 +265,10 @@ fn apply_task_images(
     task_id: i64,
     inputs: &[TaskImageInput],
     new_task: bool,
-) -> anyhow::Result<Vec<PathBuf>> {
+) -> anyhow::Result<(Vec<PathBuf>, Vec<PathBuf>)> {
     let mut written = Vec::new();
     match apply_task_images_inner(transaction, image_root, task_id, inputs, new_task, &mut written) {
-        Ok(removed) => Ok(removed),
+        Ok(removed) => Ok((removed, written)),
         Err(error) => {
             for path in written {
                 remove_image_file(&path);
@@ -337,7 +347,10 @@ fn apply_task_images_inner(
             )?;
             let image_id = transaction.last_insert_rowid();
             let temp = directory.join(format!(".tmp-{image_id}"));
-            fs::write(&temp, &bytes).with_context(|| format!("writing {}", temp.display()))?;
+            if let Err(error) = fs::write(&temp, &bytes) {
+                remove_image_file(&temp);
+                return Err(error).with_context(|| format!("writing {}", temp.display()));
+            }
             let path = stored_image_path(image_root, task_id, image_id);
             if let Err(error) = fs::rename(&temp, &path) {
                 remove_image_file(&temp);

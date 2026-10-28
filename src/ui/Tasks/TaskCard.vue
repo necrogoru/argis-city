@@ -95,7 +95,12 @@ defineExpose({ focus });
     <div class="task-card-meta">
       <span class="meta-left">
         <span class="project-name" :title="props.projectPath">{{ projectName }}</span>
-        <span v-if="props.task.images.length" class="image-badge" :aria-label="`${props.task.images.length} images attached`">
+        <span
+          v-if="props.task.images.length"
+          class="image-badge"
+          role="img"
+          :aria-label="`${props.task.images.length} ${props.task.images.length === 1 ? 'image' : 'images'} attached`"
+        >
           <ImageIcon :size="12" aria-hidden="true" />
           {{ props.task.images.length }}
         </span>

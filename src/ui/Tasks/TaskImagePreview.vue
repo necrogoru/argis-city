@@ -8,19 +8,22 @@ const emit = defineEmits<{ loaded: [blob: Blob] }>();
 const source = useAgentSource();
 const url = ref<string | null>(null);
 const failed = ref(false);
+let disposed = false;
 
 onMounted(async () => {
   try {
     const bytes = await source.readTaskImage(props.image.id);
+    if (disposed) return;
     const blob = new Blob([bytes], { type: props.image.mimeType });
     url.value = URL.createObjectURL(blob);
     emit("loaded", blob);
   } catch {
-    failed.value = true;
+    if (!disposed) failed.value = true;
   }
 });
 
 onBeforeUnmount(() => {
+  disposed = true;
   if (url.value) URL.revokeObjectURL(url.value);
   url.value = null;
 });

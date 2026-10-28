@@ -210,9 +210,10 @@ function openTaskSheet(task: Task): void {
   sheetOpen.value = true;
 }
 
-function editFromSheet(): void {
+async function editFromSheet(): Promise<void> {
   const task = sheetTask.value;
   sheetOpen.value = false;
+  await nextTick();
   if (task) editTask(task);
 }
 
@@ -374,9 +375,9 @@ function handleTaskDeleted(outcome: TaskDeletionOutcome): void {
     </div>
     <span id="task-board-navigation-hint" class="visually-hidden">
       With Search tasks focused, use ArrowDown or ArrowUp to focus matching tasks. On a task card, use ArrowDown or j and
-      ArrowUp or k to move within its status pane, ArrowLeft or h and ArrowRight or l to move between panes, press g
-      twice to focus the first visible task, press Shift+G to focus the last, or press s to choose a status with keys 1
-      through 5.
+      ArrowUp or k to move within its status pane, ArrowLeft or h and ArrowRight or l to move between panes, press Enter
+      to open the task, press g twice to focus the first visible task, press Shift+G to focus the last, or press s to
+      choose a status with keys 1 through 5.
     </span>
 
     <ProjectManagerDialog v-model:open="projectsOpen" :projects="store.projects" />

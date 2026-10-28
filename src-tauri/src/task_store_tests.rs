@@ -378,3 +378,21 @@ fn rejected_saves_leave_the_task_and_files_untouched() {
         assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
     }
 }
+
+#[test]
+fn a_failed_image_write_leaves_no_rows_and_no_stray_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = TaskStore::open(&dir.path().join("argis.sqlite")).unwrap();
+    let project = store.create_project("/projects/argis").unwrap();
+    // A fresh database hands the task and image id 1 to this save; make the
+    // destination a directory so the temp file cannot be renamed into place.
+    let blocked = dir.path().join("task-images").join("1").join("1");
+    std::fs::create_dir_all(&blocked).unwrap();
+
+    let error = store.create_task(project.id, "Blocked", "", &[image_input("a.png", PNG)]).unwrap_err();
+
+    assert!(error.to_string().contains("storing"), "{error}");
+    assert!(store.list_tasks(None).unwrap().is_empty());
+    let entries = std::fs::read_dir(dir.path().join("task-images").join("1")).unwrap().count();
+    assert_eq!(entries, 1, "only the pre-created directory should remain");
+}
