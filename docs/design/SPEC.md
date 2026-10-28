@@ -215,7 +215,7 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   paths, while the task is still removed. Keep the approved palette, type,
   radii, and spacing tokens unchanged.
 - Opening a task terminal shows a full-height terminal modal over the current
-  view, horizontally centered within the existing width constraints. Its header
+  view, horizontally centered and 80% of the window width. Its header
   identifies the task and worktree, with Agent and `term` tabs above
   full-size xterm viewports. Before process startup, each viewport stays blank
   and its tab reads `Not started`. A live Agent PTY reattaches directly. With no
