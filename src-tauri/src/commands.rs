@@ -1,8 +1,8 @@
 //! Tauri commands (see docs/CONTRACT.md → Transport).
 
 use crate::domain::{
-    Project, Snapshot, Task, TaskAgentResume, TaskStatus, TerminalAgent, TerminalAttachment, TerminalEvent,
-    TerminalInventoryEntry, TerminalSessionKey, TerminalSize, TerminalTab,
+    Project, Snapshot, Task, TaskAgentResume, TaskImageFile, TaskImageInput, TaskStatus, TerminalAgent,
+    TerminalAttachment, TerminalEvent, TerminalInventoryEntry, TerminalSessionKey, TerminalSize, TerminalTab,
 };
 use crate::git_worktrees::{
     create_task_worktree as create_git_worktree, delete_task_with_git_cleanup, inspect_task_git,
@@ -114,9 +114,10 @@ pub async fn create_task(
     project_id: i64,
     title: String,
     description: String,
+    images: Vec<TaskImageInput>,
     state: State<'_, TaskStoreState>,
 ) -> Result<Task, String> {
-    task_store_operation(state, move |store| store.create_task(project_id, &title, &description, &[])).await
+    task_store_operation(state, move |store| store.create_task(project_id, &title, &description, &images)).await
 }
 
 #[tauri::command]
@@ -124,9 +125,25 @@ pub async fn update_task_details(
     id: i64,
     title: String,
     description: String,
+    images: Vec<TaskImageInput>,
     state: State<'_, TaskStoreState>,
 ) -> Result<Task, String> {
-    task_store_operation(state, move |store| store.update_task_details(id, &title, &description, &[])).await
+    task_store_operation(state, move |store| store.update_task_details(id, &title, &description, &images)).await
+}
+
+#[tauri::command]
+pub async fn read_task_image(image_id: i64, state: State<'_, TaskStoreState>) -> Result<tauri::ipc::Response, String> {
+    let bytes = task_store_operation(state, move |store| store.read_task_image(image_id)).await?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[tauri::command]
+pub async fn read_image_file(path: String) -> Result<TaskImageFile, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::task_images::read_image_file(Path::new(&path)).map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]

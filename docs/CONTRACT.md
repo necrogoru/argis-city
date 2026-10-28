@@ -16,8 +16,10 @@ one tower per tool (provider), one house per live session, subagents as cards.
 | command | `list_task_agent_resumes` | → `TaskAgentResume[]`                             |
 | command | `get_task_agent_resume`   | `{ taskId }` → `TaskAgentResume \| null`         |
 | command | `save_task_agent_resume`  | `{ reference: TaskAgentResume }` → `TaskAgentResume` |
-| command | `create_task`             | `{ projectId, title, description }` → `Task`      |
-| command | `update_task_details`     | `{ id, title, description }` → `Task`             |
+| command | `create_task`             | `{ projectId, title, description, images }` → `Task` |
+| command | `update_task_details`     | `{ id, title, description, images }` → `Task`     |
+| command | `read_task_image`         | `{ imageId }` → raw `ArrayBuffer`                 |
+| command | `read_image_file`         | `{ path }` → `TaskImageFile`                      |
 | command | `update_task_status`      | `{ id, status }` → `Task`                         |
 | command | `delete_task`             | `{ id, removeGitResources }` → `TaskDeletionOutcome` |
 | command | `inspect_task_git_status` | `{ taskId }` → `TaskGitStatus`                    |
@@ -46,6 +48,19 @@ paths are absolute canonical paths. Task statuses are `pending`, `inProgress`,
 until created. `register_project` creates a missing directory only when
 `createIfMissing` is true. Task status changes are explicit user operations;
 agent plan data is not imported into the task list.
+
+`TaskImage` is Argis-owned metadata for an optional image attached to a task:
+`id`, `fileName`, `mimeType` (`image/png`, `image/jpeg`, `image/webp`, or
+`image/gif`), and `byteSize`. Bytes live under
+`<database parent>/task-images/<taskId>/<imageId>`, never in SQLite;
+`read_task_image` returns them as raw bytes. `create_task` and
+`update_task_details` take the full desired image set as `TaskImageInput[]`
+(`imageId` for a kept image, or `dataBase64` for a new one) and apply text,
+additions, and removals in one transaction, so a failed save changes nothing.
+Limits are 12 images per task, 10 MiB per image, and 30 MiB per task; every MIME
+type is sniffed from magic bytes in Rust and a client value that disagrees is
+rejected. `read_image_file` is the drag-and-drop path: it validates an absolute
+path to a supported file and returns its bytes base64-encoded.
 
 `TaskAgentResume` is Argis-owned metadata keyed by `taskId`, with `provider`, an
 opaque `nativeReference`, the canonical `worktreePath`, and

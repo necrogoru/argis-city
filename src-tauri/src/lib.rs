@@ -118,6 +118,8 @@ pub fn run() {
             commands::save_task_agent_resume,
             commands::create_task,
             commands::update_task_details,
+            commands::read_task_image,
+            commands::read_image_file,
             commands::update_task_status,
             commands::delete_task,
             commands::inspect_task_git_status,
