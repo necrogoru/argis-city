@@ -29,7 +29,7 @@ fn init_repository(parent: &TempDir) -> PathBuf {
 fn task_store_for(parent: &TempDir, project_path: &Path, title: &str) -> (TaskStore, i64) {
     let store = TaskStore::open(&parent.path().join("argis.sqlite")).unwrap();
     let project = store.create_project(&project_path.to_string_lossy()).unwrap();
-    let task = store.create_task(project.id, title, "description").unwrap();
+    let task = store.create_task(project.id, title, "description", &[]).unwrap();
     (store, task.id)
 }
 
@@ -60,7 +60,7 @@ fn creates_a_task_worktree_and_records_the_local_exclude_rule() {
     assert!(String::from_utf8_lossy(&branches.stdout).contains(&worktree.branch_name));
 
     let project_id = store.get_task(task_id).unwrap().project_id;
-    let second_task = store.create_task(project_id, "Second worktree", "description").unwrap();
+    let second_task = store.create_task(project_id, "Second worktree", "description", &[]).unwrap();
     let second_worktree = create_task_worktree(&store, second_task.id).unwrap();
     assert!(Path::new(&second_worktree.worktree_path).is_dir());
 

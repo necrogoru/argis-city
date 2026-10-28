@@ -342,7 +342,7 @@ mod tests {
         let cwd = tempfile::tempdir().unwrap();
         let store = TaskStore::open(&dir.path().join("argis.sqlite")).unwrap();
         let project = store.create_project("/projects/argis").unwrap();
-        let task = store.create_task(project.id, "Resume", "").unwrap();
+        let task = store.create_task(project.id, "Resume", "", &[]).unwrap();
         let process = process(TerminalAgent::Codex, 22, cwd.path(), 2_000);
         let session_id = "12345678-1234-4abc-8def-123456789006";
         let snapshot =
@@ -367,7 +367,7 @@ mod tests {
         let cwd = tempfile::tempdir().unwrap();
         let store = TaskStore::open(&dir.path().join("argis.sqlite")).unwrap();
         let project = store.create_project("/projects/argis").unwrap();
-        let task = store.create_task(project.id, "Resume", "").unwrap();
+        let task = store.create_task(project.id, "Resume", "", &[]).unwrap();
         let process = process(TerminalAgent::OpenCode, 23, cwd.path(), 2_000);
         let process = ManagedAgentProcess { task_id: task.id, ..process };
         let session_id_a = "ses_candidate_a";

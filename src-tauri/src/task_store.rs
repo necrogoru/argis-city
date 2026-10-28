@@ -1,8 +1,13 @@
-use crate::domain::{Project, ProviderId, Task, TaskAgentResume, TaskImage, TaskImageMimeType, TaskStatus};
+use crate::domain::{
+    Project, ProviderId, Task, TaskAgentResume, TaskImage, TaskImageInput, TaskImageMimeType, TaskStatus,
+};
+use crate::task_images::{
+    decode_image_input, sanitize_file_name, stored_image_path, MAX_TASK_IMAGES, MAX_TASK_IMAGE_BYTES,
+};
 use anyhow::{anyhow, bail, Context};
 use parking_lot::Mutex;
-use rusqlite::{params, Connection, OptionalExtension, Row, TransactionBehavior};
-use std::collections::HashMap;
+use rusqlite::{params, Connection, OptionalExtension, Row, Transaction, TransactionBehavior};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -46,7 +51,8 @@ impl TaskStore {
         let mut connection = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
         connection.pragma_update(None, "foreign_keys", "ON")?;
         migrate(&mut connection)?;
-        let image_root = path.parent().map(|parent| parent.join("task-images")).unwrap_or_else(|| PathBuf::from("task-images"));
+        let image_root =
+            path.parent().map(|parent| parent.join("task-images")).unwrap_or_else(|| PathBuf::from("task-images"));
 
         Ok(Self { connection: Mutex::new(connection), image_root })
     }
@@ -74,13 +80,23 @@ impl TaskStore {
             .ok_or_else(|| anyhow!("project {id} does not exist"))
     }
 
-    pub fn create_task(&self, project_id: i64, title: &str, description: &str) -> anyhow::Result<Task> {
-        let connection = self.connection.lock();
-        connection.execute(
+    pub fn create_task(
+        &self,
+        project_id: i64,
+        title: &str,
+        description: &str,
+        images: &[TaskImageInput],
+    ) -> anyhow::Result<Task> {
+        let mut connection = self.connection.lock();
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        transaction.execute(
             "INSERT INTO tasks (project_id, title, description, status) VALUES (?1, ?2, ?3, ?4)",
             params![project_id, title, description, TaskStatus::Pending.as_db_value()],
         )?;
-        task_by_id(&connection, connection.last_insert_rowid())
+        let id = transaction.last_insert_rowid();
+        apply_task_images(&transaction, &self.image_root, id, images, true)?;
+        transaction.commit()?;
+        task_by_id(&connection, id)
     }
 
     pub fn list_tasks(&self, project_id: Option<i64>) -> anyhow::Result<Vec<Task>> {
@@ -173,12 +189,24 @@ impl TaskStore {
         task_by_id(&connection, id)
     }
 
-    pub fn update_task_details(&self, id: i64, title: &str, description: &str) -> anyhow::Result<Task> {
-        let connection = self.connection.lock();
-        let changed = connection
+    pub fn update_task_details(
+        &self,
+        id: i64,
+        title: &str,
+        description: &str,
+        images: &[TaskImageInput],
+    ) -> anyhow::Result<Task> {
+        let mut connection = self.connection.lock();
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = transaction
             .execute("UPDATE tasks SET title = ?2, description = ?3 WHERE id = ?1", params![id, title, description])?;
         if changed == 0 {
             bail!("task {id} does not exist");
+        }
+        let removed = apply_task_images(&transaction, &self.image_root, id, images, false)?;
+        transaction.commit()?;
+        for path in removed {
+            remove_image_file(&path);
         }
         task_by_id(&connection, id)
     }
@@ -199,7 +227,134 @@ impl TaskStore {
         if changed == 0 {
             bail!("task {id} does not exist");
         }
+        let directory = self.image_root.join(id.to_string());
+        if let Err(error) = fs::remove_dir_all(&directory) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                eprintln!("failed to remove task image directory {}: {error}", directory.display());
+            }
+        }
         Ok(())
+    }
+
+    pub fn read_task_image(&self, image_id: i64) -> anyhow::Result<Vec<u8>> {
+        let connection = self.connection.lock();
+        let task_id: i64 = connection
+            .query_row("SELECT task_id FROM task_images WHERE id = ?1", [image_id], |row| row.get(0))
+            .optional()?
+            .ok_or_else(|| anyhow!("task image {image_id} does not exist"))?;
+        let path = stored_image_path(&self.image_root, task_id, image_id);
+        fs::read(&path).with_context(|| format!("reading {}", path.display()))
+    }
+}
+
+/// Applies the desired image set inside the caller's transaction and returns
+/// the files that must be unlinked after the commit succeeds.
+fn apply_task_images(
+    transaction: &Transaction<'_>,
+    image_root: &Path,
+    task_id: i64,
+    inputs: &[TaskImageInput],
+    new_task: bool,
+) -> anyhow::Result<Vec<PathBuf>> {
+    let mut written = Vec::new();
+    match apply_task_images_inner(transaction, image_root, task_id, inputs, new_task, &mut written) {
+        Ok(removed) => Ok(removed),
+        Err(error) => {
+            for path in written {
+                remove_image_file(&path);
+            }
+            Err(error)
+        }
+    }
+}
+
+fn apply_task_images_inner(
+    transaction: &Transaction<'_>,
+    image_root: &Path,
+    task_id: i64,
+    inputs: &[TaskImageInput],
+    new_task: bool,
+    written: &mut Vec<PathBuf>,
+) -> anyhow::Result<Vec<PathBuf>> {
+    let existing: HashMap<i64, TaskImage> =
+        images_for_task(transaction, task_id)?.into_iter().map(|image| (image.id, image)).collect();
+
+    let mut seen = HashSet::new();
+    let mut kept = Vec::new();
+    let mut additions = Vec::new();
+    for input in inputs {
+        match input.image_id {
+            Some(image_id) => {
+                if new_task {
+                    bail!("a new task cannot reference an existing image");
+                }
+                if input.data_base64.is_some() {
+                    bail!("an existing task image must not carry new image data");
+                }
+                if !seen.insert(image_id) {
+                    bail!("task image {image_id} is listed twice");
+                }
+                let image = existing
+                    .get(&image_id)
+                    .ok_or_else(|| anyhow!("task image {image_id} does not belong to task {task_id}"))?;
+                if image.file_name != sanitize_file_name(&input.file_name) || image.mime_type != input.mime_type {
+                    bail!("task image {image_id} metadata does not match the stored image");
+                }
+                kept.push(image_id);
+            }
+            None => additions.push(input),
+        }
+    }
+
+    if kept.len() + additions.len() > MAX_TASK_IMAGES {
+        bail!("a task can hold at most {MAX_TASK_IMAGES} images");
+    }
+
+    let mut decoded = Vec::with_capacity(additions.len());
+    let mut total_bytes: i64 = kept.iter().map(|image_id| existing[image_id].byte_size).sum();
+    for input in additions {
+        let bytes = decode_image_input(input)?;
+        total_bytes += bytes.len() as i64;
+        decoded.push((input, bytes));
+    }
+    if total_bytes > MAX_TASK_IMAGE_BYTES {
+        bail!("task images exceed the {} MB per-task budget", MAX_TASK_IMAGE_BYTES / (1024 * 1024));
+    }
+
+    let mut removed = Vec::new();
+    for image_id in existing.keys().filter(|image_id| !kept.contains(image_id)) {
+        transaction.execute("DELETE FROM task_images WHERE id = ?1", [image_id])?;
+        removed.push(stored_image_path(image_root, task_id, *image_id));
+    }
+
+    if !decoded.is_empty() {
+        let directory = image_root.join(task_id.to_string());
+        fs::create_dir_all(&directory).with_context(|| format!("creating {}", directory.display()))?;
+        for (input, bytes) in decoded {
+            transaction.execute(
+                "INSERT INTO task_images (task_id, file_name, mime_type, byte_size) VALUES (?1, ?2, ?3, ?4)",
+                params![task_id, sanitize_file_name(&input.file_name), input.mime_type.as_str(), bytes.len() as i64],
+            )?;
+            let image_id = transaction.last_insert_rowid();
+            let temp = directory.join(format!(".tmp-{image_id}"));
+            fs::write(&temp, &bytes).with_context(|| format!("writing {}", temp.display()))?;
+            let path = stored_image_path(image_root, task_id, image_id);
+            if let Err(error) = fs::rename(&temp, &path) {
+                remove_image_file(&temp);
+                return Err(error).with_context(|| format!("storing {}", path.display()));
+            }
+            written.push(path);
+        }
+    }
+
+    Ok(removed)
+}
+
+fn remove_image_file(path: &Path) {
+    if let Err(error) = fs::remove_file(path) {
+        if error.kind() != std::io::ErrorKind::NotFound {
+            eprintln!("failed to remove task image {}: {error}", path.display());
+        }
     }
 }
 
@@ -296,10 +451,15 @@ fn images_by_task(connection: &Connection, project_id: Option<i64>) -> anyhow::R
 }
 
 fn images_for_task(connection: &Connection, task_id: i64) -> anyhow::Result<Vec<TaskImage>> {
-    let mut statement =
-        connection.prepare("SELECT id, file_name, mime_type, byte_size FROM task_images WHERE task_id = ?1 ORDER BY id")?;
+    let mut statement = connection
+        .prepare("SELECT id, file_name, mime_type, byte_size FROM task_images WHERE task_id = ?1 ORDER BY id")?;
     let rows = statement.query_map([task_id], |row| {
-        Ok(TaskImage { id: row.get(0)?, file_name: row.get(1)?, mime_type: image_mime_type(row, 2)?, byte_size: row.get(3)? })
+        Ok(TaskImage {
+            id: row.get(0)?,
+            file_name: row.get(1)?,
+            mime_type: image_mime_type(row, 2)?,
+            byte_size: row.get(3)?,
+        })
     })?;
     rows.collect::<rusqlite::Result<Vec<_>>>().context("reading task images")
 }

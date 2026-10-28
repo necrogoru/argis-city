@@ -116,7 +116,7 @@ pub async fn create_task(
     description: String,
     state: State<'_, TaskStoreState>,
 ) -> Result<Task, String> {
-    task_store_operation(state, move |store| store.create_task(project_id, &title, &description)).await
+    task_store_operation(state, move |store| store.create_task(project_id, &title, &description, &[])).await
 }
 
 #[tauri::command]
@@ -126,7 +126,7 @@ pub async fn update_task_details(
     description: String,
     state: State<'_, TaskStoreState>,
 ) -> Result<Task, String> {
-    task_store_operation(state, move |store| store.update_task_details(id, &title, &description)).await
+    task_store_operation(state, move |store| store.update_task_details(id, &title, &description, &[])).await
 }
 
 #[tauri::command]
@@ -521,7 +521,7 @@ mod tests {
 
         let store = TaskStore::open(&parent.join("argis.sqlite")).unwrap();
         let project = register_project_path(&store, &project_path, false).unwrap();
-        let task = store.create_task(project.id, "Terminal cleanup", "").unwrap();
+        let task = store.create_task(project.id, "Terminal cleanup", "", &[]).unwrap();
         let worktree = create_git_worktree(&store, task.id).unwrap();
         (store, task, worktree)
     }
