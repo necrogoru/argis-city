@@ -1,10 +1,14 @@
 import type {
+  FileDropEvent,
   Project,
   Snapshot,
   Task,
   TaskAgentResume,
   TaskDeletionOutcome,
   TaskGitStatus,
+  TaskImage,
+  TaskImageFile,
+  TaskImageInput,
   TaskStatus,
   TaskWorktree,
   TerminalAgent,
@@ -16,6 +20,12 @@ import type {
   TerminalTab,
 } from "../../domain/types";
 import { taskBranchName, taskWorktreePath } from "../../domain/tasks";
+import {
+  base64ToBytes,
+  MAX_TASK_IMAGES,
+  MAX_TASK_IMAGE_BYTES,
+  sniffImageMimeType,
+} from "../../domain/imageFiles";
 import { POLL_INTERVAL_MS, type AgentSource } from "../agentSource";
 import { buildSession } from "./mockFactory";
 import { SESSION_SEEDS } from "./mockSeed";
@@ -41,8 +51,10 @@ export class MockAgentSource implements AgentSource {
   private projects: Project[] = [];
   private tasks: Task[] = [];
   private readonly taskAgentResumes = new Map<number, TaskAgentResume>();
+  private readonly taskImageBytes = new Map<number, Uint8Array>();
   private nextProjectId = 1;
   private nextTaskId = 1;
+  private nextTaskImageId = 1;
 
   constructor(
     scenario: MockScenario = "busy",
@@ -92,7 +104,9 @@ export class MockAgentSource implements AgentSource {
   }
 
   async listTasks(projectId?: number): Promise<Task[]> {
-    return this.tasks.filter((task) => projectId === undefined || task.projectId === projectId).map((task) => ({ ...task }));
+    return this.tasks
+      .filter((task) => projectId === undefined || task.projectId === projectId)
+      .map((task) => ({ ...task, images: task.images.map((image) => ({ ...image })) }));
   }
 
   async listTaskAgentResumes(): Promise<TaskAgentResume[]> {
@@ -119,7 +133,12 @@ export class MockAgentSource implements AgentSource {
     return { ...saved };
   }
 
-  async createTask(projectId: number, title: string, description: string): Promise<Task> {
+  async createTask(
+    projectId: number,
+    title: string,
+    description: string,
+    images: readonly TaskImageInput[],
+  ): Promise<Task> {
     if (!this.projects.some((project) => project.id === projectId)) {
       throw new Error(`project ${projectId} does not exist`);
     }
@@ -131,16 +150,85 @@ export class MockAgentSource implements AgentSource {
       status: "pending",
       branchName: null,
       worktreePath: null,
+      images: [],
     };
+    this.applyTaskImages(task, images, true);
     this.tasks.push(task);
-    return { ...task };
+    return { ...task, images: task.images.map((image) => ({ ...image })) };
   }
 
-  async updateTaskDetails(id: number, title: string, description: string): Promise<Task> {
+  async updateTaskDetails(
+    id: number,
+    title: string,
+    description: string,
+    images: readonly TaskImageInput[],
+  ): Promise<Task> {
     const task = this.findTask(id);
+    this.applyTaskImages(task, images, false);
     task.title = title;
     task.description = description;
-    return { ...task };
+    return { ...task, images: task.images.map((image) => ({ ...image })) };
+  }
+
+  private applyTaskImages(task: Task, inputs: readonly TaskImageInput[], newTask: boolean): void {
+    const kept = new Set<number>();
+    const additions: TaskImageInput[] = [];
+    for (const input of inputs) {
+      if (input.imageId == null) {
+        if (input.dataBase64 == null) throw new Error("a new task image needs dataBase64");
+        additions.push(input);
+        continue;
+      }
+      if (newTask) throw new Error("a new task cannot reference an existing image");
+      if (input.dataBase64 != null) throw new Error("an existing task image must not carry new image data");
+      if (!task.images.some((image) => image.id === input.imageId)) {
+        throw new Error(`task image ${input.imageId} does not belong to task ${task.id}`);
+      }
+      if (kept.has(input.imageId)) throw new Error(`task image ${input.imageId} is listed twice`);
+      kept.add(input.imageId);
+    }
+    if (kept.size + additions.length > MAX_TASK_IMAGES) {
+      throw new Error(`a task can hold at most ${MAX_TASK_IMAGES} images`);
+    }
+
+    const keptImages = task.images.filter((image) => kept.has(image.id));
+    let total = keptImages.reduce((sum, image) => sum + image.byteSize, 0);
+    const decoded = additions.map((input) => {
+      const bytes = base64ToBytes(input.dataBase64 ?? "");
+      if (bytes.length === 0) throw new Error("task image data is empty");
+      if (sniffImageMimeType(bytes) !== input.mimeType) throw new Error("task image type does not match");
+      total += bytes.length;
+      return { input, bytes };
+    });
+    if (total > MAX_TASK_IMAGE_BYTES) throw new Error("task images exceed the 30 MB per-task budget");
+
+    const removed = task.images.filter((image) => !kept.has(image.id));
+    task.images = keptImages;
+    for (const image of removed) this.taskImageBytes.delete(image.id);
+    for (const { input, bytes } of decoded) {
+      const image: TaskImage = {
+        id: this.nextTaskImageId++,
+        fileName: input.fileName,
+        mimeType: input.mimeType,
+        byteSize: bytes.length,
+      };
+      this.taskImageBytes.set(image.id, bytes);
+      task.images.push(image);
+    }
+  }
+
+  async readTaskImage(imageId: number): Promise<ArrayBuffer> {
+    const bytes = this.taskImageBytes.get(imageId);
+    if (!bytes) throw new Error(`task image ${imageId} does not exist`);
+    return bytes.slice().buffer;
+  }
+
+  async readImageFile(_path: string): Promise<TaskImageFile> {
+    throw new Error("Reading image files is only available in the Argis desktop app");
+  }
+
+  subscribeFileDrop(_callback: (event: FileDropEvent) => void): () => void {
+    return () => {};
   }
 
   async updateTaskStatus(id: number, status: TaskStatus): Promise<Task> {
@@ -154,6 +242,7 @@ export class MockAgentSource implements AgentSource {
     if (index < 0) throw new Error(`task ${id} does not exist`);
     const [task] = this.tasks.splice(index, 1);
     this.taskAgentResumes.delete(id);
+    for (const image of task.images) this.taskImageBytes.delete(image.id);
     return {
       taskDeleted: true,
       git: {

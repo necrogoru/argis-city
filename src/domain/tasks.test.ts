@@ -20,6 +20,7 @@ function task(id: number, status: TaskStatus, projectId = 1): Task {
     status,
     branchName: null,
     worktreePath: null,
+    images: [],
   };
 }
 

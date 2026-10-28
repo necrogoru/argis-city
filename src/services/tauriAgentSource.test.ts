@@ -63,6 +63,7 @@ const task: Task = {
   status: "pending",
   branchName: null,
   worktreePath: null,
+  images: [],
 };
 const resume: TaskAgentResume = {
   taskId: task.id,
@@ -92,13 +93,14 @@ describe("TauriAgentSource project and task operations", () => {
     invoke.mockResolvedValueOnce(task).mockResolvedValueOnce([task]);
     const source = createTauriAgentSource();
 
-    await expect(source.createTask(project.id, task.title, task.description)).resolves.toEqual(task);
+    await expect(source.createTask(project.id, task.title, task.description, [])).resolves.toEqual(task);
     await expect(source.listTasks(project.id)).resolves.toEqual([task]);
 
     expect(invoke).toHaveBeenNthCalledWith(1, "create_task", {
       projectId: project.id,
       title: task.title,
       description: task.description,
+      images: [],
     });
     expect(invoke).toHaveBeenNthCalledWith(2, "list_tasks", { projectId: project.id });
   });
@@ -118,7 +120,7 @@ describe("TauriAgentSource project and task operations", () => {
     invoke.mockResolvedValueOnce(task).mockResolvedValueOnce({ ...task, status: "inProgress" }).mockResolvedValueOnce(deletion);
     const source = createTauriAgentSource();
 
-    await source.updateTaskDetails(task.id, "Edited title", "Edited description");
+    await source.updateTaskDetails(task.id, "Edited title", "Edited description", []);
     await source.updateTaskStatus(task.id, "inProgress");
     await expect(source.deleteTask(task.id, true)).resolves.toEqual(deletion);
 
@@ -126,6 +128,7 @@ describe("TauriAgentSource project and task operations", () => {
       id: task.id,
       title: "Edited title",
       description: "Edited description",
+      images: [],
     });
     expect(invoke).toHaveBeenNthCalledWith(2, "update_task_status", { id: task.id, status: "inProgress" });
     expect(invoke).toHaveBeenNthCalledWith(3, "delete_task", { id: task.id, removeGitResources: true });
@@ -305,5 +308,24 @@ describe("TauriAgentSource project and task operations", () => {
     await Promise.resolve();
     expect(listenState.unlistenCalls).toBe(1);
     expect(eventHandlers).toHaveLength(0);
+  });
+});
+
+describe("TauriAgentSource task images", () => {
+  beforeEach(() => {
+    invoke.mockReset();
+  });
+
+  it("reads stored image bytes and dropped files through their commands", async () => {
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer;
+    const file = { fileName: "shot.png", mimeType: "image/png" as const, byteSize: 4, dataBase64: "iVBORw==" };
+    invoke.mockResolvedValueOnce(bytes).mockResolvedValueOnce(file);
+    const source = createTauriAgentSource();
+
+    await expect(source.readTaskImage(3)).resolves.toBe(bytes);
+    await expect(source.readImageFile("/tmp/shot.png")).resolves.toEqual(file);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "read_task_image", { imageId: 3 });
+    expect(invoke).toHaveBeenNthCalledWith(2, "read_image_file", { path: "/tmp/shot.png" });
   });
 });

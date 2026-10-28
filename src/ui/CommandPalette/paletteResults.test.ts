@@ -32,6 +32,7 @@ const tasks: Task[] = [
     status: "pending",
     branchName: null,
     worktreePath: null,
+    images: [],
   },
 ];
 

@@ -1,10 +1,13 @@
 import type {
+  FileDropEvent,
   Project,
   Snapshot,
   Task,
   TaskAgentResume,
   TaskDeletionOutcome,
   TaskGitStatus,
+  TaskImageFile,
+  TaskImageInput,
   TaskStatus,
   TaskWorktree,
   TerminalAgent,
@@ -40,8 +43,24 @@ export interface AgentSource {
   listTaskAgentResumes(): Promise<TaskAgentResume[]>;
   getTaskAgentResume(taskId: number): Promise<TaskAgentResume | null>;
   saveTaskAgentResume(reference: TaskAgentResume): Promise<TaskAgentResume>;
-  createTask(projectId: number, title: string, description: string): Promise<Task>;
-  updateTaskDetails(id: number, title: string, description: string): Promise<Task>;
+  createTask(
+    projectId: number,
+    title: string,
+    description: string,
+    images: readonly TaskImageInput[],
+  ): Promise<Task>;
+  updateTaskDetails(
+    id: number,
+    title: string,
+    description: string,
+    images: readonly TaskImageInput[],
+  ): Promise<Task>;
+  /** Raw bytes of a stored task image. */
+  readTaskImage(imageId: number): Promise<ArrayBuffer>;
+  /** Reads an image file picked from a native drag-and-drop payload. */
+  readImageFile(path: string): Promise<TaskImageFile>;
+  /** Native file-drop notifications; the browser mock never emits any. */
+  subscribeFileDrop(callback: (event: FileDropEvent) => void): () => void;
   updateTaskStatus(id: number, status: TaskStatus): Promise<Task>;
   deleteTask(id: number, removeGitResources: boolean): Promise<TaskDeletionOutcome>;
   getTaskGitStatus(id: number): Promise<TaskGitStatus>;

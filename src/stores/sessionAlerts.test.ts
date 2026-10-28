@@ -16,6 +16,7 @@ const task: Task = {
   status: "inProgress",
   branchName: "argis/7-build-alert-routing",
   worktreePath: "/worktrees/7/",
+  images: [],
 };
 
 function setup() {

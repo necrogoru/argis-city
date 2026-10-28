@@ -9,8 +9,8 @@ import { useTerminalRailStore } from "./terminalRail";
 
 const project: Project = { id: 1, path: "/projects/argis" };
 const tasks: Task[] = [
-  { id: 7, projectId: 1, title: "Add dashboard rail", description: "", status: "pending", branchName: null, worktreePath: "/w/7" },
-  { id: 8, projectId: 1, title: "Verify terminal states", description: "", status: "pending", branchName: null, worktreePath: "/w/8" },
+  { id: 7, projectId: 1, title: "Add dashboard rail", description: "", status: "pending", branchName: null, worktreePath: "/w/7", images: [] },
+  { id: 8, projectId: 1, title: "Verify terminal states", description: "", status: "pending", branchName: null, worktreePath: "/w/8", images: [] },
 ];
 
 function setup(overrides: Partial<AgentSource> = {}) {
@@ -42,6 +42,9 @@ function setup(overrides: Partial<AgentSource> = {}) {
       reason: null,
     })),
     createTaskWorktree: vi.fn(async (id) => ({ branchName: `argis/${id}`, worktreePath: `/w/${id}` })),
+    readTaskImage: async () => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer,
+    readImageFile: async () => { throw new Error("unused test operation"); },
+    subscribeFileDrop: () => () => {},
     startTerminalSession: async () => { throw new Error("unused"); },
     resumeTaskAgent: async () => { throw new Error("unused"); },
     reattachTerminalSession: async () => null,

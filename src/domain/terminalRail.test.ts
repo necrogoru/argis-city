@@ -20,6 +20,7 @@ const tasks: Task[] = [
     status: "pending",
     branchName: null,
     worktreePath: "/worktrees/idle",
+    images: [],
   },
   {
     id: 2,
@@ -29,6 +30,7 @@ const tasks: Task[] = [
     status: "pending",
     branchName: null,
     worktreePath: "/worktrees/running",
+    images: [],
   },
   {
     id: 3,
@@ -38,6 +40,7 @@ const tasks: Task[] = [
     status: "pending",
     branchName: null,
     worktreePath: "/worktrees/pending",
+    images: [],
   },
   {
     id: 4,
@@ -47,6 +50,7 @@ const tasks: Task[] = [
     status: "pending",
     branchName: null,
     worktreePath: "/worktrees/completed",
+    images: [],
   },
   {
     id: 5,
@@ -56,6 +60,7 @@ const tasks: Task[] = [
     status: "pending",
     branchName: null,
     worktreePath: "/worktrees/unavailable",
+    images: [],
   },
   {
     id: 6,
@@ -65,6 +70,7 @@ const tasks: Task[] = [
     status: "pending",
     branchName: null,
     worktreePath: "/worktrees/inventory-only",
+    images: [],
   },
 ];
 

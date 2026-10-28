@@ -6,6 +6,7 @@ import type {
   TaskAgentResume,
   TaskDeletionOutcome,
   TaskGitStatus,
+  TaskImageInput,
   TaskStatus,
   TaskWorktree,
 } from "../domain/types";
@@ -107,8 +108,13 @@ export const useTaskStore = defineStore("tasks", () => {
     return project;
   }
 
-  async function createTask(projectId: number, title: string, description: string): Promise<Task | null> {
-    const task = await perform(() => source.createTask(projectId, title, description));
+  async function createTask(
+    projectId: number,
+    title: string,
+    description: string,
+    images: readonly TaskImageInput[] = [],
+  ): Promise<Task | null> {
+    const task = await perform(() => source.createTask(projectId, title, description, images));
     if (task) {
       tasks.value = [...tasks.value, task];
       invalidateSearchData();
@@ -117,8 +123,13 @@ export const useTaskStore = defineStore("tasks", () => {
     return task;
   }
 
-  async function updateTaskDetails(id: number, title: string, description: string): Promise<Task | null> {
-    const updated = await perform(() => source.updateTaskDetails(id, title, description));
+  async function updateTaskDetails(
+    id: number,
+    title: string,
+    description: string,
+    images: readonly TaskImageInput[] = [],
+  ): Promise<Task | null> {
+    const updated = await perform(() => source.updateTaskDetails(id, title, description, images));
     if (updated) {
       tasks.value = tasks.value.map((task) => (task.id === id ? updated : task));
       invalidateSearchData();
@@ -147,6 +158,10 @@ export const useTaskStore = defineStore("tasks", () => {
     delete nextStatuses[id];
     gitStatuses.value = nextStatuses;
     return outcome;
+  }
+
+  async function readTaskImage(imageId: number): Promise<ArrayBuffer> {
+    return source.readTaskImage(imageId);
   }
 
   async function refreshTaskGitStatus(id: number): Promise<TaskGitStatus | null> {
@@ -200,6 +215,7 @@ export const useTaskStore = defineStore("tasks", () => {
     addProject,
     createTask,
     updateTaskDetails,
+    readTaskImage,
     updateTaskStatus,
     deleteTask,
     refreshTaskGitStatus,

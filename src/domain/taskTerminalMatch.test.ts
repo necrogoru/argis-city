@@ -10,6 +10,7 @@ const task = (id: number, worktreePath: string | null): Task => ({
   status: "pending",
   branchName: null,
   worktreePath,
+  images: [],
 });
 
 describe("normalizeAbsolutePath", () => {

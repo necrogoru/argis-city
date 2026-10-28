@@ -1,14 +1,17 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   SNAPSHOT_EVENT,
   TERMINAL_EXIT_EVENT,
+  type FileDropEvent,
   type Project,
   type Snapshot,
   type Task,
   type TaskAgentResume,
   type TaskDeletionOutcome,
   type TaskGitStatus,
+  type TaskImageFile,
   type TerminalAttachment,
   type TerminalEvent,
   type TerminalLifecycleEvent,
@@ -80,6 +83,29 @@ export function createTauriAgentSource(): AgentSource {
     }
   }
 
+  function subscribeFileDrop(callback: (event: FileDropEvent) => void): () => void {
+    let disposed = false;
+    let unlisten: UnlistenFn | null = null;
+    void getCurrentWebview()
+      .onDragDropEvent((event) => {
+        if (disposed) return;
+        const payload = event.payload;
+        if (payload.type === "enter") callback({ type: "enter" });
+        else if (payload.type === "leave") callback({ type: "leave" });
+        else if (payload.type === "drop") callback({ type: "drop", paths: payload.paths });
+      })
+      .then((stop) => {
+        if (disposed) stop();
+        else unlisten = stop;
+      })
+      .catch((error: unknown) => console.error("[argis] file drop listener failed", error));
+    return () => {
+      disposed = true;
+      unlisten?.();
+      unlisten = null;
+    };
+  }
+
   return {
     kind: "live",
     getSnapshot: () => invoke<Snapshot>("get_snapshot"),
@@ -91,10 +117,16 @@ export function createTauriAgentSource(): AgentSource {
     listTaskAgentResumes: () => invoke<TaskAgentResume[]>("list_task_agent_resumes"),
     getTaskAgentResume: (taskId) => invoke<TaskAgentResume | null>("get_task_agent_resume", { taskId }),
     saveTaskAgentResume: (reference) => invoke<TaskAgentResume>("save_task_agent_resume", { reference }),
-    createTask: (projectId, title, description) =>
-      invoke<Task>("create_task", { projectId, title, description }),
-    updateTaskDetails: (id, title, description) =>
-      invoke<Task>("update_task_details", { id, title, description }),
+    createTask: (projectId, title, description, images) =>
+      invoke<Task>("create_task", { projectId, title, description, images }),
+    updateTaskDetails: (id, title, description, images) =>
+      invoke<Task>("update_task_details", { id, title, description, images }),
+    readTaskImage: async (imageId) => {
+      const bytes = await invoke<ArrayBuffer | number[]>("read_task_image", { imageId });
+      return bytes instanceof ArrayBuffer ? bytes : new Uint8Array(bytes).buffer;
+    },
+    readImageFile: (path) => invoke<TaskImageFile>("read_image_file", { path }),
+    subscribeFileDrop,
     updateTaskStatus: (id, status) => invoke<Task>("update_task_status", { id, status }),
     deleteTask: (id, removeGitResources) =>
       invoke<TaskDeletionOutcome>("delete_task", { id, removeGitResources }),

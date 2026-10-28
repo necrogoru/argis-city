@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgentStatus, TaskAgentResume } from "../../domain/types";
+import { bytesToBase64 } from "../../domain/imageFiles";
 import { createSeedSnapshot, MockAgentSource } from "./mockAgentSource";
 import { FLIP_EVERY, flipStatus, tickSnapshot } from "./mockTick";
 
@@ -43,7 +44,7 @@ describe("mock project and task operations", () => {
   it("persists task-agent resume references and removes them when the task is deleted", async () => {
     const source = new MockAgentSource("empty");
     const project = await source.addProject("/projects/argis", false);
-    const task = await source.createTask(project.id, "Resume", "");
+    const task = await source.createTask(project.id, "Resume", "", []);
     const reference: TaskAgentResume = {
       taskId: task.id,
       provider: "codex",
@@ -63,13 +64,13 @@ describe("mock project and task operations", () => {
   it("creates projects and tasks, updates task details/status, and deletes tasks", async () => {
     const source = new MockAgentSource("empty");
     const project = await source.addProject("/projects/argis", false);
-    const task = await source.createTask(project.id, "Add task board", "Create the grouped view");
+    const task = await source.createTask(project.id, "Add task board", "Create the grouped view", []);
 
     expect(await source.listProjects()).toEqual([project]);
     expect(await source.listTasks(project.id)).toEqual([task]);
     expect(task.status).toBe("pending");
 
-    const edited = await source.updateTaskDetails(task.id, "Edited title", "Edited description");
+    const edited = await source.updateTaskDetails(task.id, "Edited title", "Edited description", []);
     const updated = await source.updateTaskStatus(task.id, "inProgress");
     expect(edited.id).toBe(task.id);
     expect(updated.status).toBe("inProgress");
@@ -85,7 +86,7 @@ describe("mock project and task operations", () => {
   it("simulates Git capability and associates a created worktree with its task", async () => {
     const source = new MockAgentSource("empty");
     const project = await source.addProject("/projects/argis", false);
-    const task = await source.createTask(project.id, "Add task board", "Create the grouped view");
+    const task = await source.createTask(project.id, "Add task board", "Create the grouped view", []);
 
     const before = await source.getTaskGitStatus(task.id);
     expect(before.canCreateBranch).toBe(true);
@@ -161,5 +162,23 @@ describe("status flips", () => {
       tickSnapshot(seed, 2_000, still, tick).sessions.filter((s, i) => s.status !== seed.sessions[i].status);
     expect(changed(FLIP_EVERY - 1)).toHaveLength(0);
     expect(changed(FLIP_EVERY)).toHaveLength(1);
+  });
+});
+
+describe("mock task images", () => {
+  it("imports, reads, and removes task images through the desired set", async () => {
+    const source = new MockAgentSource("empty");
+    const project = await source.addProject("/projects/argis", false);
+    const pngBase64 = bytesToBase64(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    const task = await source.createTask(project.id, "Images", "", [
+      { imageId: null, fileName: "a.png", mimeType: "image/png", dataBase64: pngBase64 },
+    ]);
+    expect(task.images).toHaveLength(1);
+    expect(new Uint8Array(await source.readTaskImage(task.images[0].id))).toEqual(
+      new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    );
+    const cleared = await source.updateTaskDetails(task.id, "Images", "", []);
+    expect(cleared.images).toEqual([]);
+    await expect(source.readTaskImage(task.images[0].id)).rejects.toThrow("does not exist");
   });
 });

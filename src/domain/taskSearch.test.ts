@@ -17,6 +17,7 @@ const tasks: Task[] = [
     status: "inProgress",
     branchName: null,
     worktreePath: null,
+    images: [],
   },
   {
     id: 5,
@@ -26,6 +27,7 @@ const tasks: Task[] = [
     status: "pending",
     branchName: null,
     worktreePath: null,
+    images: [],
   },
   {
     id: 6,
@@ -35,6 +37,7 @@ const tasks: Task[] = [
     status: "pending",
     branchName: null,
     worktreePath: null,
+    images: [],
   },
 ];
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "vue";
 import { createPinia, setActivePinia } from "pinia";
-import type { Project, Task, TaskAgentResume } from "../domain/types";
+import type { Project, Task, TaskAgentResume, TaskImageInput } from "../domain/types";
 import type { AgentSource } from "../services/agentSource";
 import { agentSourceKey } from "../composables/useAgentSource";
 import { useTaskStore } from "./tasks";
@@ -15,6 +15,7 @@ const task: Task = {
   status: "pending",
   branchName: null,
   worktreePath: null,
+  images: [],
 };
 
 function setup(overrides: Partial<AgentSource> = {}) {
@@ -58,6 +59,9 @@ function setup(overrides: Partial<AgentSource> = {}) {
       branchName: `argis/${id}-task`,
       worktreePath: `/projects/argis/.argis/worktrees/${id}-task`,
     })),
+    readTaskImage: async () => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer,
+    readImageFile: async () => { throw new Error("unused test operation"); },
+    subscribeFileDrop: () => () => {},
     startTerminalSession: async () => { throw new Error("unused test operation"); },
     resumeTaskAgent: async () => { throw new Error("unused test operation"); },
     reattachTerminalSession: async () => null,
@@ -211,5 +215,46 @@ describe("useTaskStore", () => {
     expect(source.createTaskWorktree).toHaveBeenCalledWith(task.id);
     expect(store.tasks[0]).toMatchObject(created);
     expect(store.gitStatuses[task.id]).toEqual(linked);
+  });
+});
+
+describe("useTaskStore task images", () => {
+  it("forwards the desired image set on create and update", async () => {
+    const images = [{ imageId: null, fileName: "a.png", mimeType: "image/png" as const, dataBase64: "AA==" }];
+    const { store, source } = setup({
+      createTask: vi.fn(async (projectId: number, title: string, description: string, inputs: readonly TaskImageInput[]) => ({
+        ...task,
+        id: 9,
+        projectId,
+        title,
+        description,
+        images: inputs.map((input, index) => ({
+          id: index + 1,
+          fileName: input.fileName,
+          mimeType: input.mimeType,
+          byteSize: 1,
+        })),
+      })),
+    });
+
+    const created = await store.createTask(project.id, "Images", "", images);
+
+    expect(source.createTask).toHaveBeenCalledWith(project.id, "Images", "", images);
+    expect(created?.images).toHaveLength(1);
+  });
+
+  it("keeps the previous task when the backend rejects an image save", async () => {
+    const { store } = setup({
+      updateTaskDetails: vi.fn(async () => {
+        throw new Error("a task can hold at most 12 images");
+      }),
+    });
+    await store.ensureSearchDataLoaded();
+
+    const updated = await store.updateTaskDetails(task.id, "Edited", "", []);
+
+    expect(updated).toBeNull();
+    expect(store.error).toContain("12 images");
+    expect(store.tasks[0]?.title).toBe("Add task board");
   });
 });

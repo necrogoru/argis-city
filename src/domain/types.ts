@@ -95,7 +95,40 @@ export interface Task {
   status: TaskStatus;
   branchName: string | null;
   worktreePath: string | null;
+  /** Ordered by id ascending. Never carries bytes. */
+  images: TaskImage[];
 }
+
+export type TaskImageMimeType = "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+
+export interface TaskImage {
+  id: number;
+  fileName: string;
+  mimeType: TaskImageMimeType;
+  /** Bytes stored on disk (the original encoding, not a copy-time conversion). */
+  byteSize: number;
+}
+
+/** One entry of the desired image set sent with a task save. */
+export interface TaskImageInput {
+  /** Existing image kept on the task; `null` for a newly added image. */
+  imageId: number | null;
+  fileName: string;
+  mimeType: TaskImageMimeType;
+  /** Present only when `imageId` is `null`. */
+  dataBase64: string | null;
+}
+
+/** A file read from disk for the drag-and-drop path. */
+export interface TaskImageFile {
+  fileName: string;
+  mimeType: TaskImageMimeType;
+  byteSize: number;
+  dataBase64: string;
+}
+
+/** Native file-drop notification from the desktop window. */
+export type FileDropEvent = { type: "enter" | "leave" } | { type: "drop"; paths: string[] };
 
 export interface TaskAgentResume {
   taskId: number;

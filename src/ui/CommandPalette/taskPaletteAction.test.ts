@@ -10,6 +10,7 @@ const task: Task = {
   status: "pending",
   branchName: null,
   worktreePath: null,
+  images: [],
 };
 
 describe("taskPaletteAction", () => {

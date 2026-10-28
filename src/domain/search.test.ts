@@ -25,6 +25,7 @@ const tasks: Task[] = [
     status: "inProgress",
     branchName: null,
     worktreePath: null,
+    images: [],
   },
   {
     id: 18,
@@ -34,6 +35,7 @@ const tasks: Task[] = [
     status: "pending",
     branchName: "argis/18-search-command-palette",
     worktreePath: "/Users/dev/payment-service/.argis/worktrees/18-search-command-palette",
+    images: [],
   },
 ];
 
