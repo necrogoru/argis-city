@@ -58,6 +58,8 @@ function setup() {
     reattachTerminalSession: async () => null,
     sendTerminalInput: async () => {},
     resizeTerminalSession: async () => {},
+    stopTerminalSession: async () => {},
+    forgetTerminalTab: async () => false,
     detachTerminalSession: async () => false,
     listTerminalInventory: async () => [],
   };

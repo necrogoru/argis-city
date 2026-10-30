@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { TerminalTab } from "./types";
 import {
   DEFAULT_TERMINAL_TAB,
   getTerminalTabForKey,
@@ -13,11 +14,21 @@ describe("DEFAULT_TERMINAL_TAB", () => {
 });
 
 describe("getTerminalTabForKey", () => {
+  const twoTabs: TerminalTab[] = ["agent", "term"];
+  const fourTabs: TerminalTab[] = ["agent", "term", "term-2", "term-3"];
+
   it.each([
     ["agent", "term"],
     ["term", "agent"],
-  ] as const)("toggles from %s on Ctrl+Tab", (activeTab, expectedTab) => {
-    expect(getTerminalTabForKey(activeTab, { key: "Tab", ctrlKey: true })).toBe(expectedTab);
+  ] as const)("cycles from %s on Ctrl+Tab with two tabs", (activeTab, expectedTab) => {
+    expect(getTerminalTabForKey(twoTabs, activeTab, { key: "Tab", ctrlKey: true })).toBe(expectedTab);
+  });
+
+  it("cycles through every tab and wraps in both directions", () => {
+    expect(getTerminalTabForKey(fourTabs, "agent", { key: "Tab", ctrlKey: true })).toBe("term");
+    expect(getTerminalTabForKey(fourTabs, "term-3", { key: "Tab", ctrlKey: true })).toBe("agent");
+    expect(getTerminalTabForKey(fourTabs, "agent", { key: "Tab", ctrlKey: true, shiftKey: true })).toBe("term-3");
+    expect(getTerminalTabForKey(fourTabs, "term-2", { key: "Tab", ctrlKey: true, shiftKey: true })).toBe("term");
   });
 
   it.each([
@@ -26,22 +37,27 @@ describe("getTerminalTabForKey", () => {
     { key: "Tab", ctrlKey: true, metaKey: true },
     { key: "Enter", ctrlKey: true },
   ])("does not toggle for unrelated or modified shortcuts: %o", (event) => {
-    expect(getTerminalTabForKey("agent", event)).toBeNull();
+    expect(getTerminalTabForKey(twoTabs, "agent", event)).toBeNull();
   });
 
   it.each([
     ["agent", "ArrowRight", "term"],
     ["term", "ArrowLeft", "agent"],
     ["agent", "ArrowLeft", "agent"],
-    ["term", "ArrowRight", "term"],
-    ["term", "Home", "agent"],
-    ["agent", "End", "term"],
+    ["term-3", "ArrowRight", "term-3"],
+    ["term-2", "ArrowLeft", "term"],
+    ["term-3", "Home", "agent"],
+    ["term-2", "End", "term-3"],
   ] as const)("keeps accessible tab navigation: %s + %s selects %s", (activeTab, key, expectedTab) => {
-    expect(getTerminalTabForKey(activeTab, { key, ctrlKey: false })).toBe(expectedTab);
+    expect(getTerminalTabForKey(fourTabs, activeTab, { key, ctrlKey: false })).toBe(expectedTab);
   });
 
   it("ignores keys outside the terminal shortcuts", () => {
-    expect(getTerminalTabForKey("agent", { key: "Escape", ctrlKey: false })).toBeNull();
+    expect(getTerminalTabForKey(twoTabs, "agent", { key: "Escape", ctrlKey: false })).toBeNull();
+  });
+
+  it("ignores an active tab that is not in the visible list", () => {
+    expect(getTerminalTabForKey(twoTabs, "term-2", { key: "Tab", ctrlKey: true })).toBeNull();
   });
 });
 

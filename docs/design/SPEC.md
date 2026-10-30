@@ -104,9 +104,9 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   position and size, and hover/focus never expands a second launcher beside the
   tracked active one. Handle these keys only within the focused rail so text
   entry and terminal input keep their existing behavior. Aggregate the Agent
-  and `term` tabs in this order: Running when either tab runs; Pending when a tab
-  is starting and neither runs; Unavailable when startup failed and neither tab
-  is running or starting; Completed when a started session exited and neither
+  and every shell tab in this order: Running when any tab runs; Pending when a tab
+  is starting and none runs; Unavailable when startup failed and no tab
+  is running or starting; Completed when a started session exited and no
   tab is running, starting, or failed; otherwise Idle. Existing terminal
   inventory supplies Running, Unavailable, or Completed when no live tab state
   takes precedence. With no live process, a valid saved conversation changes the
@@ -234,12 +234,18 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   sheet is the only place copy actions live, and it never edits the task.
 - Opening a task terminal shows a full-height terminal modal over the current
   view, horizontally centered and 80% of the window width. Its header
-  identifies the task and worktree, with Agent and `term` tabs above
-  full-size xterm viewports. Before process startup, each viewport stays blank
+  identifies the task and worktree, with Agent and shell tabs above
+  full-size xterm viewports. The Agent tab is fixed and followed by `term` and
+  any extra shell tabs (`term 2`, `term 3`, …). A `+` action at the end of the
+  tab bar adds the lowest free shell tab, selects it, and starts its shell
+  immediately; the modal holds at most six shell tabs including `term` and
+  disables `+` with an accessible reason at that cap. Extra shell tabs carry a
+  close action that stops their process; Agent and `term` do not. Before process
+  startup, each viewport stays blank
   and its tab reads `Not started`. A live Agent PTY reattaches directly. With no
   live Agent PTY, the Agent pane offers `Resume <CLI>` when a saved reference is
   valid, plus a CLI selector and `Start new` action; missing or stale references
-  show "Resume unavailable" while keeping `Start new` available. The `term`
+  show "Resume unavailable" while keeping `Start new` available. Every shell
   pane has an explicit Start shell action. Tab labels reflect startup, running,
   exited, and unavailable
   states, with launch errors shown inside only the affected pane. Closing returns
@@ -248,8 +254,10 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   view tree, so switching views does not detach its tabs. A task result selected
   in `⌘K` opens the same modal over the current view without navigating to Tasks;
   running Agent and shell sessions reattach, and absent sessions show the
-  existing resume-or-new controls. If the recorded worktree directory was
-  deleted, both tabs open in the worktree root so the user can restore or clean
+  existing resume-or-new controls. Extra shell tabs still owned by the backend
+  are recreated from terminal inventory when the modal mounts again. If the
+  recorded worktree directory was
+  deleted, every tab opens in the worktree root so the user can restore or clean
   it up; a worktree that exists but is not the task's Git worktree on its
   recorded branch still shows the existing launch error. Dashboard launchers,
   the task-board `t`
@@ -263,16 +271,17 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
 - Terminal keyboard behavior: The modal opens on `term` and focuses the active
   xterm input after its pane is visible, fitted, and any session reattachment
   completes, including when the terminal has not started. While the modal is
-  open, Ctrl+Tab toggles Agent ↔ `term`, prevents host/browser tab switching,
-  then fits and focuses the active terminal input. Keep the accessible tab-button
-  ArrowLeft/ArrowRight/Home/End navigation. Unmodified `s` starts the selected
+  open, Ctrl+Tab moves to the next tab and Ctrl+Shift+Tab to the previous one,
+  both wrapping, which prevents host/browser tab switching and then fits and
+  focuses the active terminal input. Keep the accessible tab-button
+  ArrowLeft/ArrowRight/Home/End navigation across every open tab. Unmodified `s` starts the selected
   Agent or shell pane when it is startable, including while xterm has focus;
   when running, `s` remains terminal input. Ignore modified, repeated, composing,
   and form-control keystrokes. Escape is passed to xterm and does not close the
   modal while terminal input has focus. `Ctrl+Esc` closes the modal from any
   focus target, including xterm input; plain Escape still closes it when focus
   is outside terminal input. `Ctrl+Shift+W` no longer closes the modal.
-  Closing returns focus to the opener and leaves both PTYs alive for reattachment.
+  Closing returns focus to the opener and leaves every PTY alive for reattachment.
 
 ### Task-board presentation
 - The three task groups use open, evenly distributed lanes with consistent

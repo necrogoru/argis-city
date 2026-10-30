@@ -167,7 +167,7 @@ describe("TauriAgentSource project and task operations", () => {
     expect(invoke).toHaveBeenNthCalledWith(3, "save_task_agent_resume", { reference: resume });
   });
 
-  it("streams terminal channel events and forwards terminal input and size", async () => {
+  it("streams terminal channel events and forwards terminal input, size, and stop", async () => {
     const attachment: TerminalAttachment = {
       session: {
         id: 22,
@@ -180,7 +180,11 @@ describe("TauriAgentSource project and task operations", () => {
     };
     const output = vi.fn<(event: TerminalEvent) => void>();
     const event: TerminalEvent = { type: "output", sessionId: attachment.session.id, bytes: [65, 10] };
-    invoke.mockResolvedValueOnce(attachment).mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined);
+    invoke
+      .mockResolvedValueOnce(attachment)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined);
     const source = createTauriAgentSource();
 
     await expect(source.startTerminalSession(task.id, "agent", "claude", { cols: 90, rows: 30 }, output))
@@ -188,6 +192,7 @@ describe("TauriAgentSource project and task operations", () => {
     channelHandlers[0](event);
     await source.sendTerminalInput(attachment.session.id, "hello\n");
     await source.resizeTerminalSession(attachment.session.id, { cols: 110, rows: 36 });
+    await source.stopTerminalSession(attachment.session.id);
 
     expect(output).toHaveBeenCalledWith(event);
     expect(invoke).toHaveBeenNthCalledWith(1, "start_terminal_session", {
@@ -205,6 +210,17 @@ describe("TauriAgentSource project and task operations", () => {
       sessionId: attachment.session.id,
       size: { cols: 110, rows: 36 },
     });
+    expect(invoke).toHaveBeenNthCalledWith(4, "stop_terminal_session", {
+      sessionId: attachment.session.id,
+    });
+  });
+
+  it("forgets a failed tab through the dedicated command", async () => {
+    invoke.mockResolvedValueOnce(true);
+    const source = createTauriAgentSource();
+
+    await expect(source.forgetTerminalTab(task.id, "term-2")).resolves.toBe(true);
+    expect(invoke).toHaveBeenCalledWith("forget_terminal_tab", { taskId: task.id, tab: "term-2" });
   });
 
   it("resumes a task's saved Agent conversation through the dedicated Tauri command", async () => {

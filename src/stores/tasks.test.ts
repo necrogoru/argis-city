@@ -67,6 +67,8 @@ function setup(overrides: Partial<AgentSource> = {}) {
     reattachTerminalSession: async () => null,
     sendTerminalInput: async () => {},
     resizeTerminalSession: async () => {},
+    stopTerminalSession: async () => {},
+    forgetTerminalTab: async () => false,
     detachTerminalSession: async () => false,
     listTerminalInventory: async () => [],
     ...overrides,

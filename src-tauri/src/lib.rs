@@ -129,6 +129,8 @@ pub fn run() {
             commands::reattach_terminal_session,
             commands::terminal_input,
             commands::resize_terminal_session,
+            commands::stop_terminal_session,
+            commands::forget_terminal_tab,
             commands::detach_terminal_session,
             commands::list_terminal_inventory,
             commands::play_alert_sound

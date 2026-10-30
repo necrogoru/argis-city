@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from "vue";
 import { PROVIDERS } from "../../domain/providers";
 import type { TerminalAgent, TerminalSize, TerminalTab } from "../../domain/types";
+import { isAgentTab } from "../../domain/terminalTabs";
 import { useAgentSource } from "../../composables/useAgentSource";
 import TerminalSurface from "./TerminalSurface.vue";
 import { useTerminalSession, type TerminalStatus } from "./useTerminalSession";
@@ -51,14 +52,14 @@ function statusLabel(status: TerminalStatus): string {
 async function reattach(): Promise<void> {
   await session.reattach();
   const agentCli = session.attachment.value?.session.agentCli;
-  if (props.tab === "agent" && agentCli) selectedAgent.value = agentCli;
-  if (props.tab === "agent" && session.resumeReference.value) {
+  if (isAgentTab(props.tab) && agentCli) selectedAgent.value = agentCli;
+  if (isAgentTab(props.tab) && session.resumeReference.value) {
     selectedAgent.value = session.resumeReference.value.provider;
   }
 }
 
 async function start(): Promise<void> {
-  await session.start(props.tab === "agent" ? selectedAgent.value : null);
+  await session.start(isAgentTab(props.tab) ? selectedAgent.value : null);
   if (session.connected.value) surface.value?.focus();
 }
 
@@ -83,7 +84,7 @@ function refresh(): void {
 watch(session.status, (status) => emit("statusChange", status), { immediate: true });
 onBeforeUnmount(() => void session.dispose());
 
-defineExpose({ reattach, detach: session.detach, fit, focus, refresh, start });
+defineExpose({ reattach, detach: session.detach, fit, focus, refresh, start, stop: session.stop });
 </script>
 
 <template>
@@ -98,7 +99,7 @@ defineExpose({ reattach, detach: session.detach, fit, focus, refresh, start });
     tabindex="0"
   >
     <div class="terminal-session-toolbar">
-      <div v-if="props.tab === 'agent' && session.status.value !== 'running' && session.status.value !== 'starting'" class="terminal-agent-controls">
+      <div v-if="isAgentTab(props.tab) && session.status.value !== 'running' && session.status.value !== 'starting'" class="terminal-agent-controls">
         <p v-if="session.resumeLookupComplete.value && session.resumeUnavailable.value" class="terminal-resume-unavailable" role="status">
           Resume unavailable — no valid saved conversation for this task.
         </p>
@@ -123,7 +124,7 @@ defineExpose({ reattach, detach: session.detach, fit, focus, refresh, start });
         <button type="button" aria-keyshortcuts="s" :disabled="props.restoring" @click="start">Start new</button>
       </div>
       <button
-        v-else-if="props.tab === 'term' && session.status.value !== 'running' && session.status.value !== 'starting'"
+        v-else-if="!isAgentTab(props.tab) && session.status.value !== 'running' && session.status.value !== 'starting'"
         type="button"
         aria-keyshortcuts="s"
         :disabled="props.restoring"
@@ -132,14 +133,14 @@ defineExpose({ reattach, detach: session.detach, fit, focus, refresh, start });
         Start shell
       </button>
       <span v-else class="terminal-session-status" role="status" aria-live="polite">
-        {{ props.tab === 'agent' ? PROVIDERS[displayedAgent].label : 'Shell' }} · {{ statusLabel(session.status.value) }}
+        {{ isAgentTab(props.tab) ? PROVIDERS[displayedAgent].label : 'Shell' }} · {{ statusLabel(session.status.value) }}
       </span>
       <p v-if="session.error.value" class="terminal-session-error" role="alert">{{ session.error.value }}</p>
     </div>
     <div class="terminal-surface-wrap">
       <TerminalSurface
         ref="surface"
-        :label="props.tab === 'agent' ? 'Agent terminal' : 'Shell terminal'"
+        :label="isAgentTab(props.tab) ? 'Agent terminal' : 'Shell terminal'"
         :active="props.active"
         :connected="session.connected.value"
         @data="session.sendInput"

@@ -174,6 +174,8 @@ export function createTauriAgentSource(): AgentSource {
     },
     sendTerminalInput: (sessionId, data) => invoke<void>("terminal_input", { sessionId, data }),
     resizeTerminalSession: (sessionId, size) => invoke<void>("resize_terminal_session", { sessionId, size }),
+    stopTerminalSession: (sessionId) => invoke<void>("stop_terminal_session", { sessionId }),
+    forgetTerminalTab: (taskId, tab) => invoke<boolean>("forget_terminal_tab", { taskId, tab }),
     async detachTerminalSession(taskId, tab, attachmentId) {
       const key = terminalChannelKey(taskId, tab);
       const entry = terminalChannels.get(key);

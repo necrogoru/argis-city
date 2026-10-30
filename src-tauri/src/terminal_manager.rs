@@ -109,6 +109,8 @@ struct ManagedSession {
     child: Mutex<Option<Box<dyn Child + Send + Sync>>>,
     worker: Mutex<Option<JoinHandle<()>>>,
     running: AtomicBool,
+    /// A user or lifecycle stop must not raise the app-wide exit notification.
+    close_requested: AtomicBool,
     lifecycle: Mutex<SessionLifecycle>,
 }
 
@@ -273,6 +275,7 @@ impl TerminalManager {
             child: Mutex::new(Some(child)),
             worker: Mutex::new(None),
             running: AtomicBool::new(true),
+            close_requested: AtomicBool::new(false),
             lifecycle: Mutex::new(SessionLifecycle {
                 sink_generation: 1,
                 sink: Some(sink),
@@ -392,6 +395,11 @@ impl TerminalManager {
         session.apply_size(size)
     }
 
+    /// Removes a failed-start record for a tab the user closed, so reopening does not recreate it.
+    pub fn forget_failed_start(&self, key: TerminalSessionKey) -> bool {
+        self.state.lock().failed_starts.remove(&key).is_some()
+    }
+
     /// Stops, waits for, and removes a PTY process. Calling it more than once is safe.
     pub fn stop(&self, id: u64) -> anyhow::Result<()> {
         let session = {
@@ -501,7 +509,12 @@ impl TerminalManager {
             entries
         };
         entries.sort_by_key(|entry| {
-            (entry.task_id, matches!(entry.tab, crate::domain::TerminalTab::Term), state_rank(entry.state))
+            (
+                entry.task_id,
+                u8::from(entry.tab.is_shell()),
+                entry.tab.shell_slot().unwrap_or(0),
+                state_rank(entry.state),
+            )
         });
         entries
     }
@@ -514,7 +527,7 @@ impl TerminalManager {
             .values()
             .filter_map(|session| {
                 let info = session.info();
-                if !info.running || info.key.tab != crate::domain::TerminalTab::Agent {
+                if !info.running || !info.key.tab.is_agent() {
                     return None;
                 }
                 Some(ManagedAgentProcess {
@@ -638,6 +651,9 @@ impl ManagedSession {
                 lifecycle.sink = None;
             }
         }
+        if self.close_requested.load(Ordering::Acquire) {
+            return;
+        }
         if let Some(sink) = &self.lifecycle_sink {
             sink(TerminalLifecycleEvent {
                 task_id: self.info.key.task_id,
@@ -662,6 +678,7 @@ impl ManagedSession {
     }
 
     fn stop(&self) -> anyhow::Result<()> {
+        self.close_requested.store(true, Ordering::Release);
         if self.running.load(Ordering::Acquire) {
             // Deliver Ctrl-C through the PTY and a direct interrupt so noninteractive CLIs can exit cleanly too.
             let mut writer = self.writer.lock();

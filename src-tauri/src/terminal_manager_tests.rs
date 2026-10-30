@@ -36,7 +36,7 @@ fn terminal_manager_broadcasts_one_typed_event_for_a_process_exit() {
     let manager = TerminalManager::with_lifecycle_sink(lifecycle_sink(exit_sender));
     let (output_sender, _output_events) = mpsc::channel();
     let session =
-        manager.start(spec(73, TerminalTab::Term, "/bin/sh", &["-c", "exit 7"]), sink(output_sender)).unwrap();
+        manager.start(spec(73, TerminalTab::shell(1), "/bin/sh", &["-c", "exit 7"]), sink(output_sender)).unwrap();
 
     let event = exits.recv_timeout(Duration::from_secs(5)).unwrap();
 
@@ -44,7 +44,7 @@ fn terminal_manager_broadcasts_one_typed_event_for_a_process_exit() {
         event,
         TerminalLifecycleEvent {
             task_id: 73,
-            tab: TerminalTab::Term,
+            tab: TerminalTab::shell(1),
             agent_cli: None,
             session_id: session.id,
             exit_code: 7,
@@ -103,7 +103,7 @@ fn detached_terminal_replays_output_produced_before_reattachment() {
     let (first_sender, first_events) = mpsc::channel();
     let command = spec(
         47,
-        TerminalTab::Term,
+        TerminalTab::shell(1),
         "/bin/sh",
         &["-c", "printf 'READY\\n'; while IFS= read -r line; do printf 'RECEIVED:%s\\n' \"$line\"; done"],
     );
@@ -111,15 +111,16 @@ fn detached_terminal_replays_output_produced_before_reattachment() {
     let session = initial_attachment.session;
     assert!(output_until(&first_events, "READY").contains("READY"));
 
-    assert!(manager.detach_attachment(key(47, TerminalTab::Term), initial_attachment.attachment_id));
+    assert!(manager.detach_attachment(key(47, TerminalTab::shell(1)), initial_attachment.attachment_id));
     manager.input(session.id, b"printed-while-detached\n").unwrap();
     let (reattached_sender, reattached_events) = mpsc::channel();
-    let reattached =
-        manager.reattach_if_present_with_attachment(key(47, TerminalTab::Term), None, sink(reattached_sender)).unwrap();
+    let reattached = manager
+        .reattach_if_present_with_attachment(key(47, TerminalTab::shell(1)), None, sink(reattached_sender))
+        .unwrap();
 
     assert_eq!(reattached.session.id, session.id);
     assert!(reattached.session.running);
-    assert!(!manager.detach_attachment(key(47, TerminalTab::Term), initial_attachment.attachment_id));
+    assert!(!manager.detach_attachment(key(47, TerminalTab::shell(1)), initial_attachment.attachment_id));
 
     let replayed = output_until(&reattached_events, "RECEIVED:printed-while-detached");
     assert!(replayed.contains("READY"));
@@ -128,7 +129,7 @@ fn detached_terminal_replays_output_produced_before_reattachment() {
     assert!(
         output_until(&reattached_events, "RECEIVED:visible-after-reattach").contains("RECEIVED:visible-after-reattach")
     );
-    assert!(manager.detach_attachment(key(47, TerminalTab::Term), reattached.attachment_id));
+    assert!(manager.detach_attachment(key(47, TerminalTab::shell(1)), reattached.attachment_id));
     manager.stop(session.id).unwrap();
 }
 
@@ -138,12 +139,12 @@ fn terminal_output_replay_is_bounded_to_the_most_recent_megabyte() {
     let manager = TerminalManager::default();
     let (sender, events) = mpsc::channel();
     let session = manager
-        .start(spec(53, TerminalTab::Term, "/bin/sh", &["-c", "head -c 2097152 /dev/zero"]), sink(sender))
+        .start(spec(53, TerminalTab::shell(1), "/bin/sh", &["-c", "head -c 2097152 /dev/zero"]), sink(sender))
         .unwrap();
     wait_for_exit(&events, session.id);
 
     let (reattached_sender, reattached_events) = mpsc::channel();
-    manager.reattach(key(53, TerminalTab::Term), None, sink(reattached_sender)).unwrap();
+    manager.reattach(key(53, TerminalTab::shell(1)), None, sink(reattached_sender)).unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut replayed_bytes = 0;
     loop {
@@ -174,7 +175,7 @@ fn reattaching_applies_the_viewport_size_to_the_live_pty() {
     let manager = TerminalManager::default();
     let (sender, events) = mpsc::channel();
     let mut command =
-        spec(49, TerminalTab::Term, "/bin/sh", &["-c", "stty size; while IFS= read -r line; do stty size; done"]);
+        spec(49, TerminalTab::shell(1), "/bin/sh", &["-c", "stty size; while IFS= read -r line; do stty size; done"]);
     command.size = TerminalSize { cols: 81, rows: 25, pixel_width: 0, pixel_height: 0 };
     let session = manager.start(command, sink(sender)).unwrap();
     assert!(output_until(&events, "25 81").contains("25 81"));
@@ -182,7 +183,7 @@ fn reattaching_applies_the_viewport_size_to_the_live_pty() {
     let (reattached_sender, reattached_events) = mpsc::channel();
     let reattached = manager
         .reattach_if_present_with_attachment(
-            key(49, TerminalTab::Term),
+            key(49, TerminalTab::shell(1)),
             Some(TerminalSize { cols: 100, rows: 40, pixel_width: 0, pixel_height: 0 }),
             sink(reattached_sender),
         )
@@ -202,10 +203,17 @@ fn terminal_inventory_reports_managed_task_tabs_and_lifecycle_state() {
 
     let (completed_sender, completed_events) = mpsc::channel();
     let completed = manager
-        .start(spec(61, TerminalTab::Term, "/bin/sh", &["-c", "printf 'done\\n'; exit 0"]), sink(completed_sender))
+        .start(spec(61, TerminalTab::shell(1), "/bin/sh", &["-c", "printf 'done\\n'; exit 0"]), sink(completed_sender))
         .unwrap();
     assert!(output_until(&completed_events, "done").contains("done"));
     assert_eq!(wait_for_exit(&completed_events, completed.id), (0, None));
+
+    let (extra_sender, extra_events) = mpsc::channel();
+    let extra = manager
+        .start(spec(61, TerminalTab::shell(2), "/bin/sh", &["-c", "printf 'extra\\n'; exit 0"]), sink(extra_sender))
+        .unwrap();
+    assert!(output_until(&extra_events, "extra").contains("extra"));
+    assert_eq!(wait_for_exit(&extra_events, extra.id), (0, None));
 
     let (failed_sender, _failed_events) = mpsc::channel();
     assert!(manager
@@ -217,11 +225,66 @@ fn terminal_inventory_reports_managed_task_tabs_and_lifecycle_state() {
         serde_json::json!([
             { "taskId": 61, "tab": "agent", "state": "running" },
             { "taskId": 61, "tab": "term", "state": "completed" },
+            { "taskId": 61, "tab": "term-2", "state": "completed" },
             { "taskId": 62, "tab": "agent", "state": "failed" }
         ])
     );
 
     manager.stop(running.id).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn extra_shell_slots_run_independently_and_stop_without_touching_their_siblings() {
+    let manager = TerminalManager::default();
+    let (first_sender, first_events) = mpsc::channel();
+    let (second_sender, second_events) = mpsc::channel();
+    let first = manager
+        .start(spec(64, TerminalTab::shell(2), "/bin/sh", &["-c", "printf 'first\\n'; sleep 30"]), sink(first_sender))
+        .unwrap();
+    let second = manager
+        .start(spec(64, TerminalTab::shell(3), "/bin/sh", &["-c", "printf 'second\\n'; sleep 30"]), sink(second_sender))
+        .unwrap();
+
+    assert!(output_until(&first_events, "first").contains("first"));
+    assert!(output_until(&second_events, "second").contains("second"));
+    assert_eq!(manager.active_session_count(), 2);
+
+    manager.stop(first.id).unwrap();
+
+    assert_eq!(manager.active_session_count(), 1);
+    assert!(manager.reattach_if_present(key(64, TerminalTab::shell(2)), None, sink(mpsc::channel().0)).is_none());
+    let (reattach_sender, _reattach_events) = mpsc::channel();
+    assert!(manager.reattach_if_present(key(64, TerminalTab::shell(3)), None, sink(reattach_sender)).is_some());
+
+    manager.stop(second.id).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn stopping_a_terminal_suppresses_the_app_wide_exit_notification() {
+    let (exit_sender, exits) = mpsc::channel();
+    let manager = TerminalManager::with_lifecycle_sink(lifecycle_sink(exit_sender));
+    let (output_sender, _output_events) = mpsc::channel();
+    let session = manager.start(spec(75, TerminalTab::shell(2), "/bin/sleep", &["30"]), sink(output_sender)).unwrap();
+
+    manager.stop(session.id).unwrap();
+
+    assert!(matches!(exits.recv_timeout(Duration::from_millis(200)), Err(mpsc::RecvTimeoutError::Timeout)));
+}
+
+#[test]
+fn forgetting_a_failed_start_removes_it_from_inventory() {
+    let manager = TerminalManager::default();
+    let (sender, _events) = mpsc::channel();
+    assert!(manager
+        .start(spec(76, TerminalTab::shell(2), "/definitely/not/an/executable", &[]), sink(sender))
+        .is_err());
+    assert!(manager.inventory().iter().any(|entry| entry.task_id == 76 && entry.tab == TerminalTab::shell(2)));
+
+    assert!(manager.forget_failed_start(key(76, TerminalTab::shell(2))));
+    assert!(!manager.inventory().iter().any(|entry| entry.task_id == 76));
+    assert!(!manager.forget_failed_start(key(76, TerminalTab::shell(2))));
 }
 
 fn sink(sender: Sender<TerminalEvent>) -> TerminalEventSink {
@@ -281,7 +344,7 @@ fn terminal_manager_supports_interactive_io_resize_reattach_and_stop() {
     let (first_sender, first_events) = mpsc::channel();
     let mut command = spec(
         41,
-        TerminalTab::Term,
+        TerminalTab::shell(1),
         "/bin/sh",
         &["-c", "printf 'READY\\n'; IFS= read -r line; printf 'RECEIVED:%s\\n' \"$line\"; sleep 30"],
     );
@@ -289,13 +352,13 @@ fn terminal_manager_supports_interactive_io_resize_reattach_and_stop() {
 
     let session = manager.start(command, sink(first_sender)).unwrap();
 
-    assert_eq!(session.key, key(41, TerminalTab::Term));
+    assert_eq!(session.key, key(41, TerminalTab::shell(1)));
     assert!(session.running);
     assert!(output_until(&first_events, "READY").contains("READY"));
     manager.resize(session.id, TerminalSize { cols: 110, rows: 36, pixel_width: 1100, pixel_height: 720 }).unwrap();
 
     let (reattached_sender, reattached_events) = mpsc::channel();
-    let reattached = manager.reattach(key(41, TerminalTab::Term), None, sink(reattached_sender)).unwrap();
+    let reattached = manager.reattach(key(41, TerminalTab::shell(1)), None, sink(reattached_sender)).unwrap();
     assert_eq!(reattached.id, session.id);
     manager.input(session.id, b"keep-going\n").unwrap();
     assert!(output_until(&reattached_events, "RECEIVED:keep-going").contains("RECEIVED:keep-going"));
@@ -355,7 +418,7 @@ fn running_agent_inventory_is_bound_to_live_managed_agent_ptys() {
     let agent = manager.start(agent_spec, sink(agent_sender)).unwrap();
 
     let (shell_sender, _shell_events) = mpsc::channel();
-    let mut shell_spec = spec(54, TerminalTab::Term, "/bin/sleep", &["30"]);
+    let mut shell_spec = spec(54, TerminalTab::shell(1), "/bin/sleep", &["30"]);
     shell_spec.cwd = cwd.path().to_path_buf();
     manager.start(shell_spec, sink(shell_sender)).unwrap();
 
@@ -416,22 +479,22 @@ fn task_deletion_stops_sessions_and_blocks_new_processes_until_the_outcome_is_kn
     let (agent_sender, _agent_events) = mpsc::channel();
     let (shell_sender, _shell_events) = mpsc::channel();
     manager.start(spec(52, TerminalTab::Agent, "/bin/sleep", &["30"]), sink(agent_sender)).unwrap();
-    manager.start(spec(52, TerminalTab::Term, "/bin/sleep", &["30"]), sink(shell_sender)).unwrap();
+    manager.start(spec(52, TerminalTab::shell(1), "/bin/sleep", &["30"]), sink(shell_sender)).unwrap();
 
     manager.stop_task_sessions(52).unwrap();
 
     assert_eq!(manager.active_session_count(), 0);
     let (blocked_sender, _blocked_events) = mpsc::channel();
-    assert!(manager.start(spec(52, TerminalTab::Term, "/bin/sleep", &["30"]), sink(blocked_sender)).is_err());
+    assert!(manager.start(spec(52, TerminalTab::shell(1), "/bin/sleep", &["30"]), sink(blocked_sender)).is_err());
 
     manager.finish_task_deletion(52, false);
     let (retry_sender, _retry_events) = mpsc::channel();
-    let _retry = manager.start(spec(52, TerminalTab::Term, "/bin/sleep", &["30"]), sink(retry_sender)).unwrap();
+    let _retry = manager.start(spec(52, TerminalTab::shell(1), "/bin/sleep", &["30"]), sink(retry_sender)).unwrap();
     manager.stop_task_sessions(52).unwrap();
     manager.finish_task_deletion(52, true);
 
     let (deleted_sender, _deleted_events) = mpsc::channel();
-    assert!(manager.start(spec(52, TerminalTab::Term, "/bin/sleep", &["30"]), sink(deleted_sender)).is_err());
+    assert!(manager.start(spec(52, TerminalTab::shell(1), "/bin/sleep", &["30"]), sink(deleted_sender)).is_err());
     assert_eq!(manager.active_session_count(), 0);
 }
 
@@ -443,7 +506,7 @@ fn terminal_manager_reaps_all_sessions_on_shutdown_and_is_idempotent() {
     let (second_sender, second_events) = mpsc::channel();
     let first_session = manager.start(spec(43, TerminalTab::Agent, "/bin/sleep", &["30"]), sink(first_sender)).unwrap();
     let second_session =
-        manager.start(spec(43, TerminalTab::Term, "/bin/sleep", &["30"]), sink(second_sender)).unwrap();
+        manager.start(spec(43, TerminalTab::shell(1), "/bin/sleep", &["30"]), sink(second_sender)).unwrap();
 
     manager.shutdown().unwrap();
     manager.shutdown().unwrap();
@@ -466,7 +529,7 @@ fn terminal_manager_keeps_shell_usable_after_agent_launch_error() {
     let (sender, shell_events) = mpsc::channel();
     let shell = spec(
         45,
-        TerminalTab::Term,
+        TerminalTab::shell(1),
         "/bin/sh",
         &["-c", "printf 'SHELL_READY\\n'; IFS= read -r line; printf 'SHELL_RECEIVED:%s\\n' \"$line\""],
     );
@@ -505,14 +568,14 @@ fn terminal_manager_reattaches_to_a_completed_session_and_replays_exit_status() 
 fn terminal_manager_rejects_nonexistent_working_directories_before_starting() {
     let manager = TerminalManager::default();
     let (sender, _events) = mpsc::channel();
-    let mut command = spec(44, TerminalTab::Term, "/bin/sleep", &["30"]);
+    let mut command = spec(44, TerminalTab::shell(1), "/bin/sleep", &["30"]);
     command.cwd = PathBuf::from("/definitely/not/a/project");
 
     assert!(manager.start(command, sink(sender)).is_err());
     assert_eq!(manager.active_session_count(), 0);
 
     let (sender, _events) = mpsc::channel();
-    let mut relative = spec(44, TerminalTab::Term, "/bin/sleep", &["30"]);
+    let mut relative = spec(44, TerminalTab::shell(1), "/bin/sleep", &["30"]);
     relative.cwd = PathBuf::from(".");
 
     assert!(manager.start(relative, sink(sender)).is_err());

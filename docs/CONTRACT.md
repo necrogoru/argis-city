@@ -29,6 +29,8 @@ one tower per tool (provider), one house per live session, subagents as cards.
 | command | `reattach_terminal_session` | `{ taskId, tab, size, onEvent }` → `TerminalAttachment \| null` |
 | command | `terminal_input`          | `{ sessionId, data }` → `()`                     |
 | command | `resize_terminal_session` | `{ sessionId, size }` → `()`                     |
+| command | `stop_terminal_session`   | `{ sessionId }` → `()`                            |
+| command | `forget_terminal_tab`     | `{ taskId, tab }` → `boolean`                     |
 | command | `detach_terminal_session` | `{ taskId, tab, attachmentId }` → `boolean`      |
 | command | `list_terminal_inventory` | → `TerminalInventoryEntry[]`                     |
 | command | `play_alert_sound`        | → `()` (plays the bundled alert sound)            |
@@ -107,19 +109,21 @@ creates and records both resources only for an eligible task.
 
 ## Embedded terminal sessions
 
-- Each task has at most one process in each tab: `agent` or `term`. Both process
-  working directories are resolved from the task's persisted worktree record;
-  the frontend cannot provide a cwd or arbitrary executable. Argis checks that
-  the worktree exists under the registered project and that its checked-out
-  branch matches the task's recorded branch before starting or reattaching.
-  When the recorded worktree directory has been deleted, both tabs open in its
-  existing parent (the task worktree root, `<project>/.argis/worktrees`) so the
-  worktree can be restored or cleaned up. A recorded path that still exists but
-  is not the task's Git worktree, or is on another branch, remains an error;
-  there is no silent fallback. Resuming a saved Agent conversation always
-  requires the original worktree.
+- Each task has at most one process per tab. A tab id is `agent`, `term`, or a
+  numbered extra shell `term-2` … `term-6`: `agent` is fixed, `term` is the base
+  shell, and extra shells are created from the modal's `+` action (at most six
+  shell tabs including `term`). All process working directories are resolved
+  from the task's persisted worktree record; the frontend cannot provide a cwd
+  or arbitrary executable. Argis checks that the worktree exists under the
+  registered project and that its checked-out branch matches the task's recorded
+  branch before starting or reattaching. When the recorded worktree directory
+  has been deleted, every tab opens in its existing parent (the task worktree
+  root, `<project>/.argis/worktrees`) so the worktree can be restored or cleaned
+  up. A recorded path that still exists but is not the task's Git worktree, or
+  is on another branch, remains an error; there is no silent fallback. Resuming
+  a saved Agent conversation always requires the original worktree.
 - Agent executable selection is an allowlist: `claude`, `codex`, `opencode`, or
-  `pi`. `agentCli` is required for the Agent tab and `null` for the shell tab.
+  `pi`. `agentCli` is required for the Agent tab and `null` for every shell tab.
   The shell uses the user's configured shell (`SHELL`, or `COMSPEC` on Windows).
   Task names and descriptions are never passed as process arguments.
 - `start_terminal_session` starts the selected PTY and returns a
@@ -149,8 +153,10 @@ creates and records both resources only for an eligible task.
 - `terminal://exited` is broadcast app-wide independently of any attached xterm
   Channel. Its `TerminalLifecycleEvent` payload is `{ taskId, tab, agentCli,
   sessionId, exitCode, signal }`; `agentCli` and `signal` are nullable
-  (`agentCli` is `null` for the shell tab). It is emitted once when the managed process exits
-  and is not replayed when a terminal is reattached.
+  (`agentCli` is `null` for every shell tab). It is emitted once when the managed process exits
+  and is not replayed when a terminal is reattached. An intentional stop
+  (`stop_terminal_session`, task deletion, or app exit) does not publish it, so
+  closing a tab never raises a terminal-exit notification.
 - Native alert delivery checks notification permission and asks the user only
   until the first denial. Notifications are silent; `play_alert_sound` plays
   the bundled `resources/preview.m4a` on every alert, independently of
@@ -166,16 +172,21 @@ creates and records both resources only for an eligible task.
   stay with the CLI, which tracks the mouse.
 - `terminal_input` accepts UTF-8 text up to 64 KiB. `resize_terminal_session`
   accepts positive `cols` and `rows` up to 1,000; pixel dimensions default to
-  zero when omitted. Closing only the modal keeps its Channels and xterm buffers
-  attached. Switching away from the task board detaches Channels while leaving
-  PTYs alive. Argis stops and reaps all remaining PTYs on app exit and stops a
-  task's PTYs before task deletion. Stop sends an interrupt through the PTY and
-  to the managed child, waits at most 500 ms for graceful exit, then force-kills
-  and reaps any child that remains. xterm uses a system monospace font with zero
-  letter spacing; the surrounding UI continues to use Outfit.
+  zero when omitted. `stop_terminal_session` stops a managed PTY by session id,
+  removes it from the inventory, and is used when an extra shell tab is closed;
+  `forget_terminal_tab` clears a failed-start inventory entry for a tab that
+  never produced a session, so reopening the modal does not recreate a closed
+  failed tab. `agent` and `term` cannot be closed. Closing only the modal keeps
+  its Channels and xterm buffers attached. Switching away from the task board
+  detaches Channels while leaving PTYs alive. Argis stops and reaps all remaining
+  PTYs on app exit and stops a task's PTYs before task deletion. Stop sends an
+  interrupt through the PTY and to the managed child, waits at most 500 ms for
+  graceful exit, then force-kills and reaps any child that remains. xterm uses a
+  system monospace font with zero letter spacing; the surrounding UI continues
+  to use Outfit.
 - Browser mock mode does not launch local processes: reattach returns `null`,
-  start/input/resize report that embedded processes require the desktop app, and
-  detach returns `false`.
+  start/input/resize report that embedded processes require the desktop app,
+  stop is a no-op, forget returns `false`, and detach returns `false`.
 
 ## Task-agent conversation resumption
 

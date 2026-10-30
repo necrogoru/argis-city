@@ -76,7 +76,9 @@ export function aggregateTerminalRailEntries(
       .sort((left, right) => inventoryStateRank(right.state) - inventoryStateRank(left.state))
       .map((entry) => entry.state);
     const liveState = liveStatuses[taskId];
-    const statuses = [liveState?.agent, liveState?.term].filter((value): value is TerminalStatus => value != null);
+    const statuses = Object.values(liveState ?? {}).filter(
+      (value): value is TerminalStatus => value != null,
+    );
     const resume = resumeByTaskId.get(taskId);
     const terminalState = aggregateTaskState(inventoryStates, statuses);
     const hasLiveProcess = terminalState === "running" || terminalState === "pending";

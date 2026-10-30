@@ -30,6 +30,8 @@ function createSource(): TerminalSessionService & {
   reattachTerminalSession: ReturnType<typeof vi.fn<TerminalSessionService["reattachTerminalSession"]>>;
   sendTerminalInput: ReturnType<typeof vi.fn<TerminalSessionService["sendTerminalInput"]>>;
   resizeTerminalSession: ReturnType<typeof vi.fn<TerminalSessionService["resizeTerminalSession"]>>;
+  stopTerminalSession: ReturnType<typeof vi.fn<TerminalSessionService["stopTerminalSession"]>>;
+  forgetTerminalTab: ReturnType<typeof vi.fn<TerminalSessionService["forgetTerminalTab"]>>;
   detachTerminalSession: ReturnType<typeof vi.fn<TerminalSessionService["detachTerminalSession"]>>;
 } {
   return {
@@ -39,6 +41,8 @@ function createSource(): TerminalSessionService & {
     reattachTerminalSession: vi.fn<TerminalSessionService["reattachTerminalSession"]>(),
     sendTerminalInput: vi.fn<TerminalSessionService["sendTerminalInput"]>(async () => {}),
     resizeTerminalSession: vi.fn<TerminalSessionService["resizeTerminalSession"]>(async () => {}),
+    stopTerminalSession: vi.fn<TerminalSessionService["stopTerminalSession"]>(async () => {}),
+    forgetTerminalTab: vi.fn<TerminalSessionService["forgetTerminalTab"]>(async () => false),
     detachTerminalSession: vi.fn<TerminalSessionService["detachTerminalSession"]>(async () => true),
   };
 }
@@ -266,6 +270,60 @@ describe("useTerminalSession", () => {
     expect(source.detachTerminalSession).toHaveBeenCalledWith(12, "agent", attachment.attachmentId);
     expect(session.attachment.value).toBeNull();
     expect(session.connected.value).toBe(false);
+  });
+
+  it("stops a managed shell when its tab closes", async () => {
+    const { source, session } = setup("term-2", null);
+    const shellAttachment: TerminalAttachment = {
+      ...attachment,
+      session: { ...attachment.session, key: { taskId: 12, tab: "term-2" }, agentCli: null },
+    };
+    source.reattachTerminalSession.mockResolvedValue(shellAttachment);
+    await session.reattach();
+
+    await session.stop();
+
+    expect(source.stopTerminalSession).toHaveBeenCalledWith(shellAttachment.session.id);
+    expect(source.detachTerminalSession).not.toHaveBeenCalled();
+    expect(session.attachment.value).toBeNull();
+    expect(session.connected.value).toBe(false);
+  });
+
+  it("stops a session that finishes starting after its tab closes", async () => {
+    const { source, session } = setup("term-2", null);
+    const shellAttachment: TerminalAttachment = {
+      ...attachment,
+      session: { ...attachment.session, key: { taskId: 12, tab: "term-2" }, agentCli: null },
+    };
+    let resolveStart!: (result: TerminalAttachment) => void;
+    source.startTerminalSession.mockReturnValue(new Promise((resolve) => (resolveStart = resolve)));
+
+    const starting = session.start(null);
+    await session.stop();
+    resolveStart(shellAttachment);
+    await starting;
+
+    expect(source.stopTerminalSession).toHaveBeenCalledWith(shellAttachment.session.id);
+    expect(source.detachTerminalSession).not.toHaveBeenCalled();
+  });
+
+  it("clears a failed-start record when a tab that never attached is closed", async () => {
+    const { source, session } = setup("term-2", null);
+
+    await session.stop();
+
+    expect(source.forgetTerminalTab).toHaveBeenCalledWith(12, "term-2");
+    expect(source.stopTerminalSession).not.toHaveBeenCalled();
+  });
+
+  it("closes the tab even when the process was already reaped", async () => {
+    const { source, session } = setup("term-2", null);
+    source.reattachTerminalSession.mockResolvedValue(attachment);
+    await session.reattach();
+    source.stopTerminalSession.mockRejectedValue(new Error("terminal session 71 does not exist"));
+
+    await expect(session.stop()).resolves.toBeUndefined();
+    expect(session.attachment.value).toBeNull();
   });
 
   it("ignores terminal events from a disposed attachment", async () => {

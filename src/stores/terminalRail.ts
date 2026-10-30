@@ -72,11 +72,22 @@ export const useTerminalRailStore = defineStore("terminalRail", () => {
     };
   }
 
+  function clearTaskTabStatus(taskId: number, tab: TerminalTab): void {
+    const taskStatuses = liveStatuses.value[taskId];
+    if (!taskStatuses || !(tab in taskStatuses)) return;
+    const nextStatuses = { ...taskStatuses };
+    delete nextStatuses[tab];
+    const next = { ...liveStatuses.value };
+    if (Object.keys(nextStatuses).length === 0) delete next[taskId];
+    else next[taskId] = nextStatuses;
+    liveStatuses.value = next;
+  }
+
   function clearTaskStatus(taskId: number): void {
     const next = { ...liveStatuses.value };
     delete next[taskId];
     liveStatuses.value = next;
   }
 
-  return { entries, error, refreshInventory, refreshAll, publishTaskStatus, clearTaskStatus };
+  return { entries, error, refreshInventory, refreshAll, publishTaskStatus, clearTaskTabStatus, clearTaskStatus };
 });

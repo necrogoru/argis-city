@@ -87,19 +87,36 @@
 
 .close-button:focus-visible,
 .terminal-tab:focus-visible,
+.terminal-tab-close:focus-visible,
+.terminal-new-tab:focus-visible,
 .terminal-panel:focus-visible {
   outline: 2px solid var(--teal);
   outline-offset: 2px;
 }
 
+.terminal-tabbar {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 28px 0;
+  border-bottom: 1px solid var(--border);
+}
+
 .terminal-tabs {
   display: flex;
+  flex: 1 1 auto;
   min-width: 0;
   align-items: stretch;
   gap: 8px;
-  padding: 12px 28px 0;
   overflow-x: auto;
-  border-bottom: 1px solid var(--border);
+}
+
+.terminal-tab-slot {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: stretch;
 }
 
 .terminal-tab {
@@ -119,6 +136,10 @@
   cursor: pointer;
 }
 
+.terminal-tab.is-closable {
+  padding-right: 34px;
+}
+
 .terminal-tab[aria-selected="true"] {
   border-color: var(--border);
   border-bottom-color: var(--bg);
@@ -129,7 +150,7 @@
 .terminal-tab[aria-selected="true"]::after {
   position: absolute;
   right: 12px;
-  bottom: -1px;
+  bottom: 0;
   left: 12px;
   height: 2px;
   background: var(--teal);
@@ -144,6 +165,54 @@
 .tab-status {
   color: var(--text-3);
   font-size: 11px;
+}
+
+.terminal-tab-close {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.terminal-tab-close:hover {
+  background: var(--fill-hover);
+  color: var(--text);
+}
+
+.terminal-new-tab {
+  display: grid;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px 10px 0 0;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.terminal-new-tab:hover:not(:disabled) {
+  background: var(--fill-hover);
+  color: var(--text);
+}
+
+.terminal-new-tab:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .terminal-panels {
@@ -178,7 +247,7 @@
     padding: 18px 16px 14px;
   }
 
-  .terminal-tabs {
+  .terminal-tabbar {
     padding-inline: 16px;
   }
 

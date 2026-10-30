@@ -4,7 +4,7 @@ import type { TerminalTab } from "./types";
 export const DEFAULT_TERMINAL_TAB: TerminalTab = "term";
 
 type TerminalNavigationKey = Pick<KeyboardEvent, "key" | "ctrlKey">
-  & Partial<Pick<KeyboardEvent, "altKey" | "metaKey">>;
+  & Partial<Pick<KeyboardEvent, "altKey" | "metaKey" | "shiftKey">>;
 
 type TerminalStartShortcutEvent = Pick<
   KeyboardEvent,
@@ -46,17 +46,21 @@ export function shouldStartTerminalForKey(event: TerminalStartShortcutEvent, can
 }
 
 export function getTerminalTabForKey(
+  tabs: readonly TerminalTab[],
   activeTab: TerminalTab,
   event: TerminalNavigationKey,
 ): TerminalTab | null {
+  const index = tabs.indexOf(activeTab);
+  if (index < 0) return null;
+
   if (event.key === "Tab" && event.ctrlKey && !event.altKey && !event.metaKey) {
-    return activeTab === "agent" ? "term" : "agent";
+    const step = event.shiftKey ? -1 : 1;
+    return tabs[(index + step + tabs.length) % tabs.length] ?? null;
   }
 
-  if (event.key === "Home") return "agent";
-  if (event.key === "End") return "term";
-  if (event.key === "ArrowLeft" && activeTab === "term") return "agent";
-  if (event.key === "ArrowRight" && activeTab === "agent") return "term";
-  if (event.key === "ArrowLeft" || event.key === "ArrowRight") return activeTab;
+  if (event.key === "Home") return tabs[0] ?? null;
+  if (event.key === "End") return tabs[tabs.length - 1] ?? null;
+  if (event.key === "ArrowLeft") return tabs[Math.max(index - 1, 0)] ?? null;
+  if (event.key === "ArrowRight") return tabs[Math.min(index + 1, tabs.length - 1)] ?? null;
   return null;
 }

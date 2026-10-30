@@ -3,6 +3,7 @@ import { advanceSessionAlerts, createSessionAlertState, type SessionAlert } from
 import { normalizeAbsolutePath } from "../domain/paths";
 import { PROVIDERS } from "../domain/providers";
 import { truncateLabel } from "../domain/format";
+import { shellTabSlot } from "../domain/terminalTabs";
 import type { ProviderId, Snapshot, Task, TerminalLifecycleEvent, TerminalTab } from "../domain/types";
 import { useAgentSource } from "../composables/useAgentSource";
 import type { AlertDelivery, AlertDeliveryRequest } from "../services/alertDelivery";
@@ -49,7 +50,8 @@ function sessionNotification(alert: SessionAlert): CoordinatedAlert {
 
 function terminalNotification(event: TerminalLifecycleEvent, task: Task | null): CoordinatedAlert {
   const taskName = task?.title ?? `Task ${event.taskId}`;
-  const tabName = event.tab === "agent" ? "Agent" : "Shell";
+  const slot = shellTabSlot(event.tab);
+  const tabName = event.tab === "agent" ? "Agent" : slot != null && slot > 1 ? `Shell ${slot}` : "Shell";
   const agentName = event.agentCli ? `${PROVIDERS[event.agentCli].label} ` : "";
   const exitDetail = event.signal ? `signal ${event.signal}` : `code ${event.exitCode}`;
   return {

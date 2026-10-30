@@ -63,6 +63,8 @@ function fakeSource(refresh: () => Promise<Snapshot> = async () => at(99)) {
     reattachTerminalSession: async () => null,
     sendTerminalInput: async () => {},
     resizeTerminalSession: async () => {},
+    stopTerminalSession: async () => {},
+    forgetTerminalTab: async () => false,
     detachTerminalSession: async () => false,
     listTerminalInventory: async () => [],
   };

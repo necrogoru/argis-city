@@ -271,6 +271,24 @@ pub async fn resize_terminal_session(
         .map_err(|error| error.to_string())?
 }
 
+/// Stops a managed PTY and removes it from the inventory. Used when a user closes a shell tab.
+#[tauri::command]
+pub async fn stop_terminal_session(
+    session_id: u64,
+    terminal_state: State<'_, Arc<TerminalManager>>,
+) -> Result<(), String> {
+    let manager = Arc::clone(&terminal_state);
+    tauri::async_runtime::spawn_blocking(move || manager.stop(session_id).map_err(|error| error.to_string()))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+/// Clears a failed-start inventory entry for a shell tab the user closed.
+#[tauri::command]
+pub fn forget_terminal_tab(task_id: i64, tab: TerminalTab, terminal_state: State<'_, Arc<TerminalManager>>) -> bool {
+    terminal_state.forget_failed_start(TerminalSessionKey { task_id, tab })
+}
+
 #[tauri::command]
 pub fn detach_terminal_session(
     task_id: i64,
@@ -341,8 +359,8 @@ fn terminal_process_spec(
     let (program, args) = match (tab, agent_cli) {
         (TerminalTab::Agent, Some(agent)) => (PathBuf::from(agent.executable()), Vec::new()),
         (TerminalTab::Agent, None) => return Err(anyhow::anyhow!("select an agent CLI before starting the Agent tab")),
-        (TerminalTab::Term, Some(_)) => return Err(anyhow::anyhow!("the shell tab cannot start an agent CLI")),
-        (TerminalTab::Term, None) => shell_program(),
+        (TerminalTab::Shell(_), Some(_)) => return Err(anyhow::anyhow!("a shell tab cannot start an agent CLI")),
+        (TerminalTab::Shell(_), None) => shell_program(),
     };
     Ok(TerminalProcessSpec { key: TerminalSessionKey { task_id, tab }, agent_cli, program, args, cwd, size })
 }
@@ -432,8 +450,27 @@ mod tests {
         let cwd = PathBuf::from("/project/.argis/worktrees/13-terminal-task");
 
         assert!(terminal_process_spec(13, TerminalTab::Agent, None, cwd.clone(), TerminalSize::default(),).is_err());
-        assert!(terminal_process_spec(13, TerminalTab::Term, Some(TerminalAgent::Pi), cwd, TerminalSize::default(),)
-            .is_err());
+        assert!(terminal_process_spec(
+            13,
+            TerminalTab::shell(2),
+            Some(TerminalAgent::Pi),
+            cwd,
+            TerminalSize::default(),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn extra_shell_specs_share_the_shell_program_without_an_agent_cli() {
+        let cwd = PathBuf::from("/project/.argis/worktrees/14-terminal-task");
+        let spec =
+            terminal_process_spec(14, TerminalTab::shell(3), None, cwd.clone(), TerminalSize::default()).unwrap();
+
+        assert_eq!(spec.key.tab, TerminalTab::shell(3));
+        assert_eq!(spec.agent_cli, None);
+        assert_eq!(spec.program, shell_program().0);
+        assert!(spec.args.is_empty());
+        assert_eq!(spec.cwd, cwd);
     }
 
     #[cfg(unix)]
@@ -444,7 +481,7 @@ mod tests {
         save_test_resume(&store, &task, &worktree.worktree_path);
         let manager = TerminalManager::default();
         let spec = TerminalProcessSpec {
-            key: TerminalSessionKey { task_id: task.id, tab: TerminalTab::Term },
+            key: TerminalSessionKey { task_id: task.id, tab: TerminalTab::shell(1) },
             agent_cli: None,
             program: PathBuf::from("/bin/sh"),
             args: vec!["-c".to_owned(), "sleep 30".to_owned()],
@@ -470,7 +507,7 @@ mod tests {
         let (store, task, worktree) = task_with_worktree(parent.path());
         let manager = TerminalManager::default();
         let spec = TerminalProcessSpec {
-            key: TerminalSessionKey { task_id: task.id, tab: TerminalTab::Term },
+            key: TerminalSessionKey { task_id: task.id, tab: TerminalTab::shell(1) },
             agent_cli: None,
             program: PathBuf::from("/bin/sh"),
             args: vec!["-c".to_owned(), "sleep 30".to_owned()],

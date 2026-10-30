@@ -156,6 +156,19 @@ describe("useSessionAlertCoordinator", () => {
     stop();
   });
 
+  it("names an extra shell slot in its exit notification", async () => {
+    const { delivery, exit, stop } = setup();
+
+    exit(exitEvent({ tab: "term-2", agentCli: null, sessionId: 104 }));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(delivery.deliver).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "terminalExit", body: expect.stringContaining("Shell 2") }),
+    );
+    stop();
+  });
+
   it("formats approval alerts with the harness and session labels", () => {
     const { coordinator, delivery, stop } = setup();
     coordinator.acceptSnapshot(snapshot([session({ title: "Deploy service", status: "running" })]));

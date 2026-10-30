@@ -168,7 +168,8 @@ export interface TaskWorktree {
   worktreePath: string;
 }
 
-export type TerminalTab = "agent" | "term";
+/** The fixed Agent tab, the base `term` shell, or an extra shell `term-N` (`N` 2–6). */
+export type TerminalTab = "agent" | "term" | `term-${number}`;
 export type TerminalAgent = ProviderId;
 
 export interface TerminalSize {

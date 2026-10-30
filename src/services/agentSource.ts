@@ -86,6 +86,10 @@ export interface AgentSource {
   ): Promise<TerminalAttachment | null>;
   sendTerminalInput(sessionId: number, data: string): Promise<void>;
   resizeTerminalSession(sessionId: number, size: TerminalSize): Promise<void>;
+  /** Stops a managed PTY after the user closes its tab. */
+  stopTerminalSession(sessionId: number): Promise<void>;
+  /** Clears a failed-start inventory entry for a tab closed before it produced a session. */
+  forgetTerminalTab(taskId: number, tab: TerminalTab): Promise<boolean>;
   detachTerminalSession(taskId: number, tab: TerminalTab, attachmentId: number): Promise<boolean>;
   listTerminalInventory(): Promise<TerminalInventoryEntry[]>;
 }

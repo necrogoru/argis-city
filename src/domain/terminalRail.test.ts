@@ -109,6 +109,20 @@ describe("aggregateTerminalRailEntries", () => {
     ]);
   });
 
+  it("aggregates extra shell tabs into the task state", () => {
+    const liveStatuses: TerminalRailLiveStatusMap = {
+      2: { agent: "notStarted", term: "exited", "term-2": "starting" },
+    };
+
+    expect(aggregateTerminalRailEntries(tasks.slice(1, 2), [], liveStatuses)).toEqual([
+      expect.objectContaining({ taskId: 2, state: "pending" }),
+    ]);
+
+    expect(aggregateTerminalRailEntries(tasks.slice(1, 2), [], {
+      2: { agent: "notStarted", term: "exited", "term-2": "running" },
+    })).toEqual([expect.objectContaining({ taskId: 2, state: "running" })]);
+  });
+
   it("filters rendered rail entries by task workflow status, not terminal activity", () => {
     const workflowStatus: Record<number, Task["status"]> = {
       1: "inProgress",

@@ -114,6 +114,8 @@ describe("mock project and task operations", () => {
     await expect(source.resizeTerminalSession(1, { cols: 80, rows: 24 })).rejects.toThrow(
       "only available in the Argis desktop app",
     );
+    await expect(source.stopTerminalSession(1)).resolves.toBeUndefined();
+    await expect(source.forgetTerminalTab(1, "term-2")).resolves.toBe(false);
     await expect(source.detachTerminalSession(1, "agent", 1)).resolves.toBe(false);
   });
 

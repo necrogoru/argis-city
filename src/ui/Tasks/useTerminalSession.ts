@@ -7,6 +7,7 @@ import type {
   TerminalSize,
   TerminalTab,
 } from "../../domain/types";
+import { isAgentTab } from "../../domain/terminalTabs";
 import type { AgentSource } from "../../services/agentSource";
 
 export type TerminalStatus = "notStarted" | "starting" | "running" | "exited" | "error";
@@ -19,6 +20,8 @@ export type TerminalSessionService = Pick<
   | "reattachTerminalSession"
   | "sendTerminalInput"
   | "resizeTerminalSession"
+  | "stopTerminalSession"
+  | "forgetTerminalTab"
   | "detachTerminalSession"
 >;
 
@@ -44,6 +47,7 @@ export function useTerminalSession(options: TerminalSessionOptions) {
   const connected = computed(() => status.value === "running");
   let generation = 0;
   let disposed = false;
+  let stopRequested = false;
 
   function isCurrent(operation: number): boolean {
     return !disposed && operation === generation;
@@ -78,8 +82,21 @@ export function useTerminalSession(options: TerminalSessionOptions) {
     }
   }
 
+  async function stopRemote(current: TerminalAttachment): Promise<void> {
+    try {
+      await options.source.stopTerminalSession(current.session.id);
+    } catch {
+      // The manager may have reaped it already; closing the tab must not trap the user.
+    }
+  }
+
+  async function discardStale(result: TerminalAttachment): Promise<void> {
+    if (stopRequested) await stopRemote(result);
+    else await detachRemote(result);
+  }
+
   async function lookupResumeReference(operation: number): Promise<void> {
-    if (options.tab !== "agent") return;
+    if (!isAgentTab(options.tab)) return;
     try {
       const reference = await options.source.getTaskAgentResume(options.taskId);
       if (!isCurrent(operation)) return;
@@ -111,13 +128,14 @@ export function useTerminalSession(options: TerminalSessionOptions) {
     }
 
     const generationId = ++generation;
+    stopRequested = false;
     attachment.value = null;
     status.value = "starting";
     error.value = null;
     try {
       const result = await launchProcess(size, (event) => receive(generationId, event));
       if (!isCurrent(generationId)) {
-        await detachRemote(result);
+        await discardStale(result);
         return;
       }
       acceptAttachment(result);
@@ -142,6 +160,7 @@ export function useTerminalSession(options: TerminalSessionOptions) {
 
   async function reattach(): Promise<void> {
     if (disposed) return;
+    stopRequested = false;
     const operation = ++generation;
     attachment.value = null;
     status.value = "starting";
@@ -154,7 +173,7 @@ export function useTerminalSession(options: TerminalSessionOptions) {
         (event) => receive(operation, event),
       );
       if (!isCurrent(operation)) {
-        if (result) await detachRemote(result);
+        if (result) await discardStale(result);
         return;
       }
       if (!result) {
@@ -163,7 +182,7 @@ export function useTerminalSession(options: TerminalSessionOptions) {
         return;
       }
       acceptAttachment(result);
-      if (options.tab === "agent" && !result.session.running) await lookupResumeReference(operation);
+      if (isAgentTab(options.tab) && !result.session.running) await lookupResumeReference(operation);
     } catch (reason) {
       if (!isCurrent(operation)) return;
       status.value = "error";
@@ -202,6 +221,25 @@ export function useTerminalSession(options: TerminalSessionOptions) {
     if (current) await detachRemote(current);
   }
 
+  /** Stops the managed process when its tab is closed; an already-exited session is harmless. */
+  async function stop(): Promise<void> {
+    stopRequested = true;
+    generation += 1;
+    const current = attachment.value;
+    attachment.value = null;
+    status.value = "exited";
+    error.value = null;
+    if (current) {
+      await stopRemote(current);
+      return;
+    }
+    try {
+      await options.source.forgetTerminalTab(options.taskId, options.tab);
+    } catch {
+      // Closing the tab must not fail because the backend had no failed-start record.
+    }
+  }
+
   async function dispose(): Promise<void> {
     disposed = true;
     await detach();
@@ -221,6 +259,7 @@ export function useTerminalSession(options: TerminalSessionOptions) {
     sendInput,
     resize,
     detach,
+    stop,
     dispose,
   };
 }

@@ -315,6 +315,12 @@ export class MockAgentSource implements AgentSource {
     throw new Error("Embedded terminal processes are only available in the Argis desktop app");
   }
 
+  async stopTerminalSession(_sessionId: number): Promise<void> {}
+
+  async forgetTerminalTab(_taskId: number, _tab: TerminalTab): Promise<boolean> {
+    return false;
+  }
+
   async detachTerminalSession(_taskId: number, _tab: TerminalTab, _attachmentId: number): Promise<boolean> {
     return false;
   }
