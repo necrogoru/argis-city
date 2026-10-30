@@ -3,6 +3,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from
 import { X } from "@lucide/vue";
 import type { Task, TerminalTab } from "../../domain/types";
 import {
+  DEFAULT_TERMINAL_TAB,
   getTerminalTabForKey,
   shouldCloseTerminalModalForKey,
   shouldStartTerminalForKey,
@@ -29,7 +30,7 @@ const agentTabButton = useTemplateRef<HTMLButtonElement>("agent-tab");
 const termTabButton = useTemplateRef<HTMLButtonElement>("term-tab");
 const agentPane = useTemplateRef<TerminalPaneHandle>("agent-pane");
 const termPane = useTemplateRef<TerminalPaneHandle>("term-pane");
-const activeTab = ref<TerminalTab>("agent");
+const activeTab = ref<TerminalTab>(DEFAULT_TERMINAL_TAB);
 const terminalReady = ref(false);
 const restoring = ref(false);
 const agentStatus = ref<TerminalStatus>("notStarted");
@@ -67,7 +68,7 @@ function show(): void {
   if (!element || element.open) return;
   returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const firstOpen = !terminalReady.value;
-  activeTab.value = "agent";
+  activeTab.value = DEFAULT_TERMINAL_TAB;
   element.showModal();
   void nextTick(async () => {
     if (!open.value) return;
@@ -77,10 +78,10 @@ function show(): void {
       await nextTick();
       if (open.value) {
         await restoreSessions();
-        await focusTab("agent");
+        await focusTab(DEFAULT_TERMINAL_TAB);
       }
     } else {
-      await focusTab("agent");
+      await focusTab(DEFAULT_TERMINAL_TAB);
     }
   });
 }

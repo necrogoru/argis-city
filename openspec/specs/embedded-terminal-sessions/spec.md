@@ -2,23 +2,31 @@
 
 ## Purpose
 
-Lets users run an interactive coding agent and shell inside Argis at a task's isolated worktree while keeping terminal sessions available as they move between Argis views.
+Lets users run an interactive coding agent and shell inside Argis at a task's isolated worktree, or at the worktree root when the worktree directory was deleted, while keeping terminal sessions available as they move between Argis views.
 
 ## Requirements
 
 ### Requirement: Open a two-tab terminal for a task worktree
-Argis SHALL open an embedded terminal in a large modal or panel over the task workspace with an Agent tab and a `term` shell tab, both rooted at the task worktree.
+Argis SHALL open an embedded terminal in a large modal or panel over the task workspace with an Agent tab and a `term` shell tab, both rooted at the task worktree, or at the worktree root when the recorded worktree directory was deleted.
 
 #### Scenario: Open a task terminal
 - **WHEN** a user opens the terminal for a task with an associated worktree
 - **THEN** Argis displays the Agent and `term` tabs rooted at that worktree without launching an external terminal application
+
+#### Scenario: Open a terminal after the worktree directory was deleted
+- **WHEN** a user opens the terminal for a task whose recorded worktree directory no longer exists but the worktree root does
+- **THEN** Argis opens both tabs in the worktree root so the user can restore or clean up the worktree
+
+#### Scenario: Recorded worktree is invalid
+- **WHEN** the recorded worktree path exists but is not the task's Git worktree or is on another branch
+- **THEN** Argis reports an error and does not open a terminal in a fallback directory
 
 #### Scenario: Terminal is unavailable before worktree creation
 - **WHEN** a user views the terminal action for a task without an associated worktree
 - **THEN** the action is disabled with an explanation that the task worktree must be created first
 
 ### Requirement: Select an agent CLI for the Agent tab
-When starting a new Agent tab, Argis SHALL ask which supported coding-agent CLI to launch, default the selection to Claude Code, and start the chosen CLI in the task worktree.
+When starting a new Agent tab, Argis SHALL ask which supported coding-agent CLI to launch, default the selection to Claude Code, and start the chosen CLI in the task's terminal directory: the task worktree, or its worktree root when the recorded worktree directory was deleted.
 
 #### Scenario: Launch the default agent
 - **WHEN** a user accepts the default agent selection
@@ -37,11 +45,11 @@ Argis SHALL provide interactive input and output for the Agent and shell process
 
 #### Scenario: Use the shell tab
 - **WHEN** a user types a command in the `term` tab
-- **THEN** Argis sends the input to an interactive shell whose working directory is the task worktree and displays its output
+- **THEN** Argis sends the input to an interactive shell whose working directory is the task's terminal directory and displays its output
 
 #### Scenario: Use the Agent tab
 - **WHEN** a user interacts with the selected agent in the Agent tab
-- **THEN** Argis sends input to and displays output from that agent process in the task worktree
+- **THEN** Argis sends input to and displays output from that agent process in the task's terminal directory
 
 ### Requirement: Close the terminal modal with Escape
 Argis SHALL close the terminal modal when Escape is pressed while it is open and focus is outside terminal input, without stopping its managed terminal processes. While terminal input is focused, plain Escape SHALL be passed to the terminal instead of closing the modal.
@@ -74,7 +82,7 @@ While the terminal modal is open, Ctrl+Tab SHALL toggle between the Agent and `t
 
 #### Scenario: Open the terminal modal
 - **WHEN** a task terminal modal opens
-- **THEN** the Agent tab is active and its terminal input receives focus
+- **THEN** the `term` tab is active and its terminal input receives focus
 
 #### Scenario: Switch from Agent to shell
 - **WHEN** the Agent tab is active and a user presses Ctrl+Tab

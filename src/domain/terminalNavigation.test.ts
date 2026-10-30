@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_TERMINAL_TAB,
   getTerminalTabForKey,
   shouldCloseTerminalModalForKey,
   shouldStartTerminalForKey,
 } from "./terminalNavigation";
+
+describe("DEFAULT_TERMINAL_TAB", () => {
+  it("opens task terminals on the shell tab", () => {
+    expect(DEFAULT_TERMINAL_TAB).toBe("term");
+  });
+});
 
 describe("getTerminalTabForKey", () => {
   it.each([

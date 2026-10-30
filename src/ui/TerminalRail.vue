@@ -41,7 +41,7 @@ function railTint(state: (typeof entries.value)[number]["state"]): string {
   }
 }
 
-function openAgentTab(taskId: number): void {
+function openTaskTerminal(taskId: number): void {
   terminalNavigation.openTaskTerminal(taskId);
 }
 
@@ -139,7 +139,7 @@ onUnmounted(() => {
           :data-expanded="expandedTaskId === entry.taskId"
           :style="{ '--rail-tint': railTint(entry.state) }"
           :aria-label="`Task ${entry.index}: ${entry.title}. In progress. Terminal: ${terminalRailEntryLabel(entry)}. Press Enter to open; use arrow keys or j/k to move.`"
-          @click="openAgentTab(entry.taskId)"
+          @click="openTaskTerminal(entry.taskId)"
           @pointerenter="setHovered(entry.taskId)"
           @pointerleave="setHovered(null)"
           @focus="setFocused(entry.taskId)"

@@ -1,5 +1,5 @@
 use crate::git_worktrees::{
-    create_task_worktree, delete_task_with_git_cleanup, inspect_task_git, task_branch_name,
+    create_task_worktree, delete_task_with_git_cleanup, inspect_task_git, task_branch_name, terminal_task_cwd,
     validated_task_worktree_path,
 };
 use crate::task_store::TaskStore;
@@ -241,4 +241,89 @@ fn task_terminal_worktree_path_is_returned_only_for_the_recorded_task_worktree()
     let store = TaskStore::open(&database_path).unwrap();
 
     assert!(validated_task_worktree_path(&store, task_id).is_err());
+}
+
+#[test]
+fn terminal_task_cwd_uses_the_validated_worktree_while_it_exists() {
+    let parent = tempfile::tempdir().unwrap();
+    let repo = init_repository(&parent);
+    let (store, task_id) = task_store_for(&parent, &repo, "Terminal cwd");
+    let worktree = create_task_worktree(&store, task_id).unwrap();
+
+    assert_eq!(terminal_task_cwd(&store, task_id).unwrap(), PathBuf::from(&worktree.worktree_path));
+}
+
+#[test]
+fn terminal_task_cwd_falls_back_to_the_worktree_root_after_the_directory_is_deleted() {
+    let parent = tempfile::tempdir().unwrap();
+    let repo = init_repository(&parent);
+    let (store, task_id) = task_store_for(&parent, &repo, "Deleted worktree");
+    let worktree = create_task_worktree(&store, task_id).unwrap();
+    fs::remove_dir_all(&worktree.worktree_path).unwrap();
+
+    assert_eq!(terminal_task_cwd(&store, task_id).unwrap(), fs::canonicalize(&repo).unwrap().join(".argis/worktrees"));
+}
+
+#[test]
+fn terminal_task_cwd_requires_the_worktree_root_when_the_worktree_is_gone() {
+    let parent = tempfile::tempdir().unwrap();
+    let repo = init_repository(&parent);
+    let (store, task_id) = task_store_for(&parent, &repo, "Missing worktree root");
+    let worktree = create_task_worktree(&store, task_id).unwrap();
+    let root = PathBuf::from(&worktree.worktree_path).parent().unwrap().to_path_buf();
+    fs::remove_dir_all(&worktree.worktree_path).unwrap();
+    fs::remove_dir(&root).unwrap();
+
+    let error = terminal_task_cwd(&store, task_id).unwrap_err().to_string();
+
+    assert!(error.contains("missing"), "unexpected error: {error}");
+}
+
+#[test]
+fn terminal_task_cwd_rejects_a_worktree_on_another_branch_instead_of_falling_back() {
+    let parent = tempfile::tempdir().unwrap();
+    let repo = init_repository(&parent);
+    let (store, task_id) = task_store_for(&parent, &repo, "Other branch");
+    let worktree = create_task_worktree(&store, task_id).unwrap();
+    assert!(git(Path::new(&worktree.worktree_path), &["checkout", "--quiet", "-b", "other"]).status.success());
+
+    let error = terminal_task_cwd(&store, task_id).unwrap_err().to_string();
+
+    assert!(error.contains("branch"), "unexpected error: {error}");
+}
+
+#[test]
+fn terminal_task_cwd_rejects_a_plain_directory_at_the_worktree_path() {
+    let parent = tempfile::tempdir().unwrap();
+    let repo = init_repository(&parent);
+    let (store, task_id) = task_store_for(&parent, &repo, "Plain worktree path");
+    let worktree = create_task_worktree(&store, task_id).unwrap();
+    fs::remove_dir_all(&worktree.worktree_path).unwrap();
+    fs::create_dir(&worktree.worktree_path).unwrap();
+
+    let error = terminal_task_cwd(&store, task_id).unwrap_err().to_string();
+
+    assert!(error.contains("not a Git worktree"), "unexpected error: {error}");
+}
+
+#[test]
+fn terminal_task_cwd_refuses_a_recorded_path_outside_the_worktree_root() {
+    let parent = tempfile::tempdir().unwrap();
+    let repo = init_repository(&parent);
+    let database_path = parent.path().join("argis.sqlite");
+    let (store, task_id) = task_store_for(&parent, &repo, "Outside worktree root");
+    create_task_worktree(&store, task_id).unwrap();
+
+    drop(store);
+    let connection = Connection::open(&database_path).unwrap();
+    connection
+        .execute(
+            "UPDATE tasks SET worktree_path = ?2 WHERE id = ?1",
+            rusqlite::params![task_id, parent.path().join("repo/README.md").to_string_lossy().as_ref()],
+        )
+        .unwrap();
+    drop(connection);
+    let store = TaskStore::open(&database_path).unwrap();
+
+    assert!(terminal_task_cwd(&store, task_id).is_err());
 }

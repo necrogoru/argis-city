@@ -100,8 +100,33 @@ pub fn inspect_task_git(store: &TaskStore, task_id: i64) -> anyhow::Result<TaskG
     })
 }
 
+struct RecordedTaskWorktree {
+    project_path: PathBuf,
+    worktree_path: PathBuf,
+    branch_name: String,
+}
+
 /// Returns the existing, task-owned Git worktree after checking its recorded path and branch.
 pub fn validated_task_worktree_path(store: &TaskStore, task_id: i64) -> anyhow::Result<PathBuf> {
+    let worktree = recorded_task_worktree(store, task_id)?;
+    validate_existing_task_worktree(&worktree)?;
+    Ok(worktree.worktree_path)
+}
+
+/// Returns a task terminal's working directory: the validated worktree while it
+/// exists, or the worktree root that contained it once its directory is gone.
+/// The fallback lets a user restore or clean up a task whose worktree was
+/// deleted; it never guesses a cwd outside the registered project.
+pub fn terminal_task_cwd(store: &TaskStore, task_id: i64) -> anyhow::Result<PathBuf> {
+    let worktree = recorded_task_worktree(store, task_id)?;
+    if worktree.worktree_path.exists() {
+        validate_existing_task_worktree(&worktree)?;
+        return Ok(worktree.worktree_path);
+    }
+    terminal_fallback_cwd(&worktree)
+}
+
+fn recorded_task_worktree(store: &TaskStore, task_id: i64) -> anyhow::Result<RecordedTaskWorktree> {
     let task = store.get_task(task_id)?;
     let project = store.get_project(task.project_id)?;
     let project_path =
@@ -109,23 +134,40 @@ pub fn validated_task_worktree_path(store: &TaskStore, task_id: i64) -> anyhow::
     let worktree_path = task.worktree_path.as_deref().ok_or_else(|| anyhow!("task has no worktree"))?;
     let branch_name = task.branch_name.as_deref().ok_or_else(|| anyhow!("task has no branch"))?;
     validate_task_branch_name(task.id, branch_name)?;
-
     let worktree_path = validate_task_worktree_path(&project_path, task.id, worktree_path)?;
+    Ok(RecordedTaskWorktree { project_path, worktree_path, branch_name: branch_name.to_owned() })
+}
+
+fn validate_existing_task_worktree(worktree: &RecordedTaskWorktree) -> anyhow::Result<()> {
+    let worktree_path = &worktree.worktree_path;
     if !worktree_path.is_dir() {
         bail!("task worktree is not an existing directory: {}", worktree_path.display());
     }
-    if git_root(&worktree_path)?.as_deref() != Some(worktree_path.as_path()) {
+    if git_root(worktree_path)?.as_deref() != Some(worktree_path.as_path()) {
         bail!("recorded task path is not a Git worktree: {}", worktree_path.display());
     }
 
-    let branch_output = run_git(&worktree_path, &["branch", "--show-current"])?;
+    let branch_output = run_git(worktree_path, &["branch", "--show-current"])?;
     ensure_success(&branch_output, "checking task worktree branch")?;
     let actual_branch = String::from_utf8(branch_output.stdout).context("Git returned a non-UTF-8 branch name")?;
-    if actual_branch.trim() != branch_name {
+    if actual_branch.trim() != worktree.branch_name {
         bail!("task worktree branch does not match its recorded branch: {}", worktree_path.display());
     }
+    Ok(())
+}
 
-    Ok(worktree_path)
+fn terminal_fallback_cwd(worktree: &RecordedTaskWorktree) -> anyhow::Result<PathBuf> {
+    let worktree_root = worktree
+        .worktree_path
+        .parent()
+        .ok_or_else(|| anyhow!("task worktree path has no parent: {}", worktree.worktree_path.display()))?;
+    let worktree_root = fs::canonicalize(worktree_root).with_context(|| {
+        format!("task worktree and its parent directory are missing: {}", worktree.worktree_path.display())
+    })?;
+    if worktree_root == worktree.project_path || !worktree_root.starts_with(&worktree.project_path) {
+        bail!("refusing to open a terminal outside the project: {}", worktree_root.display());
+    }
+    Ok(worktree_root)
 }
 
 pub fn create_task_worktree(store: &TaskStore, task_id: i64) -> anyhow::Result<TaskWorktree> {

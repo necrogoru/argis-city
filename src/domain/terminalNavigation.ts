@@ -1,5 +1,8 @@
 import type { TerminalTab } from "./types";
 
+/** Task terminals open on the shell so they behave like a normal terminal. */
+export const DEFAULT_TERMINAL_TAB: TerminalTab = "term";
+
 type TerminalNavigationKey = Pick<KeyboardEvent, "key" | "ctrlKey">
   & Partial<Pick<KeyboardEvent, "altKey" | "metaKey">>;
 

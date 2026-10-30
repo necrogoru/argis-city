@@ -248,7 +248,11 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   view tree, so switching views does not detach its tabs. A task result selected
   in `⌘K` opens the same modal over the current view without navigating to Tasks;
   running Agent and shell sessions reattach, and absent sessions show the
-  existing resume-or-new controls. Dashboard launchers, the task-board `t`
+  existing resume-or-new controls. If the recorded worktree directory was
+  deleted, both tabs open in the worktree root so the user can restore or clean
+  it up; a worktree that exists but is not the task's Git worktree on its
+  recorded branch still shows the existing launch error. Dashboard launchers,
+  the task-board `t`
   shortcut, and a matching selected-house Terminal action all open this same
   task-scoped modal without switching views. Tasks without worktrees remain
   searchable and show
@@ -256,7 +260,7 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   terminal target is later reopened after detachment, retained recent PTY output
   is restored before live output. Terminal text uses a system monospace font
   with zero letter spacing; Outfit remains the surrounding UI font.
-- Terminal keyboard behavior: The modal opens on Agent and focuses the active
+- Terminal keyboard behavior: The modal opens on `term` and focuses the active
   xterm input after its pane is visible, fitted, and any session reattachment
   completes, including when the terminal has not started. While the modal is
   open, Ctrl+Tab toggles Agent ↔ `term`, prevents host/browser tab switching,
@@ -300,7 +304,7 @@ Radii: buttons 14, panels 24, cards 16, pills 7–8. Letter-spaced caps labels
   task. Unmodified `c` opens New task only when a project is registered; `b`
   creates a branch/worktree only for a focused visible task eligible for branch
   creation with no existing branch; `t` opens the focused visible task's shared
-  Agent-resume terminal flow only when its worktree exists; `s` opens the status
+  task terminal modal only when its worktree is recorded; `s` opens the status
   picker for a focused visible task, where `1`–`5` select the status in the
   fixed order. Selecting a status keeps focus on that task after a column move.
   Keep the existing input (including xterm), dialog, modifier, repeat, and

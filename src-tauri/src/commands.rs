@@ -5,7 +5,7 @@ use crate::domain::{
     TerminalAttachment, TerminalEvent, TerminalInventoryEntry, TerminalSessionKey, TerminalSize, TerminalTab,
 };
 use crate::git_worktrees::{
-    create_task_worktree as create_git_worktree, delete_task_with_git_cleanup, inspect_task_git,
+    create_task_worktree as create_git_worktree, delete_task_with_git_cleanup, inspect_task_git, terminal_task_cwd,
     validated_task_worktree_path, TaskDeletionOutcome, TaskGitStatus, TaskWorktree,
 };
 use crate::monitor::Monitor;
@@ -189,7 +189,7 @@ pub async fn start_terminal_session(
     let manager = Arc::clone(&terminal_state);
     let sink = terminal_event_sink(on_event);
     tauri::async_runtime::spawn_blocking(move || {
-        let cwd = validated_task_worktree_path(&store, task_id)?;
+        let cwd = terminal_task_cwd(&store, task_id)?;
         let spec = terminal_process_spec(task_id, tab, agent_cli, cwd, size)?;
         manager.start_or_reattach_with_attachment(spec, sink)
     })
@@ -237,7 +237,7 @@ pub async fn reattach_terminal_session(
     let manager = Arc::clone(&terminal_state);
     let sink = terminal_event_sink(on_event);
     tauri::async_runtime::spawn_blocking(move || {
-        validated_task_worktree_path(&store, task_id)?;
+        terminal_task_cwd(&store, task_id)?;
         Ok(manager.reattach_if_present_with_attachment(TerminalSessionKey { task_id, tab }, size, sink))
     })
     .await

@@ -112,6 +112,12 @@ creates and records both resources only for an eligible task.
   the frontend cannot provide a cwd or arbitrary executable. Argis checks that
   the worktree exists under the registered project and that its checked-out
   branch matches the task's recorded branch before starting or reattaching.
+  When the recorded worktree directory has been deleted, both tabs open in its
+  existing parent (the task worktree root, `<project>/.argis/worktrees`) so the
+  worktree can be restored or cleaned up. A recorded path that still exists but
+  is not the task's Git worktree, or is on another branch, remains an error;
+  there is no silent fallback. Resuming a saved Agent conversation always
+  requires the original worktree.
 - Agent executable selection is an allowlist: `claude`, `codex`, `opencode`, or
   `pi`. `agentCli` is required for the Agent tab and `null` for the shell tab.
   The shell uses the user's configured shell (`SHELL`, or `COMSPEC` on Windows).

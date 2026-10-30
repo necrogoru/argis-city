@@ -41,19 +41,19 @@ When no live Argis-managed Agent process exists for a task, Argis SHALL offer an
 - **THEN** Argis explains that resume is unavailable and still offers starting a new conversation
 
 ### Requirement: Use the same resume flow from task terminal entry points
-The task-board `t` shortcut, Dashboard terminal launcher, and selected-house Terminal action SHALL open the same task-scoped Agent resume flow without changing the current app view.
+The task-board `t` shortcut, Dashboard terminal launcher, and selected-house Terminal action SHALL open the same task-scoped terminal modal without changing the current app view, with the Agent resume flow available in its Agent tab.
 
 #### Scenario: Open through the task-board shortcut
 - **WHEN** the user presses `t` for a task with a worktree
-- **THEN** Argis opens that task's Agent resume flow
+- **THEN** Argis opens that task's terminal modal on its `term` tab
 
 #### Scenario: Open through the Dashboard launcher
 - **WHEN** the user activates a Dashboard launcher for a task with a saved resumable conversation
-- **THEN** Argis opens that task's Agent resume flow and identifies the saved CLI session
+- **THEN** Argis opens that task's terminal modal, and its Agent tab identifies the saved CLI session
 
 #### Scenario: Open through a matching selected house
 - **WHEN** the selected house matches a task worktree with a saved resumable conversation
-- **THEN** the Terminal action opens the same task's Agent resume flow
+- **THEN** the Terminal action opens the same task's terminal modal on its `term` tab
 
 ### Requirement: Keep resumable tasks discoverable after restart
 The Dashboard SHALL show a launcher for each task with a valid saved agent reference even when no terminal process is currently running, and SHALL continue to exclude terminals not managed by Argis.
@@ -64,7 +64,7 @@ The Dashboard SHALL show a launcher for each task with a valid saved agent refer
 
 #### Scenario: Saved reference is stale or its worktree is unavailable
 - **WHEN** Argis cannot validate a saved reference against the task's current worktree or the provider reports it cannot resume
-- **THEN** Argis marks resume unavailable, does not launch in another directory, and offers a new conversation when the worktree is usable
+- **THEN** Argis marks resume unavailable, does not launch the saved conversation in another directory, and still offers a new conversation (in the worktree root when the worktree directory was deleted)
 
 ### Requirement: Preserve process cleanup and task deletion safety
 Resuming a saved conversation SHALL launch a new CLI process rather than restore an old PTY, and deleting its task SHALL remove its saved references after managed processes are stopped.
